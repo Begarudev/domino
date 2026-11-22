@@ -34,13 +34,13 @@
 .signin { max-width: 1040px; margin: 0 auto; padding: 48px 24px; display: grid; grid-template-columns: 1fr 420px; gap: 48px; align-items: start; }
 .signin-head h1 { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.02em; margin: 24px 0 8px; max-width: 18em; }
 .signin-head > p { color: var(--ink-2); font-size: 15px; line-height: 22px; margin: 0; max-width: 34em; }
-.signin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 28px 0 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.signin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 8px 0 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
 .signin-stats > div { padding: 12px 16px; }
 .signin-stats > div + div { border-left: 1px solid var(--rule-2); }
 
 .signin-stats dt { font-size: 13px; color: var(--ink-2); }
 .signin-stats dd { margin: 2px 0 0; font-size: 24px; line-height: 30px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
-.signin-at { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
+.signin-head > p.signin-at { margin: 28px 0 0; font-size: 13px; color: var(--ink-2); }
 .signin-panel { padding: 24px; }
 .signin-panel h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .signin-go { width: 100%; height: 38px; margin-top: 8px; }
@@ -82,3 +82,9 @@
 /* candidate clause chips own their layout (the shell .clauses li grid is for company clause rows) */
 .side-candidate ol.clauses li { display: block; padding: 0; grid-template-columns: none; cursor: default; }
 .side-candidate ol.clauses li:hover { background: none; }
+.side-candidate .onb-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.side-candidate .onb-demo { height: 38px; margin: 0; color: var(--ink); }
+.consent-item input:checked + .consent-box::after { border-color: var(--on-ink); }
+.signin-stats dd { font-size: 18px; line-height: 24px; color: var(--ink-2); }
+.signin-stats { margin-top: 8px; background: none; }
+.pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

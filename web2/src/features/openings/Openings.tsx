@@ -116,7 +116,7 @@ function OpeningPanel({ o, ev, rows }: { o: OpeningWithWhy; ev: Map<string, Evid
       </header>
       <div className="pad">
         <p className="serif rec-role">{sentenceCase(o.roleTitle)}</p>
-        <p className="faint rec-role-sub">Rule O1 · decided {fmtDate(o.predictedAt, true)} · {familyLabel(o.roleFamily)} role family</p>
+        <p className="faint rec-role-sub">O1 · evaluated {fmtDate(o.predictedAt, true)}{o.provisional && o.windowClosesBy ? ` · provisional, window closes ${fmtDate(o.windowClosesBy)}` : ''} · {familyLabel(o.roleFamily)} role family</p>
         <ol className="rec-proof" aria-label="The decision, dated" data-testid="proof">
           {proofSteps(o, rows).map((s) => (
             <li key={s.text} className={`tone-${s.tone}`}>

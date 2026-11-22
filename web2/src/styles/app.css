@@ -15,7 +15,7 @@ a { color: inherit; text-decoration: none; }
 :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 3px; }
 .num, [data-num], .serif, .mono { font-variant-numeric: tabular-nums; }
 .serif { font-family: var(--serif); }
-.mono { font-family: var(--mono); font-size: 12px; letter-spacing: -.01em; }
+.mono { font-family: var(--mono); font-size: 13px; letter-spacing: -.01em; }
 .muted { color: var(--ink-2); } .faint { color: var(--ink-3); }
 
 /* ---------------------------------------------------------------- frame */
@@ -86,10 +86,10 @@ a { color: inherit; text-decoration: none; }
 .btn:disabled, .btn[disabled] { opacity: .45; cursor: default; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
 .btn.ghost:hover { color: var(--ink); background: var(--hover); }
-.llm { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); padding: 1px 8px; border: 1px dashed var(--ink-3); border-radius: 999px; white-space: nowrap; }
+.llm { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); padding: 1px 8px; border: 1px dashed var(--ink-3); border-radius: 999px; white-space: nowrap; }
 .sample-tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--ink-2); background: repeating-linear-gradient(135deg, var(--sample-a) 0 4px, var(--sample-b) 4px 8px); border: 1px solid var(--rule); padding: 0 6px; border-radius: 3px; line-height: 16px; vertical-align: 1px; }
 /* state: the only accent use */
-.st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 3px; white-space: nowrap; line-height: 18px; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 3px; white-space: nowrap; line-height: 18px; }
 .st.verified, .st.delivered { background: var(--acc); color: var(--on-acc); }
 .st.prov { color: var(--acc); border: 1px dashed var(--acc); background: var(--surface); }
 .st.held { color: var(--ink-2); border: 1px solid var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
@@ -99,11 +99,11 @@ a { color: inherit; text-decoration: none; }
 .srclink { color: var(--ink-2); border: 0; border-bottom: 1px solid var(--rule); background: none; padding: 0; cursor: pointer; font-size: inherit; }
 .srclink:hover { color: var(--ink); border-color: var(--ink-3); }
 .struck { text-decoration: line-through; text-decoration-color: var(--ink-3); color: var(--ink-3); }
-.cant { font-size: 12px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 3px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+.cant { font-size: 13px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 3px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
 .count { font-weight: 600; border: 0; border-bottom: 1px solid var(--ink-3); background: none; padding: 0; cursor: pointer; }
 .count:hover { border-color: var(--ink); }
 table.t { border-collapse: collapse; width: 100%; }
-table.t th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-3); padding: 8px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+table.t th { text-align: left; font-weight: 500; font-size: 13px; color: var(--ink-2); padding: 8px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 table.t td { padding: 9px 12px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
 table.t tr:last-child td { border-bottom: 0; }
 table.t tbody tr { transition: background 150ms var(--ease); }
@@ -114,7 +114,7 @@ table.t .num { text-align: right; }
 .receipt { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--acc-line); background: var(--acc-weak); border-radius: 4px; }
 .hr { height: 1px; background: var(--rule-2); margin: 14px 0; }
 /* older shared names, kept for features written before the mock */
-.tag { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); white-space: nowrap; line-height: 18px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 3px; font-size: 13px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); white-space: nowrap; line-height: 18px; }
 .tag.ok, .tag.live { color: var(--acc); border-color: var(--acc-line); background: var(--acc-weak); }
 .tag.warn { color: var(--ink-2); border-color: var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
 .tag.bad { color: var(--err); border-color: var(--err); background: var(--err-weak); }
@@ -131,7 +131,7 @@ table.t .num { text-align: right; }
 .clauses li:hover { background: var(--hover); }
 
 /* ---------------------------------------------------------------- notes, ghosts, empties */
-.src-note { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+.src-note { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
 .src-note.bad { color: var(--err); }
 .linkish { border: 0; background: none; padding: 0; color: var(--ink); text-decoration: underline; font-size: inherit; }
 .ghost-rows { display: grid; gap: 12px; }
@@ -164,17 +164,17 @@ table.t .num { text-align: right; }
 .role b { font-size: 15px; font-weight: 600; display: block; }
 .role p { color: var(--ink-2); margin: 2px 0 0; }
 .login-field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.login-field label { font-size: 12px; color: var(--ink-2); font-weight: 500; }
-.pick { display: grid; gap: 0; max-height: 246px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--rule); border-radius: 4px; }
-.pick-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 12px; border: 0; background: none; text-align: left; }
+.login-field label { font-size: 13px; color: var(--ink-2); font-weight: 500; }
+.pick { display: grid; gap: 0; max-height: calc(6 * 38px + 2px); mask-image: linear-gradient(#000 calc(100% - 20px), transparent); overflow-y: auto; margin-top: 8px; border: 1px solid var(--rule); border-radius: 4px; }
+.pick-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 0 12px; height: 38px; border: 0; background: none; text-align: left; }
 .pick-row:hover, .pick-row:focus-visible { background: var(--hover); }
 .pick-row + .pick-row { border-top: 1px solid var(--rule-2); }
 .pick-name b { font-weight: 600; }
-.pick-name small { color: var(--ink-3); font-size: 12px; margin-left: 8px; }
-.pick-meta { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 13px; }
+.pick-name small { color: var(--ink-3); font-size: 13px; margin-left: 8px; }
+.pick-meta { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 13px; white-space: nowrap; flex: none; }
 .pick-note { color: var(--ink-2); padding: 10px 12px; margin: 0; }
 .login-actions { display: flex; gap: 8px; margin-top: 18px; }
-.login-legal { margin-top: 20px; font-size: 12px; color: var(--ink-3); }
+.login-legal { margin-top: 20px; font-size: 13px; color: var(--ink-2); }
 @media (max-width: 1100px) { .login { grid-template-columns: 1fr; } .login-l { border-right: 0; padding: 40px; } .login-h { font-size: 44px; line-height: 50px; } }
 
 /* ---------------------------------------------------------------- source activity (reading log) */
@@ -200,7 +200,7 @@ table.t .num { text-align: right; }
 .src.dim .src-title { color: var(--ink-2); }
 .src-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 13px; color: var(--ink-2); }
 .src-date { color: var(--ink-2); }
-.src-signal { justify-self: start; font-size: 12px; color: var(--ink-2); }
+.src-signal { justify-self: start; font-size: 13px; color: var(--ink-2); }
 .src-signal b { color: var(--acc); font-weight: 600; }
 .src-signal.off b { color: var(--ink-3); }
 
@@ -220,3 +220,6 @@ table.t .num { text-align: right; }
 .ev-meta a { text-decoration: underline; }
 
 @media (min-width: 1800px) { body { font-size: 15px; } .page { max-width: 1400px; } }
+.loading-line { margin: 8px 0; font-size: 14px; color: var(--ink-2); }
+/* projector floor: secondary text never below 13px or the tertiary token for deciding states */
+.st.held, .st.plain, .cant { color: var(--ink); }

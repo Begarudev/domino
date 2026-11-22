@@ -87,8 +87,8 @@ function HireRow({ m, ev, intro, onAsk }: { m: Match; ev: Map<string, Evidence>;
       <td>
         {intro?.status === 'delivered' ? (
           <div className="receipt" data-testid="intro-receipt">
-            <span className="st verified">Delivered once</span>
-            <span className="mono">{intro.id}{fmtTime(intro.receivedAt) ? ` · ${fmtTime(intro.receivedAt)}` : ''}</span>
+            <span className="st verified">Delivered once to the team inbox{fmtTime(intro.receivedAt) ? ` · ${fmtTime(intro.receivedAt)}` : ''}</span>
+            <span className="mono faint">{intro.id}</span>
           </div>
         ) : intro ? (
           <button type="button" className="btn pri" onClick={onAsk} data-testid="review-intro">Review the intro</button>

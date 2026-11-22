@@ -32,7 +32,7 @@ export function CompaniesPage() {
     <div className="page">
       <div className="ph"><div><h1>What each company needs next</h1><p>Companies where a rule fired on dated moves. Open one to see the decision, its clauses and every source.</p></div></div>
       <SourceNote source={q.source} error={q.error} />
-      {q.loading && !q.data && <div className="ghost-rows" aria-hidden><span /><span /></div>}
+      {q.loading && !q.data && <p className="loading-line" role="status">Loading companies from the latest scan…</p>}
       <div className="panel">{q.data?.slice(0, 60).map((c) => <CohortRow key={c.id} c={c} />)}</div>
       {q.data && !q.data.length && (
         <div className="empty-act">
@@ -58,6 +58,7 @@ function CohortRow({ c }: { c: CompanySummary }) {
 }
 
 const GROUPS: TabGroup[] = ['Act', 'Read', 'Check'];
+const OWN_HEADER = new Set<CompanyTab>(['file', 'reading']);
 
 /** /company/:id/:tab: the signed-in company's working tool (design mock screens 4–11). */
 export function CompanyPage({ route }: { route: Extract<Route, { page: 'company' }> }) {
@@ -92,17 +93,19 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
             </div>
           );
         })}
-        <div className="side-foot">Every count opens its records. Rules decide; the model drafts and parses, and says so.</div>
       </nav>
       <div className="co-main">
-        <div className="ph">
-          <div>
-            <h1 data-testid="company-title">{current.label}</h1>
-            <p>{current.hint}</p>
-            <SourceNote source={q.source} error={q.error} onRetry={() => invalidate(`company:${id}`)} />
+        {/* Tabs with their own header (file, reading) skip the shell title once their data is in. */}
+        {!(desk && OWN_HEADER.has(tab)) && (
+          <div className="ph">
+            <div>
+              <h1 data-testid="company-title">{current.label}</h1>
+              <p>{current.hint}</p>
+              <SourceNote source={q.source} error={q.error} onRetry={() => invalidate(`company:${id}`)} />
+            </div>
           </div>
-        </div>
-        {!desk && !q.error && <div className="ghost-rows" aria-hidden><span /><span /><span /></div>}
+        )}
+        {!desk && !q.error && <p className="loading-line" role="status">Loading {current.label.toLowerCase()} from the latest scan…</p>}
         {desk && (
           <section data-testid={`panel-${tab}`}>
             {tab === 'recruitment' && <Openings desk={desk} />}
