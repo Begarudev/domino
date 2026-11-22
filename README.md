@@ -151,7 +151,8 @@ The original run view, with the live step theatre and kill and resume, is at <ht
 4321 is taken, `bun start` names the busy port; pick another with `DOMINO_PORT=4399 bun start`.
 
 **Without API keys**, DOMINO runs on a labelled synthetic fixture world (the data badge reads "Fixture", and the demo
-candidate is a labelled fictional person) and writes drafts from an evidence template. Every feature works this way,
+candidate is a labelled fictional person) and writes drafts from an evidence template. The first start scans that world
+by itself (0 credits, a few seconds), so both sides have predicted openings to open straight away. Every feature works this way,
 including consent, approvals, crash and resume, the ledger and replay. **For live data**, create `.env` in the repo
 root. It is gitignored and never committed:
 
