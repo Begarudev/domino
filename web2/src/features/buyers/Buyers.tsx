@@ -46,7 +46,15 @@ export function Buyers({ desk }: { desk: CompanyDesk }) {
 
   const chosen = useMemo(() => {
     if (!runs?.length) return null;
-    return runs.find((r) => r.row.id === pick || (pick && r.row.id.startsWith(pick))) ?? [...runs].sort((a, b) => b.snap.drafts.length - a.snap.drafts.length)[0];
+    // Default: the newest run whose drafts cite only live (or cached live) evidence. A run whose drafts cite fixture rows
+    // is never the default, even if it says "live" (runs before 13:18 could mix them in); it stays pickable and labelled.
+    const allLive = (r: Loaded) => {
+      const mode = new Map(r.snap.evidence.map((e) => [e.id, e.mode]));
+      return r.snap.drafts.length > 0 && r.snap.drafts.every((d) => d.citations.every((c) => mode.get(c.evidenceId) !== 'fixture'));
+    };
+    return runs.find((r) => r.row.id === pick || (pick && r.row.id.startsWith(pick)))
+      ?? runs.find(allLive)
+      ?? [...runs].sort((a, b) => b.snap.drafts.length - a.snap.drafts.length)[0];
   }, [runs, pick]);
 
   // Attach the run so the evidence drawer and the approval use it; give the page its own run back on leave.
