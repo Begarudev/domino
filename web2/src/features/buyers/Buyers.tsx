@@ -40,13 +40,16 @@ export function Buyers({ desk }: { desk: CompanyDesk }) {
   const [err, setErr] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(() => new URLSearchParams(location.search).get('buyers'));
   const [nonce, setNonce] = useState(0);
+  const [stage, setStage] = useState('Reading outbound runs…');
 
   // Load the newest outbound runs (GET). The default is the newest one that has drafts.
   useEffect(() => {
     let live = true;
     setErr(null);
     (async () => {
+      setStage('Reading outbound runs…');
       const list = (await getJson<RunRow[]>('/api/runs')).filter(isOutbound).slice(0, 8);
+      if (live) setStage(list.length + ' outbound runs found · loading each run’s accounts and drafts…');
       const snaps = await Promise.all(list.map((row) => getJson<RunSnapshot>(`/api/runs/${row.id}`).then((snap) => ({ row, snap })).catch(() => null)));
       if (live) setRuns(snaps.filter((x): x is Loaded => !!x));
     })().catch((e) => { if (live) setErr((e as Error).message); });
@@ -81,7 +84,7 @@ export function Buyers({ desk }: { desk: CompanyDesk }) {
       </div>
     );
   }
-  if (!runs) return <BuyersSkeleton />;
+  if (!runs) return <BuyersSkeleton stage={stage} />;
   if (!chosen) {
     return (
       <>
@@ -352,10 +355,10 @@ function Receipt({ keyId, at }: { keyId: string; at: string | null }) {
   );
 }
 
-function BuyersSkeleton() {
+function BuyersSkeleton({ stage }: { stage: string }) {
   return (
     <section className="panel by-accounts" aria-busy="true">
-      <header><h2>Accounts</h2><span className="faint">loading the latest outbound run…</span></header>
+      <header><h2>Accounts</h2><span className="faint" role="status" aria-live="polite">{stage}</span></header>
       <div className="by-ghost">{[0, 1, 2].map((i) => <i key={i} />)}</div>
     </section>
   );
