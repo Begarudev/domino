@@ -79,11 +79,11 @@ test('a past employer in a run snapshot stays a company: only the person becomes
     const initials = store.redactor.value({ people: [
       { id: 'pe_2', name: 'Kavya Menon R.', title: 'Senior AI Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
       { id: 'pe_3', name: 'Ravi S.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
-      { id: 'pe_4', name: 'Alex Z', title: 'Chief Technology Officer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_4', name: 'Kiran Q', title: 'Head of Platform', companyId: 'co_c', linkedinUrl: null, startedAt: null },
       { id: 'pe_5', name: 'Asha K.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
     ] });
-    assert.deepEqual(initials.people.map(person => person.name), ['K.', 'R.', 'A.', 'Asha K.']);
-    assert.equal(store.redactor.text('Hi Alex, Ravi S. left Hugging Face.'), 'Hi A., R. left Hugging Face.');
+    assert.deepEqual(initials.people.map(person => person.name), ['K.', 'R.', 'K.', 'Asha K.']);
+    assert.equal(store.redactor.text('Hi Kiran, Ravi S. left Hugging Face.'), 'Hi K., R. left Hugging Face.');
   } finally {
     store.sql.close();
     rmSync(dir, { recursive: true, force: true });

@@ -52,7 +52,7 @@ function personNames(input: unknown): string[] {
 }
 
 // "Asha K." (first name + last initial with its full stop: the candidate's consented display name) is already minimal.
-// "Asha Rao K." is not, and neither is "Alex Z". A source profile already shortened to "Alex Z." is a third party, so
+// "Asha Rao K." is not, and neither is "Kiran Q". A source profile already shortened to "Kiran Q." is a third party, so
 // names from the profile cache are reduced to an initial whatever their form (see `cachedFullNames`).
 const isFullName = (name: string) => name.trim().split(/\s+/).length >= 2 && !/^\S+\s+\p{L}\.$/u.test(name.trim());
 const hasSurname = (name: string) => name.trim().split(/\s+/).length >= 2;
