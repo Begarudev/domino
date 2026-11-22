@@ -69,7 +69,7 @@ export function matchesSignal(text: string, keywords: string[]): boolean {
     (keywords.some(keyword => containsPhrase('GPU', keyword)) && /\bgpus\b/i.test(text));
 }
 
-export function matchesDecider(title: string, requested: string[]): boolean {
+export function deciderPhrases(requested: string[]): string[] {
   const equivalents = [
     ['CTO', 'Chief Technology Officer', 'Chief Technical Officer'],
     ['VP Engineering', 'VP of Engineering', 'Vice President Engineering', 'Vice President of Engineering'],
@@ -78,10 +78,22 @@ export function matchesDecider(title: string, requested: string[]): boolean {
     ['Head of ML Platform', 'Head of Machine Learning Platform'],
     ['Co-founder', 'Cofounder'],
   ];
-  return deciderPhrases(requested).some(phrase => containsPhrase(title, phrase));
+  return [...new Set(requested.flatMap(title =>
+    equivalents.find(group => group.some(phrase => normalizeName(phrase) === normalizeName(title))) ?? [title]))];
+}
 
-  function deciderPhrases(titles: string[]): string[] {
-    return titles.flatMap(requestedTitle =>
-      equivalents.find(group => group.some(phrase => normalizeName(phrase) === normalizeName(requestedTitle))) ?? [requestedTitle]);
-  }
+export function matchesDecider(title: string, requested: string[]): boolean {
+  return deciderPhrases(requested).some(phrase => containsPhrase(title, phrase));
+}
+
+export function relatedDomains(a?: string | null, b?: string | null): boolean {
+  const first = normalizeDomain(a);
+  const second = normalizeDomain(b);
+  if (!first || !second) return false;
+  const root = (domain: string) => {
+    const parts = domain.split('.');
+    const multipartSuffix = parts.at(-1)?.length === 2 && /^(?:ac|co|com|edu|gov|net|org)$/.test(parts.at(-2) ?? '');
+    return parts.slice(multipartSuffix ? -3 : -2).join('.');
+  };
+  return root(first) === root(second);
 }

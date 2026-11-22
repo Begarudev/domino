@@ -145,6 +145,7 @@ export interface GraphEdge {
   mechanism: Mechanism;
   label: string;                    // short edge text shown on the canvas
   rationale: string;                // one paragraph, why this edge implies the need
+  alternative?: string | null;      // the competing explanation we could not rule out ("hiring may be cost-cutting")
   confidence: number;               // 0..1
   observedAt: IsoDate | null;       // latest dated evidence on this edge
   evidenceIds: string[];
