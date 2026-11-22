@@ -1,0 +1,29 @@
+// Screenshot every key state of the talent-flow centrepiece.
+//   PW=/path/to/playwright-core node wow/wow-flow/shoot.mjs [baseUrl]
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PW || 'playwright-core');
+const base = process.argv[2] || 'http://localhost:5181/';
+const out = new URL('.', import.meta.url).pathname;
+const shots = (process.env.SHOTS || '0.4:01-start,6.5:02-river-forming,8.6:03-drain-cracked,10.4:04-frozen-predictions,16.5:05-first-hit,22.2:06-scored,25.6:07-zoom,29.4:08-letter-assembling,34:09-letter-done').split(',');
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const errs = [];
+page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+page.on('pageerror', (e) => errs.push(String(e)));
+for (const item of shots) {
+  const [s, name] = item.split(':');
+  const extra = process.env.EXTRA || '';
+  await page.goto(`${base}?s=${s}${extra}`);
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${out}${name}.png` });
+  console.log('shot', name);
+}
+if (process.env.FPS) {
+  await page.goto(`${base}?speed=1`);
+  await page.waitForTimeout(1200);
+  const fps = await page.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 4000) requestAnimationFrame(f); else res(n / 4); }; requestAnimationFrame(f); }));
+  console.log('fps', fps);
+}
+console.log('errors', JSON.stringify(errs));
+await browser.close();

@@ -16,7 +16,8 @@
     "test": "node --test 'server/**/*.test.ts'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "node scripts/smoke.ts",
-    "snapshot": "node scripts/snapshot.ts"
+    "snapshot": "node scripts/snapshot.ts",
+    "wow:flow": "vite --config web/wow-flow/vite.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
