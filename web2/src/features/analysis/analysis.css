@@ -1,0 +1,135 @@
+/* Company file (mock screen 6). Shell primitives (.panel, table.t, .st, .srclink, .tag, .tick) are reused; this file
+   lays out the two rows and adds the rule expand. Dense sans, 8px grid, 15px card titles, 36px table rows.
+   Motion: one 200 ms ease-out height/opacity expand for rule clauses, nothing else moves on its own. */
+
+.cf { display: flex; flex-direction: column; gap: 16px; min-height: calc(100vh - 52px - 172px); }
+
+/* identity strip */
+.cf-id { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.cf-name { font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+.cf-meta { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
+.cf-meta .mono { font-size: 13px; }
+.cf-run { margin: 0; font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.cf-run .mono { color: var(--ink-2); }
+
+/* honest error / not-found state */
+.cf-err { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border: 1px solid var(--rule); border-left: 3px solid var(--ink-3); border-radius: 4px; background: var(--surface); }
+.cf-err div { display: grid; gap: 2px; }
+.cf-err b { font-weight: 600; font-size: 14px; }
+.cf-err span { color: var(--ink-2); font-size: 13px; }
+
+/* rows */
+.cf-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; align-items: stretch; }
+.cf-bottom { flex: 1; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 16px; align-items: stretch; }
+@media (max-width: 1100px) { .cf-top, .cf-bottom { grid-template-columns: minmax(0, 1fr); } }
+
+.cf-p { display: flex; flex-direction: column; min-width: 0; }
+.cf-p > header { min-height: 48px; }
+.cf-p > header h2 { font-size: 15px; line-height: 20px; }
+.cf-p > header .faint, .cf-p > header .srclink { font-size: 12px; white-space: nowrap; }
+.cf-top .cf-p { min-height: 200px; }
+.cf > .cf-x { margin-top: -16px; }
+.cf > .cf-x.on { margin-top: 0; }
+
+.cf-empty { margin: 0; padding: 16px; color: var(--ink-2); font-size: 13px; line-height: 19px; display: grid; gap: 4px; }
+.cf-empty b { color: var(--ink); font-weight: 600; font-size: 14px; }
+.cf-empty.sm { padding: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+li.cf-empty.sm { padding: 10px 16px; list-style: none; }
+.cf-foot { margin: auto 0 0; padding: 10px 16px 12px; font-size: 12px; line-height: 18px; color: var(--ink-3); border-top: 1px solid var(--rule-2); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.cf-foot .tag { font-size: 11px; line-height: 16px; }
+.cf-date { color: var(--ink-2); white-space: nowrap; font-size: 12px; }
+
+/* headcount */
+.cf-hc { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.cf-hc-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cf-big { font-size: 32px; line-height: 36px; font-weight: 600; letter-spacing: -.02em; }
+.cf-hc-date { color: var(--ink-2); font-size: 13px; }
+.cf-delta { font-size: 13px; font-weight: 600; color: var(--ink); padding: 1px 6px; border: 1px solid var(--rule); border-radius: 3px; }
+.cf-delta.down { border-color: var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
+.cf-spark { display: flex; flex-direction: column; flex: 1; gap: 6px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; margin-top: auto; }
+.cf-spark:disabled { cursor: default; }
+.cf-spark:focus-visible { outline: 2px solid var(--ink-3); outline-offset: 4px; border-radius: 2px; }
+.cf-spark-plot { position: relative; display: block; flex: 1; min-height: 64px; border-bottom: 1px solid var(--rule); }
+.cf-spark-plot svg { position: absolute; inset: 4px 0; width: 100%; height: calc(100% - 8px); overflow: visible; }
+.cf-spark-plot polyline { fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-linejoin: round; }
+.cf-spark:hover .cf-spark-plot polyline { stroke: var(--ink); }
+.cf-spark-m { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 3; }
+.cf-dot { position: absolute; width: 5px; height: 5px; margin: 1.5px 0 0 -2.5px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--ink-3); transform: translateY(-50%); box-sizing: border-box; }
+/* dots sit inside the svg's 4px inset */
+.cf-spark-plot .cf-dot { top: 0; }
+.cf-dot.end { width: 7px; height: 7px; margin-left: -3.5px; background: var(--ink); border-color: var(--ink); }
+.cf-spark-ax { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* funding */
+.cf-rows { list-style: none; margin: 0; padding: 0; }
+.cf-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--rule-2); font-size: 14px; }
+.cf-row-btn { display: flex; justify-content: space-between; gap: 12px; width: 100%; border: 0; background: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+
+/* rules */
+.cf-rules { list-style: none; margin: 0; padding: 0; }
+.cf-rule + .cf-rule { border-top: 1px solid var(--rule-2); }
+.cf-rule-btn {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 12px; grid-template-areas: 'name st chev' 'tally tally tally';
+  align-items: center; column-gap: 10px; row-gap: 0; width: 100%; padding: 6px 16px;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 150ms var(--ease);
+}
+.cf-rule-btn:hover { background: var(--row-hover); }
+.cf-rule.x > .cf-rule-btn { background: var(--hover); box-shadow: inset 2px 0 0 var(--ink); }
+.cf-rule-btn:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.cf-rule-name { grid-area: name; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-rule-name b { color: var(--ink); font-weight: 600; margin-right: 2px; }
+.cf-rule-btn .st { grid-area: st; justify-self: end; }
+.cf-rule-tally { grid-area: tally; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.cf-chev { grid-area: chev; justify-self: end; color: var(--ink-3); font-size: 15px; line-height: 1; transition: transform 200ms var(--ease); }
+.cf-rule.x .cf-chev { transform: rotate(90deg); color: var(--ink); }
+.st.cf-ne { border-style: dashed; color: var(--ink-3); font-weight: 500; }
+
+.cf-x { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 200ms var(--ease), opacity 200ms var(--ease); }
+.cf-x.on { grid-template-rows: 1fr; opacity: 1; }
+.cf-x-in { min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .cf-x, .cf-chev { transition: none; } }
+.cf-rd > header h2 { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.cf-rd-body { padding: 12px 16px 16px; display: grid; gap: 12px; }
+.cf-rd .cf-clauses { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; row-gap: 12px; }
+@media (max-width: 1100px) { .cf-rd .cf-clauses { grid-template-columns: minmax(0, 1fr); } }
+.cf-rule-sum { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink); font-weight: 500; }
+.cf-clauses { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cf-clauses li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; font-size: 14px; line-height: 20px; }
+.cf-clause-d { display: block; color: var(--ink-3); font-size: 12px; line-height: 17px; margin-top: 1px; }
+.cf-srcs { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; font-size: 12px; }
+.cf-fail { color: var(--err); font-weight: 700; }
+
+/* why this target */
+.cf-why { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: 'h pos rule' '. . because'; column-gap: 16px; row-gap: 4px; align-items: baseline; padding: 8px 16px; }
+.cf-why-h { grid-area: h; font-size: 15px; font-weight: 600; }
+.cf-why-pos { grid-area: pos; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.cf-why-rule { grid-area: rule; font-size: 13px; color: var(--ink-2); }
+.cf-why-because { grid-area: because; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink); }
+.cf-why-b + .cf-why-b::before { content: '·'; color: var(--ink-3); margin-right: 14px; }
+
+/* talent flows */
+.cf-t th:first-child, .cf-t td:first-child { padding-left: 16px; width: 96px; }
+.cf-t th:last-child, .cf-t td:last-child { padding-right: 16px; }
+.cf-t td:nth-child(3) { white-space: nowrap; }
+.cf-t td { font-size: 14px; height: 36px; padding-top: 8px; padding-bottom: 8px; vertical-align: middle; }
+.cf-click { cursor: pointer; }
+.cf-click:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.cf-dir { display: inline-block; min-width: 32px; font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: 3px; border: 1px solid var(--rule); color: var(--ink-2); text-align: center; line-height: 18px; }
+.cf-dir.in { color: var(--acc); border-color: var(--acc-line); background: var(--acc-weak); }
+
+/* news and checks */
+.cf-news { list-style: none; margin: 0; padding: 0 0 4px; }
+.cf-news li + li { border-top: 1px solid var(--rule-2); }
+.cf-news-row {
+  display: grid; grid-template-columns: 88px 80px minmax(0, 1fr); grid-template-areas: 'date kind text' '. . src';
+  column-gap: 12px; row-gap: 0; width: 100%; padding: 8px 16px; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; cursor: pointer; transition: background 150ms var(--ease);
+}
+.cf-news-row:hover { background: var(--row-hover); }
+.cf-news-row:disabled { cursor: default; }
+.cf-news-row:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.cf-news-row .cf-date { grid-area: date; padding-top: 1px; }
+.cf-kind { grid-area: kind; justify-self: start; align-self: start; margin-top: 1px; font-size: 12px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 3px; padding: 0 6px; line-height: 18px; }
+.cf-kind.k-news { color: var(--acc); border-color: var(--acc-line); background: var(--acc-weak); }
+.cf-news-t { grid-area: text; font-size: 14px; line-height: 20px; }
+.cf-news-src { grid-area: src; font-size: 12px; color: var(--ink-3); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
