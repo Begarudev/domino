@@ -9,14 +9,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, describe, test } from 'node:test';
-import type { Evidence } from '../../shared/types.ts';
+import type { Draft, Evidence } from '../../shared/types.ts';
 import type { Candidate, CompanySummary, CompanyView, Departure, IntroPreview, IntroRequest, Opening, OpeningForCandidate } from '../../shared/desk.ts';
 import { waitFor } from '../../scripts/smoke.ts';
 import { displayName, enrichFixture, linkedinProfileUrl, parseEnrich, personEnrich } from '../crustdata/person-enrich.ts';
 import { Store } from '../db.ts';
 import { defaultLimits, root } from '../env.ts';
 import { classifyProfile, openingsForCandidate } from './match.ts';
-import { introClaims } from '../engine/candidate-steps.ts';
+import { introClaims, introSendGate } from '../engine/candidate-steps.ts';
 
 const meta = { mode: 'live' as const, retrievedAt: '2026-11-22T09:00:00.000Z', asOf: '2026-11-22', windowDays: 0, endpoint: '/person/enrich' };
 const PROFILE = 'https://www.linkedin.com/in/fictional-test-profile/';
@@ -149,6 +149,33 @@ describe('intro claims', () => {
     assert.ok(open.verifiable);
     const [watch] = introClaims({ ...openings[0], status: 'watch', watch: { have: 1, need: 2 } }, candidate, [], rows);
     assert.match(watch.text, /^DOMINO is watching Orbitline Fictional for a possible ML Platform Engineer opening/);
+  });
+});
+
+describe('intro send gate', () => {
+  const profileRow = (id: string): Evidence => ({ ...evidence(id, 'Profile field', '2026-11-22'), source: { provider: 'crustdata', endpoint: '/person/enrich' } });
+  const rows = [...seedEvidence, profileRow('ev_p1'), profileRow('ev_p2')];
+  const draft = (ids: string[]) => ({
+    id: 'dr', companyId: 'co_orbit', personId: null, subject: '', generator: 'template', verified: true, checks: [], unverifiable: [],
+    meeting: { title: '', durationMin: 20, proposedSlots: [] },
+    body: ids.map((_, index) => `Fact [${index + 1}].`).join(' '), citations: ids.map((evidenceId, index) => ({ marker: index + 1, evidenceId })),
+  }) as Draft;
+  const opening = new Set(seedEvidence.map(row => row.id));
+  const check = async (ids: string[], role = 'ML Platform Engineer') =>
+    introSendGate(draft(ids), role, rows, opening, (await import('../engine/steps.ts')).draftGate);
+
+  test('passes with 2 verified facts, one about the opening, and a named role', async () => {
+    assert.equal(await check(['ev_drain_a', 'ev_p1']), null);
+  });
+  test('lists every missing item when it fails', async () => {
+    assert.deepEqual(await check(['ev_p1']), {
+      reason: 'Not sent: not enough verified evidence (1 of 2 verified facts, 0 of 1 about the opening); ' +
+        'missing: 1 more verified, dated, cited fact, a verified, dated fact about the opening',
+      missing: ['1 more verified, dated, cited fact', 'a verified, dated fact about the opening'],
+    });
+    assert.equal((await check(['ev_p1', 'ev_p2']))?.reason,
+      'Not sent: not enough verified evidence (0 of 1 about the opening); missing: a verified, dated fact about the opening');
+    assert.deepEqual((await check(['ev_drain_a', 'ev_p1'], ' '))?.missing, ['a named role']);
   });
 });
 
@@ -294,7 +321,7 @@ describe('search desk over HTTP (fixture mode)', () => {
     const ghostIntro = await call<IntroRequest>(`/api/candidates/${candidate.id}/intros`, { openingId: 'op_ghost_mlp' });
     const blocked = await waitFor(async () => (await call<IntroRequest[]>(`/api/candidates/${candidate.id}/intros`))
       .find(row => row.id === ghostIntro.id && row.status === 'not_drafted'), 20_000);
-    assert.match(blocked.blockedReason ?? '', /^Not drafted: no verified, dated fact about the opening/);
+    assert.equal(blocked.blockedReason, 'Not sent: not enough verified evidence (0 of 1 about the opening); missing: a verified, dated fact about the opening');
     assert.equal(blocked.approvalId, null);
 
     const again = await call<IntroRequest>(`/api/candidates/${candidate.id}/intros`, { openingId: 'op_orbit_mlp' });
