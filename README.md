@@ -577,6 +577,18 @@ on this cohort, and we say so. For scale, 10 of the 118 cohort companies (8%) sh
 months, and 10 of the 70 recently-hiring companies did (14%). Files: `docs/live/replay-2026-09-01-summary.json`,
 `docs/live/o1-replay-2026-09-01.json`.
 
+**The same replay in the app** (Check → Replay; `POST /api/openings/scan` with `dataMode: "cache"` and
+`replay.asOf: "2026-09-01"`, 0 credits, all 59 reads from the recorded cache). It uses the app's cohort, which keeps
+companies with at least one family departure inside or straddling the window, so its counts differ from the script
+table above. The conclusion is the same:
+
+| Arm | Picks | Outcome appeared by 31 Oct |
+|---|---|---|
+| O1 | **0** predicted (6 held) | 0 |
+| Any job post in the last 30 days | 57 | 6 (11%) |
+| Headcount +30% | 0 | 0 |
+| Base rate | 91 cohort companies | 6 |
+
 **Part 2** (live replay `run_396d5e95`, 0 facts after 1 Sep used, 54.4 credits):
 
 | Arm | Predicted | Showed the need | Did not |
