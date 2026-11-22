@@ -1,7 +1,7 @@
 // Search Desk persistence: candidates and intro requests, plus read helpers over the openings / candidate / intro runs.
 // Tables are created lazily (CREATE TABLE IF NOT EXISTS) on the shared store; the engine worker calls the same helpers.
 import type { Company, Evidence } from '../../shared/types.ts';
-import type { Candidate, Consent, Departure, IntroRequest, Opening } from '../../shared/desk.ts';
+import type { Candidate, Consent, Departure, FieldProvenance, IntroRequest, Opening, RoleFamily } from '../../shared/desk.ts';
 import { decode, now } from '../db.ts';
 import type { Store } from '../db.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
@@ -22,12 +22,17 @@ export function deskTables(store: Store) {
     CREATE INDEX IF NOT EXISTS desk_intros_candidate ON desk_intros (candidate_id);
     CREATE INDEX IF NOT EXISTS desk_intros_company ON desk_intros (company_id);
   `);
+  const columns = store.sql.prepare('PRAGMA table_info(desk_candidates)').all().map(column => column.name);
+  if (!columns.includes('edits_json')) store.sql.exec('ALTER TABLE desk_candidates ADD COLUMN edits_json TEXT');
   ready.add(store);
 }
 
 export interface CandidateRow {
   id: string; runId: string | null; linkedinUrl: string; consent: Consent; samples: string[]; confirmedAt: string | null; createdAt: string;
+  edits: CandidateEdits;
 }
+// Fields the candidate corrected when confirming; absent = keep the parsed value.
+export interface CandidateEdits { roleFamily?: RoleFamily | null; skills?: string[] }
 export interface IntroRow {
   id: string; runId: string | null; direction: IntroRequest['direction']; candidateId: string; companyId: string;
   openingId: string; openingsRunId: string; createdAt: string;
@@ -37,6 +42,7 @@ const candidateRow = (row: Record<string, unknown>): CandidateRow => ({
   id: row.id as string, runId: row.run_id as string | null, linkedinUrl: row.linkedin_url as string,
   consent: decode<Consent>(row.consent_json as string), samples: decode<string[]>(row.samples_json as string),
   confirmedAt: row.confirmed_at as string | null, createdAt: row.created_at as string,
+  edits: row.edits_json ? decode<CandidateEdits>(row.edits_json as string) : {},
 });
 const introRow = (row: Record<string, unknown>): IntroRow => ({
   id: row.id as string, runId: row.run_id as string | null, direction: row.direction as IntroRow['direction'],
@@ -44,7 +50,7 @@ const introRow = (row: Record<string, unknown>): IntroRow => ({
   openingsRunId: row.openings_run_id as string, createdAt: row.created_at as string,
 });
 
-export function insertCandidate(store: Store, row: Omit<CandidateRow, 'runId' | 'confirmedAt' | 'createdAt'>) {
+export function insertCandidate(store: Store, row: Omit<CandidateRow, 'runId' | 'confirmedAt' | 'createdAt' | 'edits'>) {
   deskTables(store);
   // Samples are stored only with consent.
   store.sql.prepare(`INSERT INTO desk_candidates (id, linkedin_url, consent_json, samples_json, created_at) VALUES (?, ?, ?, ?, ?)`)
@@ -59,10 +65,11 @@ export function getCandidateRow(store: Store, id: string): CandidateRow | undefi
   const row = store.sql.prepare('SELECT * FROM desk_candidates WHERE id = ?').get(id);
   return row ? candidateRow(row) : undefined;
 }
-export function confirmCandidate(store: Store, id: string, consent: Consent | undefined) {
+export function confirmCandidate(store: Store, id: string, consent: Consent | undefined, edits: CandidateEdits = {}) {
   deskTables(store);
   const row = getCandidateRow(store, id)!;
   const next = consent ? { ...consent, recordedAt: now() } : row.consent;
+  store.sql.prepare('UPDATE desk_candidates SET edits_json = ? WHERE id = ?').run(JSON.stringify({ ...row.edits, ...edits }), id);
   // Withdrawing sample consent deletes the stored samples; re-granting cannot restore them.
   store.sql.prepare('UPDATE desk_candidates SET confirmed_at = ?, consent_json = ?, samples_json = ? WHERE id = ?')
     .run(now(), JSON.stringify(next), JSON.stringify(next.shareSamples ? row.samples : []), id);
@@ -134,15 +141,19 @@ export function candidateView(store: Store, row: CandidateRow): Candidate {
   const parsed = runId ? store.getOutput<CandidateOutputs['parse_profile']>(runId, 'parse_profile') : undefined;
   const status: Candidate['status'] = parsed && fetched?.found ? 'ready'
     : (fetched && !fetched.found) || (run && failedStatuses.has(run.status)) ? 'failed' : 'enriching';
-  const { consent } = row;
+  const { consent, edits } = row;
+  const parsedBy: FieldProvenance = parsed?.parsedBy === 'llm' ? `Parsed by ${parsed.fieldSource?.match(/^Filled by (.+?) ·/)?.[1] ?? 'the LLM'}` : 'Parsed by rules';
+  const roleFamily = edits.roleFamily !== undefined ? edits.roleFamily : parsed?.roleFamily ?? null;
+  const skills = edits.skills ?? parsed?.skills ?? [];
   return {
     id: row.id, status, linkedinUrl: row.linkedinUrl,
-    displayName: parsed?.displayName || 'Candidate', headline: parsed?.headline ?? null, roleFamily: parsed?.roleFamily ?? null,
-    skills: consent.shareSkills ? parsed?.skills ?? [] : [],
+    displayName: parsed?.displayName || 'Candidate', headline: parsed?.headline ?? null, roleFamily,
+    skills: consent.shareSkills ? skills : [],
     history: consent.shareHistory ? parsed?.history ?? [] : [],
     samples: consent.shareSamples ? row.samples : [],
     consent, confirmedAt: row.confirmedAt,
     evidenceIds: (fetched?.evidence ?? []).filter(evidence => consentedField(evidence, consent)).map(evidence => evidence.id),
+    provenance: { roleFamily: edits.roleFamily !== undefined ? 'Edited by candidate' : parsedBy, skills: edits.skills ? 'Edited by candidate' : parsedBy },
     runId, parsedBy: parsed?.parsedBy ?? 'rules', ...(parsed?.fieldSource && { fieldSource: parsed.fieldSource }),
     ...(fetched?.evidence.some(evidence => evidence.mode === 'fixture') && { fixture: true }),
   };

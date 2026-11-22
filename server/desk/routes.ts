@@ -7,6 +7,8 @@ import type { Company, Evidence, Pipeline, RunLimits } from '../../shared/types.
 import type {
   Candidate, CompanySummary, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
 } from '../../shared/desk.ts';
+import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
+import type { RoleFamily } from '../../shared/desk.ts';
 import type { Store } from '../db.ts';
 import { linkedinProfileUrl } from '../crustdata/person-enrich.ts';
 import { introSharedFields } from '../engine/candidate-steps.ts';
@@ -18,7 +20,7 @@ import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
   listCandidateRows, listIntroRows, openingsSnapshot, setCandidateRun, setIntroRun,
 } from './store.ts';
-import type { IntroRow, OpeningsSnapshot } from './store.ts';
+import type { CandidateEdits, IntroRow, OpeningsSnapshot } from './store.ts';
 
 // The send-once proof's fault injection (scripts/send-once-proof.ts); /api/runs accepts the same flag.
 type InjectedChaos = { crashAfterDeliver?: boolean };
@@ -34,6 +36,11 @@ export interface DeskDeps {
 const consentSchema = z.object({
   shareHistory: z.boolean(), shareSkills: z.boolean(), shareSamples: z.boolean(), discoverable: z.boolean(),
 }).strict();
+const confirmSchema = z.object({
+  consent: consentSchema.optional(),
+  roleFamily: z.enum(Object.keys(ROLE_FAMILY_LABELS) as [RoleFamily, ...RoleFamily[]]).nullable().optional(),
+  skills: z.array(z.string().max(60)).max(40).optional(),
+});
 const candidateSchema = z.object({
   linkedinUrl: z.string().max(300),
   samples: z.array(z.string().max(2000)).max(5).optional(),
@@ -151,11 +158,20 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const candidate = loadCandidate(id);
     if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
     if (candidate.status !== 'ready') return c.json({ error: 'The profile is not ready to confirm yet' }, 409);
-    const body = z.object({ consent: consentSchema.optional() }).safeParse(await c.req.json().catch(() => ({})));
-    if (!body.success) return c.json({ error: 'Expected an optional consent object' }, 400);
-    confirmCandidate(store, id, body.data.consent);
+    const body = confirmSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: 'Expected optional consent, roleFamily (a role family or null) and skills (strings)' }, 400);
+    // Only a real change counts as a candidate edit, so unchanged fields keep their "parsed by" provenance.
+    const { roleFamily, skills } = body.data;
+    const edits: CandidateEdits = {};
+    if (roleFamily !== undefined && roleFamily !== candidate.roleFamily) edits.roleFamily = roleFamily;
+    const cleanSkills = skills && [...new Set(skills.map(skill => String(sanitize(skill.trim(), true))).filter(Boolean))].slice(0, 30);
+    if (cleanSkills && cleanSkills.join('\n') !== candidate.skills.join('\n')) edits.skills = cleanSkills;
+    confirmCandidate(store, id, body.data.consent, edits);
     const confirmed = loadCandidate(id)!;
-    return c.json({ ...confirmed, evidence: candidateEvidence(store, confirmed) });
+    // Matching re-runs on the confirmed profile (edited family and skills, current consent).
+    const snapshot = openingsSnapshot(store);
+    const openings = snapshot ? openingsForCandidate(confirmed, snapshot.openings, snapshot.evidence).map(publicOpening) : [];
+    return c.json({ ...confirmed, evidence: candidateEvidence(store, confirmed), openings });
   });
 
   api.get('/candidates/:id/openings', c => {
