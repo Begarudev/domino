@@ -9,12 +9,15 @@ import {
 import type { CompanyInput } from './common.ts';
 import type { EndpointSpec } from './spec.ts';
 
-const GROWTH_LIMIT = 40;
+const GROWTH_LIMIT = 20;
 const GROWTH_RATE = 1.03; // 0.03 base + taxonomy, headcount and funding on both filter and response.
 const JUMP_PCT = 15;
 const FUNDRAISE_DATE = 'funding.last_fundraise_date';
 const GROWTH_DATE = 'metadata.growth_calculation_date';
 const MONTH_GROWTH = 'headcount.growth_percent.1m';
+const COHORT_LIMIT = 40;
+const COHORT_MIN_EMPLOYEES = 20;
+const COHORT_MAX_EMPLOYEES = 5000;
 
 const companySchema = z.object({
   crustdata_company_id: int,
@@ -45,7 +48,7 @@ type CompanyRow = z.infer<typeof companySchema>;
 const searchResponse = z.object({ companies: z.array(companySchema) }).passthrough();
 const enrichResponse = z.array(z.object({
   matched_on: str, match_type: str,
-  matches: z.array(z.object({ confidence_score: num, company_data: companySchema }).passthrough()),
+  matches: z.array(z.object({ confidence_score: num, company_data: companySchema.nullable() }).passthrough()),
 }).passthrough());
 
 function roundName(value?: string | null): string | null {
@@ -180,6 +183,22 @@ function companySignals(row: NonNullable<ReturnType<typeof toCompany>>, intent: 
   return triggers;
 }
 
+const aiIndustry = group('or', ['taxonomy.categories', 'basic_info.industries', 'taxonomy.professional_network_industry']
+  .flatMap(field => ['Artificial Intelligence', 'Machine Learning'].map(value => condition(field, '[.]', value))));
+
+function parseCompanySearch(raw: unknown, intent: Intent, meta: ParseMeta, prefix: string, eligible = (_row: CompanyRow) => true) {
+  const batch = emptyBatch();
+  for (const row of validate(searchResponse, raw).companies) {
+    if (!matchesGeography(row.locations?.country, intent.geography) || !eligible(row)) continue;
+    const normalized = toCompany(row, { ...meta, asOf: intent.asOf }, prefix, intent.runKind === 'replay');
+    if (!normalized) continue;
+    batch.mentions.push(normalized.mention);
+    batch.evidence.push(...normalized.evidence);
+    batch.triggers.push(...companySignals(normalized, intent));
+  }
+  return batch;
+}
+
 export const companySearchGrowth: EndpointSpec<{ intent: Intent }, TriggerBatch> = {
   name: 'company_growth', path: '/company/search', method: 'POST',
   build({ intent }) {
@@ -202,19 +221,36 @@ export const companySearchGrowth: EndpointSpec<{ intent: Intent }, TriggerBatch>
       limit: GROWTH_LIMIT,
     };
   },
-  parse(raw, { intent }, meta) {
-    const batch = emptyBatch();
-    for (const row of validate(searchResponse, raw).companies) {
-      if (!matchesGeography(row.locations?.country, intent.geography)) continue;
-      const normalized = toCompany(row, { ...meta, asOf: intent.asOf }, 'company_growth', intent.runKind === 'replay');
-      if (!normalized) continue;
-      batch.mentions.push(normalized.mention);
-      batch.evidence.push(...normalized.evidence);
-      batch.triggers.push(...companySignals(normalized, intent));
-    }
-    return batch;
-  },
+  parse: (raw, { intent }, meta) => parseCompanySearch(raw, intent, meta, 'company_growth'),
   estimateCredits: raw => estimate(raw, 'companies', GROWTH_LIMIT, GROWTH_RATE),
+};
+
+export const companyCohort: EndpointSpec<{ intent: Intent }, TriggerBatch> = {
+  name: 'company_cohort', path: '/company/search', method: 'POST',
+  build({ intent }) {
+    const cutoff = new Date(intent.asOf);
+    const month = cutoff.getUTCMonth() - 18;
+    const year = cutoff.getUTCFullYear();
+    const monthEnd = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const fundedSince = new Date(Date.UTC(year, month, Math.min(monthEnd, cutoff.getUTCDate()))).toISOString().slice(0, 10);
+    return {
+      filters: group('and', [
+        aiIndustry,
+        ...geographyFilter('locations.country', intent.geography),
+        condition('headcount.total', '=>', COHORT_MIN_EMPLOYEES), condition('headcount.total', '=<', COHORT_MAX_EMPLOYEES),
+        group('or', [group('and', dates(FUNDRAISE_DATE, fundedSince, intent.asOf)), condition(MONTH_GROWTH, '>', 0)]),
+      ]),
+      fields: ['basic_info', 'locations.country', GROWTH_DATE, 'headcount.total'],
+      sorts: [{ field: FUNDRAISE_DATE, order: 'desc' }, { field: 'crustdata_company_id', order: 'asc' }],
+      limit: COHORT_LIMIT,
+    };
+  },
+  parse: (raw, { intent }, meta) => parseCompanySearch(raw, intent, meta, 'company_cohort', row => {
+    const count = row.headcount?.total;
+    return count != null && count >= COHORT_MIN_EMPLOYEES && count <= COHORT_MAX_EMPLOYEES
+      && companyNumber(row.crustdata_company_id ?? row.basic_info?.crustdata_company_id) !== null;
+  }),
+  estimateCredits: raw => estimate(raw, 'companies', COHORT_LIMIT, GROWTH_RATE),
 };
 
 const enrichFields = ['basic_info', 'taxonomy', 'locations', 'headcount', 'funding', 'competitors'];
@@ -233,11 +269,13 @@ export const companyEnrich: EndpointSpec<{ companies: CompanyInput[] }, Pick<Tri
     const historical = Boolean(isoDay(meta.retrievedAt) && meta.asOf < isoDay(meta.retrievedAt)!);
     const seen = new Set<string>();
     for (const result of validate(enrichResponse, raw)) {
-      const matching = result.matches.filter(candidate => {
-        const basic = candidate.company_data.basic_info;
+      const matching = result.matches.filter((candidate): candidate is typeof candidate & { company_data: CompanyRow } => {
+        const row = candidate.company_data;
+        if (!row) return false;
+        const basic = row.basic_info;
         const identity = {
           name: basic?.name || '', domain: basic?.primary_domain || basic?.website,
-          crustdataId: candidate.company_data.crustdata_company_id ?? basic?.crustdata_company_id,
+          crustdataId: row.crustdata_company_id ?? basic?.crustdata_company_id,
         };
         return companies.some(company => sameCompany(identity, company));
       }).sort((a, b) => (b.confidence_score ?? 0) - (a.confidence_score ?? 0));

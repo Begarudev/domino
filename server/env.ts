@@ -1,11 +1,25 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DataMode, RunLimits } from '../shared/types.ts';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
-const envFile = resolve(root, '.env');
-if (existsSync(envFile)) {
+function findEnvFile() {
+  const local = resolve(root, '.env');
+  if (existsSync(local)) return local;
+  try {
+    const worktree = /^gitdir:\s*(.+)$/.exec(readFileSync(resolve(root, '.git'), 'utf8').trim());
+    if (!worktree) return;
+    const gitDir = resolve(root, worktree[1]);
+    const commonDir = resolve(gitDir, readFileSync(resolve(gitDir, 'commondir'), 'utf8').trim());
+    const main = resolve(dirname(commonDir), '.env');
+    if (existsSync(main)) return main;
+  } catch {
+    // A regular checkout or a source archive may have no linked-worktree metadata.
+  }
+}
+const envFile = findEnvFile();
+if (envFile) {
   for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.*)$/.exec(line);
     if (!match || process.env[match[1]] !== undefined) continue;
@@ -19,7 +33,7 @@ const { DOMINO_DATA, DOMINO_PORT, DOMINO_DB, DOMINO_OUTBOX } = process.env;
 const crustdataKey = Boolean(process.env.CRUSTDATA_API_KEY);
 const anthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
 const openaiKey = Boolean(process.env.OPENAI_API_KEY);
-const llm: 'anthropic' | 'openai' | 'template' = anthropicKey ? 'anthropic' : openaiKey ? 'openai' : 'template';
+const llm: 'anthropic' | 'openai' | 'template' = openaiKey ? 'openai' : anthropicKey ? 'anthropic' : 'template';
 export const ANTHROPIC_MODEL = redactSecrets(process.env.ANTHROPIC_MODEL || 'claude-opus-5-5');
 const openaiModel = redactSecrets(process.env.OPENAI_MODEL || 'gpt-5-mini');
 const dataMode: DataMode = DOMINO_DATA === 'live' || DOMINO_DATA === 'cache' || DOMINO_DATA === 'fixture'

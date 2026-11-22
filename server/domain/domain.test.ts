@@ -227,3 +227,14 @@ test('placeholder identifiers never merge unrelated companies (live regression: 
   assert.ok(names.includes('ENKRE') && names.includes('The Hershey Company') && names.includes('Hexalia') && names.includes('Hanse'));
   assert.equal(result.merges.length, 0);
 });
+
+test('verifier keeps cited sentences that name a "Pvt. Ltd." company and seller-only logistics', () => {
+  const evidence: Evidence[] = [{ id: 'ev_k', claim: 'Kestrel Labs Pvt. Ltd. posted Senior Inference Engineer on 3 Nov.', value: 'Senior Inference Engineer',
+    source: { provider: 'crustdata', endpoint: '/job/search', url: 'https://example.com/j' }, observedAt: '2026-11-03',
+    retrievedAt: '2026-11-22T08:00:00Z', mode: 'fixture', verifiable: true }];
+  const claims: Claim[] = [{ n: 1, text: 'Kestrel Labs Pvt. Ltd. posted Senior Inference Engineer on 3 Nov.', evidenceIds: ['ev_k'], verifiable: true, numbers: ['3 Nov'] } as Claim];
+  const result = verifyDraft({ subject: 's', body: 'Kestrel Labs Pvt. Ltd. posted Senior Inference Engineer on 3 Nov. [1] Happy to keep it to 20 minutes.' }, claims, evidence);
+  assert.match(result.body, /Kestrel Labs Pvt\. Ltd\. posted Senior Inference Engineer on 3 Nov\./);
+  assert.match(result.body, /20 minutes/);
+  assert.equal(result.checks.filter(check => check.status === 'removed').length, 0);
+});

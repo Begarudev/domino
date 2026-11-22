@@ -17,6 +17,10 @@ export const stepLabels: Record<StepName, string> = {
 
 export const now = () => new Date().toISOString();
 const encode = JSON.stringify;
+export type RunChaos = ChaosConfig & { crashAfterDeliver?: boolean };
+export type ToolLedgerEntry = LedgerEntry & { error?: string };
+type JournalEvent = RunEvent & { error?: string };
+type JournalRecord = Omit<StoredEvent, 'event'> & { event: JournalEvent };
 export function decode<T>(json: string): T {
   return JSON.parse(json) as T;
 }
@@ -37,9 +41,9 @@ export interface RunRow {
   resumes: number;
 }
 type StepRow = StepState & { output_json: string | null };
-type LedgerInput = Omit<LedgerEntry, 'id' | 'ts'>;
+type LedgerInput = Omit<ToolLedgerEntry, 'id' | 'ts'>;
 type EventRow = { seq: number; run_id: string; ts: string; payload_json: string };
-export type EvidenceSource = { endpoint: string; input: unknown; rawId: string };
+export type EvidenceSource = { endpoint: string; path?: string; input: unknown; rawId: string; time: Pick<Intent, 'asOf' | 'windowDays'> };
 
 export class Store {
   readonly sql: DatabaseSync;
@@ -64,7 +68,10 @@ export class Store {
       CREATE TABLE IF NOT EXISTS ledger (
         id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, ts TEXT, step TEXT, provider TEXT, endpoint TEXT, mode TEXT,
         status TEXT, attempt INTEGER, credits REAL, input_tokens INTEGER, output_tokens INTEGER, usd REAL, latency_ms INTEGER,
-        injected INTEGER, request_hash TEXT
+        injected INTEGER, request_hash TEXT, error TEXT
+      );
+      CREATE TABLE IF NOT EXISTS tool_slots (
+        endpoint TEXT PRIMARY KEY, next_at INTEGER NOT NULL, lease_id TEXT, lease_until INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS tool_cache (
         key TEXT PRIMARY KEY, provider TEXT, endpoint TEXT, request_json TEXT, response_json TEXT, fetched_at TEXT
@@ -75,8 +82,10 @@ export class Store {
         id TEXT PRIMARY KEY, run_id TEXT, json TEXT, status TEXT, idempotency_key TEXT UNIQUE
       );
       CREATE TABLE IF NOT EXISTS outbox (
-        idempotency_key TEXT PRIMARY KEY, run_id TEXT, approval_id TEXT, json TEXT, executed_at TEXT
+        idempotency_key TEXT PRIMARY KEY, run_id TEXT, approval_id TEXT, json TEXT, executed_at TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
       );
+      CREATE TABLE IF NOT EXISTS inbox_received (idempotency_key TEXT PRIMARY KEY, received_at TEXT, payload_json TEXT);
       CREATE TABLE IF NOT EXISTS asks (id TEXT PRIMARY KEY, run_id TEXT, json TEXT, answer TEXT);
       CREATE INDEX IF NOT EXISTS events_run_seq ON events(run_id, seq);
       CREATE INDEX IF NOT EXISTS events_run_type_seq ON events(run_id, type, seq);
@@ -86,10 +95,23 @@ export class Store {
       CREATE INDEX IF NOT EXISTS outbox_run ON outbox(run_id);
       CREATE INDEX IF NOT EXISTS asks_run ON asks(run_id);
     `);
+    this.ensureColumn('outbox', 'status', "TEXT NOT NULL DEFAULT 'pending'",
+      "UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL");
+    this.ensureColumn('ledger', 'error', 'TEXT');
   }
 
-  transaction<T>(fn: () => T): T {
-    this.sql.exec('BEGIN IMMEDIATE');
+  private ensureColumn(table: 'ledger' | 'outbox', name: string, definition: string, backfill?: string) {
+    const exists = () => this.sql.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === name);
+    if (exists()) return;
+    this.transaction(() => {
+      if (exists()) return;
+      this.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      if (backfill) this.sql.exec(backfill);
+    });
+  }
+
+  transaction<T>(fn: () => T, mode: 'read' | 'write' = 'write'): T {
+    this.sql.exec(mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE');
     try {
       const result = fn();
       this.sql.exec('COMMIT');
@@ -100,7 +122,7 @@ export class Store {
     }
   }
 
-  createRun(id: string, request: string, mode: DataMode, llm: string, limits: RunLimits, chaos: ChaosConfig) {
+  createRun(id: string, request: string, mode: DataMode, llm: string, limits: RunLimits, chaos: RunChaos) {
     this.transaction(() => {
       const ts = now();
       this.sql.prepare(`INSERT INTO runs (id, request, status, data_mode, llm, limits_json, chaos_json, created_at, updated_at)
@@ -146,12 +168,12 @@ export class Store {
     }
   }
 
-  appendEvent(runId: string, event: RunEvent): StoredEvent {
+  appendEvent(runId: string, event: JournalEvent): JournalRecord {
     return this.transaction(() => this.recordEvent(runId, event));
   }
 
   // This variant participates in the caller's transaction.
-  recordEvent(runId: string, event: RunEvent): StoredEvent {
+  recordEvent(runId: string, event: JournalEvent): JournalRecord {
     const ts = now();
     const { lastInsertRowid } = this.sql.prepare('INSERT INTO events (run_id, ts, type, payload_json) VALUES (?, ?, ?, ?)')
       .run(runId, ts, event.type, encode(event));
@@ -200,7 +222,7 @@ export class Store {
     return { seq: Number(lastInsertRowid), runId, ts, event };
   }
 
-  getEvents(runId: string, after: number, limit = 256): StoredEvent[] {
+  getEvents(runId: string, after: number, limit = 256): JournalRecord[] {
     const rows = this.sql.prepare('SELECT seq, run_id, ts, payload_json FROM events WHERE run_id = ? AND seq > ? ORDER BY seq LIMIT ?')
       .all(runId, after, limit) as unknown as EventRow[];
     return rows.map(row => ({ seq: row.seq, runId: row.run_id, ts: row.ts, event: decode(row.payload_json) }));
@@ -243,7 +265,7 @@ export class Store {
   }
 
   getOutbox(runId: string): OutboxAction[] {
-    return this.sql.prepare('SELECT json FROM outbox WHERE run_id = ? AND executed_at IS NOT NULL ORDER BY rowid').all(runId)
+    return this.sql.prepare("SELECT json FROM outbox WHERE run_id = ? AND status = 'delivered' ORDER BY rowid").all(runId)
       .map(row => decode(row.json as string));
   }
 
@@ -258,7 +280,7 @@ export class Store {
       .run(key, provider, endpoint, request, encode(response), now());
   }
 
-  beginLedger(input: LedgerInput, hash: string): LedgerEntry {
+  beginLedger(input: LedgerInput, hash: string): ToolLedgerEntry {
     const ts = now();
     const { lastInsertRowid } = this.sql.prepare(`INSERT INTO ledger
       (run_id, ts, step, provider, endpoint, mode, status, attempt, credits, input_tokens, output_tokens, usd, latency_ms, injected, request_hash)
@@ -268,18 +290,18 @@ export class Store {
     return { ...input, ts, id: Number(lastInsertRowid) };
   }
 
-  finishLedger(entry: LedgerEntry) {
+  finishLedger(entry: ToolLedgerEntry) {
     this.sql.prepare(`UPDATE ledger SET status = ?, credits = ?, input_tokens = ?, output_tokens = ?, usd = ?,
-      latency_ms = ? WHERE id = ?`).run(entry.status, entry.credits, entry.inputTokens, entry.outputTokens,
-      entry.usd, entry.latencyMs, entry.id);
+      latency_ms = ?, error = ? WHERE id = ?`).run(entry.status, entry.credits, entry.inputTokens, entry.outputTokens,
+      entry.usd, entry.latencyMs, entry.error ?? null, entry.id);
     this.recordEvent(entry.runId, { type: 'ledger.entry', entry });
   }
 
-  getLedger(runId: string): LedgerEntry[] {
+  getLedger(runId: string): ToolLedgerEntry[] {
     const rows = this.sql.prepare(`SELECT id, run_id AS runId, ts, step, provider, endpoint, mode, status, attempt, credits,
-      input_tokens AS inputTokens, output_tokens AS outputTokens, usd, latency_ms AS latencyMs, injected FROM ledger
-      WHERE run_id = ? ORDER BY id`).all(runId) as unknown as LedgerEntry[];
-    return rows.map(row => ({ ...row, injected: Boolean(row.injected) }));
+      input_tokens AS inputTokens, output_tokens AS outputTokens, usd, latency_ms AS latencyMs, injected, error FROM ledger
+      WHERE run_id = ? ORDER BY id`).all(runId) as unknown as (ToolLedgerEntry & { error: string | null })[];
+    return rows.map(({ error, ...row }) => ({ ...row, injected: Boolean(row.injected), ...(error ? { error } : {}) }));
   }
 
   budget(runId: string): BudgetState {

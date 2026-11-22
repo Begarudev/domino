@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { STEP_ORDER } from '../shared/types.ts';
-import type { RunSnapshot } from '../shared/types.ts';
+import type { DeliveryReceipt, RunSnapshot } from '../shared/types.ts';
 import { root } from '../server/env.ts';
 
 export async function waitFor<T>(check: () => Promise<T | undefined>, timeoutMs = 25_000): Promise<T> {
@@ -63,7 +63,7 @@ async function smoke(base: string) {
   console.log(`Fixture run completed. ${completed.targets.length} targets, 1 local message, 1 tentative meeting hold, duplicate approve blocked.`);
 
   const second = await request<{ id: string }>('/api/runs', {
-    ...setup, chaos: { timeoutOnce: ['company_enrich'] },
+    ...setup, chaos: { timeoutOnce: ['company_enrich'], crashAfterDeliver: true },
   });
   const preKill = await waitState(second.id, state => state.steps.some(step => step.step === 'enrich_companies' && step.status === 'running'));
   const killed = await request<{ killed: boolean }>(`/api/runs/${second.id}/kill`, {});
@@ -85,7 +85,15 @@ async function smoke(base: string) {
   assert.equal(resumed.outbox.length, 0);
   assert.equal(resumed.engine.crashes, 1);
   assert.equal(resumed.engine.resumes, 1);
-  console.log(`SIGKILL recovery complete. ${checkpoints.length} checkpoints reused, ${resumed.steps.length} unique step rows, 0 outbox rows on the resumed run.`);
+  console.log(`SIGKILL recovery complete. ${checkpoints.length} checkpoints reused, ${resumed.steps.length} unique step rows, 0 outbox rows before approval.`);
+  const retrySend = resumed.approvals.find(approval => approval.kind === 'send_message')!;
+  const interrupted = await request<{ pending: boolean }>(`/api/approvals/${retrySend.id}`, { decision: 'approve' });
+  assert.equal(interrupted.pending, true);
+  assert.equal((await status(second.id)).outbox.length, 0);
+  const recovered = await request<{ receipt: DeliveryReceipt }>(`/api/approvals/${retrySend.id}`, { decision: 'approve' });
+  assert.equal(recovered.receipt.status, 'already_delivered');
+  assert.equal((await status(second.id)).outbox.length, 1);
+  console.log('Dispatcher SIGKILL recovery complete. Test inbox returned already_delivered and the sender recorded one outbox action.');
   console.log(`Ledger totals. First run ${completed.ledger.length} attempts, ${completed.budget.used.credits} credits, $${completed.budget.used.modelUsd.toFixed(6)} USD.`);
   console.log(`Ledger totals. Resumed run ${resumed.ledger.length} attempts, ${resumed.budget.used.credits} credits, $${resumed.budget.used.modelUsd.toFixed(6)} USD.`);
 }

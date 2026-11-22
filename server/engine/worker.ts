@@ -30,6 +30,8 @@ async function runWorker(runId: string) {
 
     const checkpoints: Checkpoints = {};
     const runStep = async <K extends StepName>(step: K) => {
+      const ctx = new ToolContext(store, runId, step, { signal: deadline.signal });
+      ctx.assertTime();
       const old = state.find(row => row.step === step);
       if (old?.status === 'done') {
         checkpoints[step] = store.getOutput<Outputs[K]>(runId, step);
@@ -41,8 +43,6 @@ async function runWorker(runId: string) {
           .run(now(), 'Replay scoring applies to historical runs', runId, step);
         return;
       }
-      const ctx = new ToolContext(store, runId, step, { signal: deadline.signal });
-      ctx.assertTime();
       current = step;
       const started = performance.now();
       store.appendEvent(runId, { type: 'step.started', step, label: stepLabels[step], attempt: (old?.attempt ?? 0) + 1 });

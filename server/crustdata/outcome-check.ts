@@ -1,7 +1,7 @@
 import type { Intent } from '../../shared/types.ts';
 import { servingSignalKeywords } from '../domain/facts.ts';
 import type { OutcomeFact, TriggerBatch } from '../domain/types.ts';
-import { companyFilter, estimate, mentionFor, sameCompany } from './common.ts';
+import { companyFilter, estimate, mentionFor, sameCompany, sameEmployer } from './common.ts';
 import type { CompanyInput } from './common.ts';
 import { buildJobs, jobCompanyFields, JOB_LIMIT, parseJobs } from './job-search.ts';
 import { buildPeopleMoves, MOVES_LIMIT, parsePeopleMoves } from './person-search.ts';
@@ -15,12 +15,13 @@ const outcomeIntent = (intent: Intent): Intent => ({
 });
 
 function extract(batch: TriggerBatch, companies: Input['companies'], kind: OutcomeFact['kind']): Output {
+  const matches = kind === 'hire' ? sameEmployer : sameCompany;
   const outcomes: OutcomeFact[] = [];
   for (const trigger of batch.triggers) {
     if (trigger.kind !== kind) continue;
     const employer = mentionFor(batch, trigger.companyId);
     if (!employer) continue;
-    const company = companies.find(item => sameCompany(item, employer));
+    const company = companies.find(item => matches(item, employer));
     const title = batch.evidence.find(row => trigger.evidenceIds.includes(row.id) &&
       (kind === 'job_post' ? row.source.field === '$.job_details.title' : row.source.field?.endsWith('.start_date')))?.value;
     if (company) outcomes.push({

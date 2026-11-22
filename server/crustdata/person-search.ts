@@ -5,14 +5,16 @@ import { PROFILE_LAG_DAYS } from '../domain/replay-guard.ts';
 import type { ProfileEvidence } from '../domain/replay-guard.ts';
 import type { CompanyMention, MoveTrigger, ParseMeta, PersonMention, TriggerBatch } from '../domain/types.ts';
 import {
-  companyFilter, condition, dates, emptyBatch, estimate, evidenceRow, geographyFilter, group, int, matchesGeography,
-  sameCompany, str, strs, validate,
+  companyFilter, companyNumber, condition, dates, emptyBatch, estimate, evidenceRow, geographyFilter, group, int,
+  matchesGeography, sameCompany, sameEmployer, str, strs, validate,
 } from './common.ts';
 import type { CompanyInput } from './common.ts';
 import type { EndpointSpec } from './spec.ts';
 
 export const MOVES_LIMIT = 50;
 const DECIDERS_LIMIT = 12;
+const COHORT_DEPARTURES_LIMIT = 200;
+const COHORT_LOOKBACK_DAYS = 90;
 const EMPLOYMENT = 'experience.employment_details';
 export const CURRENT = EMPLOYMENT + '.current';
 export const PAST = EMPLOYMENT + '.past';
@@ -96,7 +98,7 @@ function roles(profile: Profile): RoleEntry[] {
     const startMonth = monthBounds(data.start_date);
     const endMonth = monthBounds(data.end_date);
     return {
-      data, path: '$.' + EMPLOYMENT + '.' + kind + (data.position_id != null
+      data, path: '$.' + EMPLOYMENT + '.' + kind + (data.position_id != null && data.position_id !== ''
         ? '[?(@.position_id == ' + JSON.stringify(data.position_id) + ')]' : '[' + index + ']'),
       start: startMonth ? null : isoDay(data.start_date), end: endMonth ? null : isoDay(data.end_date),
       current: kind === 'current', startMonth, endMonth,
@@ -104,13 +106,16 @@ function roles(profile: Profile): RoleEntry[] {
   }));
 }
 
+function roleEmployer(data: Role): CompanyInput {
+  return { name: data.name?.trim() ?? '', domain: data.company_website, crustdataId: data.crustdata_company_id };
+}
+
 function employer(role: RoleEntry, key: string, historical: boolean): CompanyMention | null {
+  const identity = roleEmployer(role.data);
+  if (!identity.name) return null;
   const data = role.data;
-  const name = data.name?.trim();
-  if (!name) return null;
   return {
-    key, name, domain: data.company_website, linkedinUrl: data.company_professional_network_profile_url,
-    crustdataId: data.crustdata_company_id, hq: data.company_headquarters_country,
+    ...identity, key, linkedinUrl: data.company_professional_network_profile_url, hq: data.company_headquarters_country,
     industry: historical ? undefined : data.company_industries?.[0] || data.company_professional_network_industry,
     categories: historical ? undefined : data.company_industries ?? undefined,
     headcount: historical ? undefined : data.company_headcount_latest, evidenceIds: [],
@@ -153,7 +158,7 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
       const latest = datedRoleStart(role, through, !historical);
       if (companies) {
         const company = employer(role, '', true);
-        return Boolean(company && companies.some(target => sameCompany(target, company)) && earliest &&
+        return Boolean(company && companies.some(target => sameEmployer(target, company)) && earliest &&
           earliest > after && inWindow(latest, after, through));
       }
       if (!matchesGeography(role.data.company_headquarters_country, intent.geography)) return false;
@@ -174,7 +179,7 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
       const movementDate = at;
       const dateLabel = role.startMonth ? formatMonth(role.startMonth[0]) : at;
       const precisionNote = role.startMonth ? ' (month precision)' : '';
-      const position = role.data.position_id ?? stableId('position_', role.data.name || '', title, at || '');
+      const position = String(role.data.position_id ?? '') || stableId('position_', role.data.name || '', title, at || '');
       const mentionKey = 'person_recent_moves:' + recordId + ':' + position;
       const next = employer(role, mentionKey + ':company', historical);
       if (!next || seen.has(mentionKey)) continue;
@@ -248,6 +253,118 @@ export const personSearchRecentMoves: EndpointSpec<{ intent: Intent }, TriggerBa
   estimateCredits: raw => estimate(raw, 'profiles', MOVES_LIMIT, 0.23),
 };
 
+type CohortInput = { intent: Intent; companies: CompanyInput[] };
+
+function cohortWindow(intent: Intent) {
+  return {
+    since: shiftDays(intent.asOf, -COHORT_LOOKBACK_DAYS),
+    through: intent.runKind === 'replay' ? shiftDays(intent.asOf, -PROFILE_LAG_DAYS) : intent.asOf,
+  };
+}
+
+function cohortKeywords(intent: Intent) {
+  const keywords = intent.signalKeywords.filter(keyword => keyword.trim());
+  return keywords.length ? keywords : ['inference', 'ML infrastructure', 'ML platform', 'GPU', 'model serving'];
+}
+
+export const personCohortDepartures: EndpointSpec<CohortInput, TriggerBatch> = {
+  name: 'person_cohort_departures', path: '/person/search', method: 'POST',
+  build({ intent, companies }) {
+    const ids = [...new Set(companies.flatMap(company => companyNumber(company.crustdataId) ?? []))];
+    const { since, through } = cohortWindow(intent);
+    return {
+      filters: group('and', [
+        // The API indexes the response's crustdata_company_id under company_id.
+        condition(PAST + '.company_id', 'in', ids.length ? ids : [-1]),
+        group('or', cohortKeywords(intent).map(keyword => condition(PAST + '.title', '[.]', keyword))),
+        ...dates(CURRENT + '.start_date', shiftDays(since, -1), through),
+      ]),
+      fields: [...basicFields, ...[CURRENT, PAST].flatMap(prefix => roleFields.map(field => prefix + '.' + field))],
+      // Person Search supports sorting on the employment-level date index.
+      sorts: [{ field: EMPLOYMENT + '.start_date', order: 'desc' }],
+      limit: COHORT_DEPARTURES_LIMIT,
+    };
+  },
+  parse(raw, { intent, companies }, meta) {
+    const { since, through } = cohortWindow(intent);
+    const keywords = cohortKeywords(intent);
+    const byId = new Map(companies.map(company => [companyNumber(company.crustdataId), company]));
+    const batch = emptyBatch();
+    const seen = new Set<string>();
+    const profiles = validate(personResponse, raw).profiles;
+
+    for (const profile of profiles) {
+      const name = profile.basic_profile?.name?.trim();
+      const url = profileUrl(profile);
+      if (profile.crustdata_person_id == null && !name && !url) continue;
+      const recordId = profileId(profile);
+      const work = roles(profile);
+      const active = work.filter(role => role.current && !role.end && !role.endMonth);
+      const hires = active.flatMap(role => {
+        const start = datedRoleStart(role, through, intent.runKind === 'live');
+        const first = role.startMonth?.[0] ?? start;
+        return start && first && start >= since && first <= through && start <= through && role.data.title
+          ? [{ role, start }] : [];
+      }).sort((a, b) => a.start.localeCompare(b.start) || Number(Boolean(b.role.data.is_default)) - Number(Boolean(a.role.data.is_default)));
+      const previousRoles = work.flatMap(role => {
+        const first = role.end ?? role.endMonth?.[0];
+        const last = role.end ?? role.endMonth?.[1];
+        const end = last && intent.runKind === 'live' && role.endMonth ? beforeOrOn(last, through) : last;
+        return !role.current && first && end && first <= through && end >= since && end <= through
+          && (!role.start || role.start <= end) && role.data.title && matchesSignal(role.data.title, keywords)
+          ? [{ role, first, end }] : [];
+      }).sort((a, b) => b.end.localeCompare(a.end));
+
+      for (const { role: previous, first, end: departedAt } of previousRoles) {
+        const companyId = companyNumber(previous.data.crustdata_company_id);
+        const company = companyId === null ? undefined : byId.get(companyId);
+        const moveKey = `person_cohort_departures:${recordId}:${companyId}`;
+        if (!company || seen.has(moveKey) || active.some(role => sameCompany(roleEmployer(role.data), company))) continue;
+        const arrivalRole = hires.find(({ role, start }) => start >= first && role.data.name?.trim());
+        if (!arrivalRole) continue;
+        const { role: hire, start: hiredAt } = arrivalRole;
+
+        const next = employer(hire, moveKey + ':destination', intent.runKind === 'replay')!;
+        const origin: CompanyMention = { ...company, key: moveKey + ':origin', evidenceIds: [] };
+        const pastTitle = previous.data.title!;
+        const newTitle = hire.data.title!;
+        const endLabel = previous.endMonth ? `in ${formatMonth(first)} (month precision)` : `on ${departedAt}`;
+        const startLabel = hire.startMonth ? `in ${formatMonth(hire.startMonth[0])} (month precision)` : `on ${hiredAt}`;
+        const departure: ProfileEvidence = evidenceRow(meta, recordId, previous.path + '.end_date',
+          `An employee's ${pastTitle} role at ${origin.name} ended ${endLabel}.`, departedAt, pastTitle, url);
+        const arrival: ProfileEvidence = evidenceRow(meta, recordId, hire.path + '.start_date',
+          `An employee started as ${newTitle} at ${next.name} ${startLabel}.`, hiredAt, newTitle, url);
+        departure.profileRoleStartedAt = arrival.profileRoleStartedAt = hiredAt;
+        origin.evidenceIds.push(departure.id);
+        next.evidenceIds.push(arrival.id);
+        const evidenceIds = [departure.id, arrival.id];
+        seen.add(moveKey);
+        batch.mentions.push(origin, next);
+        batch.evidence.push(departure, arrival);
+        if (name) batch.people.push({
+          key: moveKey, name, title: newTitle, companyKey: next.key, linkedinUrl: url, startedAt: hiredAt,
+          pastEmployers: pastEmployers(work, through, new Map([[previous, origin.key]])), evidenceIds,
+        });
+        const hireTrigger: MoveTrigger = {
+          id: stableId('tr_', 'cohort_hire', moveKey), companyId: next.key, kind: 'hire', date: hiredAt,
+          summary: `filled a ${newTitle} role ${startLabel}`, personId: name ? moveKey : null,
+          relatedCompanyId: origin.key, evidenceIds,
+          move: { currentTitle: newTitle, previousTitle: pastTitle, datePrecision: hire.startMonth ? 'month' : 'day',
+            startInterval: hire.startMonth ? [hire.startMonth[0], hiredAt] : undefined,
+            previousEndInterval: previous.endMonth ?? undefined },
+        };
+        const departureTrigger: MoveTrigger = { ...hireTrigger,
+          id: stableId('tr_', 'cohort_departure', moveKey), companyId: origin.key, kind: 'departure', date: departedAt,
+          summary: `an employee left a ${pastTitle} role ${endLabel}`, relatedCompanyId: next.key,
+        };
+        batch.triggers.push(departureTrigger, hireTrigger);
+      }
+    }
+    return batch;
+  },
+  estimateCredits: raw => estimate(raw, 'profiles', COHORT_DEPARTURES_LIMIT, 0.23),
+};
+
 export const personSearchDeciders: EndpointSpec<{ intent: Intent; company: Company }, Pick<TriggerBatch, 'people' | 'evidence'>> = {
   name: 'person_deciders', path: '/person/search', method: 'POST',
   build({ intent, company }) {
@@ -272,8 +389,7 @@ export const personSearchDeciders: EndpointSpec<{ intent: Intent; company: Compa
       if (!name) continue;
       const work = roles(profile);
       const role = work.find(entry => {
-        const atCompany = employer(entry, '', true);
-        if (!atCompany || !sameCompany(company, atCompany) || !entry.data.title ||
+        if (!sameEmployer(company, roleEmployer(entry.data)) || !entry.data.title ||
           !matchesDecider(entry.data.title, intent.deciderTitles)) return false;
         if (intent.runKind === 'replay') {
           const lastPossibleStart = datedRoleStart(entry, intent.asOf, false);
