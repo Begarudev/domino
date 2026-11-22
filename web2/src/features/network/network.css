@@ -1,0 +1,50 @@
+.dg { margin-bottom: 16px; grid-column: 1 / -1; }
+.dg-svg { display: block; width: 100%; height: auto; overflow: visible; font-family: inherit; }
+.dg-none { margin: 0; padding: 12px 16px; font-size: 14px; color: var(--ink-2); }
+
+.dg-n rect { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+.dg-n text { fill: var(--ink); font-size: 14px; font-weight: 600; }
+.dg-n.focal rect { fill: var(--ink); stroke: var(--ink); }
+.dg-n.focal text { fill: var(--surface); font-size: 15px; }
+.dg-n.struck text { fill: var(--ink-3); text-decoration: line-through; }
+.dg-n.held rect { stroke: var(--ink-2); stroke-dasharray: 3 3; }
+
+.dg-e .hit { fill: none; stroke: transparent; stroke-width: 18; }
+.dg-e .ln {
+  fill: none; stroke: var(--acc); stroke-width: 2;
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: dg-draw 200ms ease-out forwards; animation-delay: calc(var(--i) * 120ms);
+}
+.dg-e.in .ln { stroke: var(--ink-3); }
+.dg-e.held .ln { stroke: var(--ink-2); }
+.dg-e.struck .ln { stroke: var(--ink-3); }
+.dg-e .lbl { fill: var(--ink); font-size: 13px; font-weight: 500; }
+.dg-e .note { fill: var(--ink-2); font-size: 12.5px; }
+.dg-e.struck .lbl { fill: var(--ink-3); text-decoration: line-through; }
+.dg-e.link { cursor: pointer; outline: none; }
+.dg-e.link:hover .ln, .dg-e.link:focus-visible .ln { stroke-width: 3; }
+.dg-e.link:focus-visible .lbl { text-decoration: underline; }
+
+/* dashed styles apply after the draw-in so the dash animation isn't overridden mid-stroke */
+.dg-e.struck .ln, .dg-e.held .ln { animation-name: dg-draw-dashed; }
+
+.dg-m path { fill: var(--acc); }
+.dg-m.in path, .dg-m.struck path { fill: var(--ink-3); }
+.dg-m.held path { fill: var(--ink-2); }
+
+.dg-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0 0; padding: 0 16px 12px; font-size: 13px; color: var(--ink-2); }
+.dg-legend .sw { display: inline-block; width: 18px; height: 0; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--acc); }
+.dg-legend .sw.held { border-top: 2px dashed var(--ink-2); }
+.dg-legend .sw.struck { border-top: 2px dashed var(--ink-3); }
+.dg-legend .sw.in { border-top-color: var(--ink-3); }
+
+@keyframes dg-draw { to { stroke-dashoffset: 0; } }
+@keyframes dg-draw-dashed {
+  0% { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  99% { stroke-dasharray: 1; stroke-dashoffset: 0; }
+  100% { stroke-dasharray: 0.012 0.012; stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dg-e .ln { animation: none; stroke-dashoffset: 0; }
+  .dg-e.struck .ln, .dg-e.held .ln { stroke-dasharray: 0.012 0.012; }
+}
