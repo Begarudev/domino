@@ -174,7 +174,7 @@ export function NeverEmpty({ scan, cand, family, renderCard }: {
         <h3 id="near-h" className="dash-h3">Closest openings in nearby roles</h3>
         {nearby.length ? nearby.map(({ o, ev }) => (
           <div key={o.id} className="near">
-            <p className="near-tag"><span className="tag warn">Different role family: {famLabel(o.roleFamily)}</span></p>
+            <p className="near-tag"><span className="ctag tone-watch">Different role family: {famLabel(o.roleFamily)}</span></p>
             {renderCard(o, ev)}
           </div>
         )) : <p className="dash-quiet">No predicted opening in any family today.</p>}
@@ -193,7 +193,7 @@ function WatchRow({ w, showFamily }: { w: WatchItem; showFamily: boolean }) {
         <b className="wl-co">{w.companyName}</b>
         {w.headcount > 0 && <span className="wl-meta">{fmtInt(w.headcount)} staff</span>}
         {showFamily && <span className="tag">{famLabel(w.family)}</span>}
-        <span className={`wl-state st-${w.status}`}>
+        <span className={`wl-state st-${w.status} ctag tone-${w.status === 'held' ? 'held' : 'watch'}`}>
           <span className="pips" aria-hidden="true">{[0, 1].map((i) => <i key={i} className={i < Math.min(n, 2) ? 'on' : ''} />)}</span>
           {state}
         </span>
