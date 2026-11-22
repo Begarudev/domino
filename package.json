@@ -18,7 +18,8 @@
     "test": "bun test server",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "bun scripts/smoke.ts",
-    "snapshot": "bun scripts/snapshot.ts"
+    "snapshot": "bun scripts/snapshot.ts",
+    "test:e2e": "bun test tests/e2e"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
