@@ -199,11 +199,12 @@ test('draft verifier removes unsupported claims and keeps valid citations', () =
   ];
   const rendered = verifyDraft({ subject: 'Hello', body: [
     'Hi Dana,', claims[0].text + ' [1] They recently raised $40M.',
-    'The company listed its supplier. [2]', 'We posted a role on 2026-11-11. [1]', 'Would you have 20 minutes to talk?',
+    'The company listed its supplier. [2]', 'We posted a role on 2026-11-11. [1]',
+    'Delta Group posted a role on 2026-11-05. [1]', 'Your engineers left on 2026-11-05. [1]', 'Would you have 20 minutes to talk?',
   ].join('\n\n') }, claims, [first]);
   assert.match(rendered.body, /inference role on 2026-11-05\. \[1\]/);
-  assert.doesNotMatch(rendered.body, /\$40M|supplier|2026-11-11/);
-  assert.equal(rendered.checks.filter(check => check.status === 'removed').length, 3);
+  assert.doesNotMatch(rendered.body, /\$40M|supplier|2026-11-11|Delta Group|engineers left/);
+  assert.equal(rendered.checks.filter(check => check.status === 'removed').length, 5);
   assert.equal(rendered.unverifiable[0].reason, 'It has no date.');
   assert.deepEqual(rendered.citations, [{ marker: 1, evidenceId: first.id }]);
 });

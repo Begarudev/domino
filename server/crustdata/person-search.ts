@@ -294,10 +294,16 @@ export const personSearchDeciders: EndpointSpec<{ intent: Intent; company: Compa
           : `${name} is listed as ${title} at ${company.name}.`,
         start, title, url);
       if (start) fact.profileRoleStartedAt = start;
-      const history = work.filter(entry => entry.end && entry.end <= intent.asOf && entry.data.name);
-      const historyFacts = history.map(entry => evidenceRow(meta, recordId, entry.path + '.end_date',
-        `${name} worked at ${entry.data.name}${entry.start ? ' from ' + entry.start : ''} until ${entry.end}.`,
-        entry.end, entry.data.name, url));
+      const historyFacts = work.flatMap(entry => {
+        const end = entry.end ?? entry.endMonth?.[1];
+        if (!end || end > intent.asOf || !entry.data.name) return [];
+        const startLabel = entry.startMonth ? formatMonth(entry.startMonth[0]) : entry.start;
+        const endLabel = entry.endMonth ? formatMonth(entry.endMonth[0]) : end;
+        const precision = entry.startMonth || entry.endMonth ? ' (month precision)' : '';
+        return [evidenceRow(meta, recordId, entry.path + '.end_date',
+          `${name} worked at ${entry.data.name}${startLabel ? ' from ' + startLabel : ''} until ${endLabel}${precision}.`,
+          end, entry.data.name, url)];
+      });
       evidence.push(fact, ...historyFacts);
       people.push({ key: 'person_deciders:' + recordId, name, title, companyKey: company.id, linkedinUrl: url, startedAt: start,
         pastEmployers: pastEmployers(work, intent.asOf), evidenceIds: [fact.id, ...historyFacts.map(row => row.id)] });

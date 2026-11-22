@@ -154,6 +154,7 @@ function permittedCopy(sentence: string, names: string[]) {
   if (/^(?:would (?:you|it)|could we|are you open to|do you have|can we)\b[^.!?]*\?$/i.test(sentence) &&
       !/\b(?:since|recently|raised|founded|grew|hired|left|moved|posted|employees|engineers|million|billion)\b/i.test(sentence) &&
       tokens(sentence).every(value => value === '20' || tokens(meetingCopy(config)).includes(value))) return true;
+  if (/^(?:I hope you(?:'re|’re| are) well|Hope you(?:'re|’re| are) well|Thanks for your time)[.!]?$/i.test(sentence)) return true;
   if (sentence === `We offer ${config.offering}.` || sentence === config.oneLiner) return true;
   return names.includes(sentence.trim());
 }
@@ -162,14 +163,28 @@ const sentenceStarters = new Set(['A', 'An', 'And', 'As', 'At', 'Could', 'Do', '
   'If', 'In', 'It', 'Let', 'May', 'Our', 'Please', 'See', 'That', 'The', 'Their', 'They', 'This', 'To',
   'We', 'What', 'Would', 'You', 'Your']);
 
+function properWords(sentence: string) {
+  const text = sentence.replace(markerPattern, '');
+  return [...text.matchAll(/\b\p{Lu}[\p{L}'’-]*/gu)].flatMap(word =>
+    sentenceStarters.has(word[0]) && (word.index ?? 0) <= 2 ? [] : [word[0]]);
+}
+
 function factual(sentence: string, names: string[]) {
   if (tokens(sentence).length) return true;
-  let text = sentence.replace(markerPattern, '');
+  let text = sentence;
   for (const name of names) {
     if (name) text = text.replaceAll(name, ' ');
   }
-  const words = [...text.matchAll(/\b\p{Lu}[\p{L}'’-]*/gu)];
-  return words.some((word, index) => index > 0 || !sentenceStarters.has(word[0]) || (word.index ?? 0) > 2);
+  return properWords(text).length > 0 ||
+    /\b(?:raised|hired|founded|acquired|reported|posted|announced|reached|grew|deployed|poached|departed|moved)\b/i.test(text);
+}
+
+function claimWordingAllowed(sentence: string, claims: Claim[], names: string[]) {
+  if (/\b(?:engineers? (?:left|departed|moved)|left for|poached|departures?)\b/i.test(sentence)) return false;
+  const words = new Set([...claims.flatMap(claim => properWords(claim.text)), ...names.flatMap(properWords),
+    'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
+    'Jan', 'Feb', 'Mar', 'Apr', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+  return properWords(sentence).every(word => words.has(word));
 }
 
 export function verifyDraft(draft: { subject: string; body: string }, claims: Claim[], evidence: Evidence[]):
@@ -191,7 +206,9 @@ export function verifyDraft(draft: { subject: string; body: string }, claims: Cl
     const numbers = tokens(sentence);
     const evidenceIds = [...new Set(markers.flatMap(marker => allowed.get(marker)?.evidenceIds ?? []))];
     const citedNumbers = new Set(markers.flatMap(marker => allowed.get(marker)?.numbers ?? []).map(canonicalToken));
-    if (markers.length && markers.every(marker => allowed.has(marker)) && numbers.every(value => citedNumbers.has(canonicalToken(value)))) {
+    const citedClaims = markers.flatMap(marker => allowed.get(marker) ?? []);
+    if (markers.length && citedClaims.length === markers.length && numbers.every(value => citedNumbers.has(canonicalToken(value))) &&
+      claimWordingAllowed(sentence, citedClaims, names)) {
       checks.push({ sentence, status: 'cited', evidenceIds });
       for (const marker of markers) for (const evidenceId of allowed.get(marker)!.evidenceIds) {
         citations.set(marker + ':' + evidenceId, { marker, evidenceId });
