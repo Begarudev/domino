@@ -55,7 +55,9 @@
   /* rhythm: 4px base, 8px steps */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   /* shape: small control radii, softer cards, 1px hairlines, one popover elevation */
-  --r-sm: 4px; --r: 6px; --r-ctl: 8px; --r-lg: 10px; --r-pill: 999px;
+  /* Attio SPEC: cards and panels 8px, controls 8-10px (8 here: 32px-tall controls read bubbly at 10), tiles 12px */
+  --r-sm: 4px; --r: 6px; --r-ctl: 8px; --r-lg: 8px; --r-xl: 12px; --r-pill: 999px;
+  --track-ui: -0.005em;
   --hair: 1px solid var(--rule); --hair-2: 1px solid var(--rule-2);
   /* data grid */
   --row-h: 40px; --row-h-compact: 36px; --head-h: 36px; --cell-x: 12px; --cell-x-edge: 16px;
