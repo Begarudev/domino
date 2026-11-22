@@ -219,7 +219,6 @@ a { color: var(--cobalt-text); }
 .target-hold { color: var(--amber); font-weight: 600; }
 .target.is-held { border-style: dashed; border-color: rgba(224, 164, 58, 0.35); }
 .target.is-held .target-conf b { color: var(--text-2); }
-.has-tab .targets { display: none; }
 .has-tab .centre-legend { display: none; }
 
 /* ---------- evidence drawer ---------- */
