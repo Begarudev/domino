@@ -90,9 +90,13 @@ export function dossier(snap: RunSnapshot, companyId: string, openings: Opening[
   };
 }
 
-function o1Rule(openings: Opening[]): DossierRule {
+function o1Rule(openings: Opening[], headcount?: number | null, departures = 0): DossierRule {
   const opening = openings[0];
-  if (!opening) return { id: 'O1', name: 'Predicted opening', state: 'not_evaluated', summary: 'No O1 group for this company in the latest openings scan', clauses: [] };
+  // O1 only counts companies of 20–5,000 staff; a larger or smaller company's moves are read but never counted.
+  const outside = typeof headcount === 'number' && (headcount < 20 || headcount > 5000);
+  if (!opening) return { id: 'O1', name: 'Predicted opening', state: 'not_evaluated', clauses: [], summary: outside
+    ? `Not counted by O1: ${headcount.toLocaleString('en-US')} staff is outside its 20–5,000 band${departures ? ` (${departures} dated move${departures === 1 ? '' : 's'} read, none counted)` : ''}`
+    : 'No O1 group for this company in the latest openings scan' };
   const state: DossierRule['state'] = opening.status === 'held' ? 'held' : opening.status === 'watch' ? 'not_met'
     : opening.provisional ? 'open' : 'met';
   const label = ROLE_FAMILY_LABELS[opening.roleFamily];
@@ -140,7 +144,7 @@ export function scanDossier(store: Store, key: string): CompanyDossier | null {
   // R1 counts conclusive departures only (a month that straddles the window edge is unsettled).
   const settled = Math.max(0, ...conclusive.map(clause => Number(/^(\d+) conclusive/.exec(clause.text)?.[1] ?? 0)));
   const unsettled = Math.max(0, departures.length - settled);
-  const rules: DossierRule[] = [o1Rule(openings),
+  const rules: DossierRule[] = [o1Rule(openings, company.headcount, departures.length),
     { id: 'R1', name: 'Talent drain', state: 'not_met',
       summary: `${settled} conclusive dated serving/infra departure${settled === 1 ? '' : 's'}${unsettled ? ` (${unsettled} unsettled)` : ''}; R1 needs 3 in 90 days, the 3rd in the last 30`,
       clauses: conclusive.map(clause => ({ ...clause, id: 'r1.departures', state: settled >= 3 ? 'met' as const : 'failed' as const,
