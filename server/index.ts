@@ -9,10 +9,11 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { MAX_REQUEST_CHARS } from '../shared/types.ts';
-import type { RunEvent, RunLimits, RunStatus } from '../shared/types.ts';
+import type { Pipeline, RunEvent, RunLimits, RunStatus } from '../shared/types.ts';
 import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts';
 import { decode, Store } from './db.ts';
 import type { RunChaos } from './db.ts';
+import { deskRoutes } from './desk/routes.ts';
 import { recheckSource } from './engine/sources.ts';
 import { config, defaultLimits, redactSecrets, root } from './env.ts';
 import { cacheStats, importCache } from './runtime/cache-snapshot.ts';
@@ -35,6 +36,7 @@ const runSchema = z.object({
   request: z.string().trim().min(1).max(MAX_REQUEST_CHARS),
   limits: limitsSchema.optional(), chaos: chaosSchema.optional(),
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
+  pipeline: z.enum(['outbound', 'openings', 'candidate', 'intro']).optional(),
 });
 const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>run bun run build:web</p></html>';
 
@@ -149,18 +151,27 @@ export function createApp(store: Store) {
     version: '0.1.0', ...cacheStats(store),
   }));
 
-  app.post('/api/runs', async c => {
-    const body = runSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) return c.json({ error: 'Expected a request and valid optional limits, chaos, and dataMode' }, 400);
-    const { request, dataMode, limits, chaos } = body.data;
+  function launch(pipeline: Pipeline, request: string, options: {
+    limits?: Partial<RunLimits>; dataMode?: 'live' | 'cache' | 'fixture'; chaos?: z.infer<typeof chaosSchema>;
+  } = {}): string {
+    const { dataMode, limits, chaos } = options;
     const id = `run_${randomUUID()}`;
     store.createRun(id, redactSecrets(request), dataMode ?? config.dataMode, config.llmLabel, { ...defaultLimits, ...limits }, {
       timeoutOnce: chaos?.timeoutOnce?.map(redactSecrets), nonsenseOnce: chaos?.nonsenseOnce?.map(redactSecrets),
       ...chaos?.crashAfterDeliver && { crashAfterDeliver: true },
-    });
+    }, pipeline);
     startWorker(id, false);
-    return c.json({ id }, 201);
+    return id;
+  }
+
+  app.post('/api/runs', async c => {
+    const body = runSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: 'Expected a request and valid optional limits, chaos, and dataMode' }, 400);
+    const { request, dataMode, limits, chaos, pipeline } = body.data;
+    return c.json({ id: launch(pipeline ?? 'outbound', request, { dataMode, limits, chaos }) }, 201);
   });
+
+  app.route('/api', deskRoutes({ store, launch }));
 
   app.get('/api/runs', c => c.json(store.listRuns()));
 

@@ -1,7 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { STEP_ORDER } from '../shared/types.ts';
+import { ALL_STEPS, PIPELINES } from '../shared/types.ts';
+import type { Pipeline } from '../shared/types.ts';
 import type {
   Approval, Ask, BudgetState, ChaosConfig, DataMode, Evidence, Intent, LedgerEntry, OutboxAction, RunEvent,
   RunLimits, RunStatus, StepName, StepState, StoredEvent,
@@ -13,6 +14,10 @@ export const stepLabels: Record<StepName, string> = {
   enrich_companies: 'Enrich companies', cascade: 'Build cascade', rank_targets: 'Rank targets',
   find_deciders: 'Find decision-makers', warm_paths: 'Find warm paths', draft_messages: 'Draft and verify messages',
   approval_gate: 'Request approvals', score_replay: 'Score replay',
+  scope_search: 'Scope the search', pull_departures: 'Pull departures', resolve_departures: 'Resolve companies',
+  check_replacements: 'Check for replacements', detect_openings: 'Predict openings', score_openings: 'Score replay',
+  fetch_profile: 'Fetch profile', parse_profile: 'Read profile', match_openings: 'Match openings',
+  draft_intro: 'Draft intro', intro_gate: 'Request approval',
 };
 
 export const now = () => new Date().toISOString();
@@ -32,6 +37,7 @@ export interface RunRow {
   data_mode: DataMode;
   llm: string;
   intent_json: string | null;
+  pipeline?: Pipeline;
   limits_json: string;
   chaos_json: string;
   created_at: string;
@@ -98,9 +104,10 @@ export class Store {
     this.ensureColumn('outbox', 'status', "TEXT NOT NULL DEFAULT 'pending'",
       "UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL");
     this.ensureColumn('ledger', 'error', 'TEXT');
+    this.ensureColumn('runs', 'pipeline', "TEXT NOT NULL DEFAULT 'outbound'");
   }
 
-  private ensureColumn(table: 'ledger' | 'outbox', name: string, definition: string, backfill?: string) {
+  private ensureColumn(table: 'ledger' | 'outbox' | 'runs', name: string, definition: string, backfill?: string) {
     const exists = () => this.sql.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === name);
     if (exists()) return;
     this.transaction(() => {
@@ -122,13 +129,14 @@ export class Store {
     }
   }
 
-  createRun(id: string, request: string, mode: DataMode, llm: string, limits: RunLimits, chaos: RunChaos) {
+  createRun(id: string, request: string, mode: DataMode, llm: string, limits: RunLimits, chaos: RunChaos,
+    pipeline: Pipeline = 'outbound') {
     this.transaction(() => {
       const ts = now();
-      this.sql.prepare(`INSERT INTO runs (id, request, status, data_mode, llm, limits_json, chaos_json, created_at, updated_at)
-        VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?)`).run(id, request, mode, llm, encode(limits), encode(chaos), ts, ts);
+      this.sql.prepare(`INSERT INTO runs (id, request, status, data_mode, llm, limits_json, chaos_json, created_at, updated_at, pipeline)
+        VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`).run(id, request, mode, llm, encode(limits), encode(chaos), ts, ts, pipeline);
       const insert = this.sql.prepare("INSERT INTO steps (run_id, step, status, attempt) VALUES (?, ?, 'pending', 0)");
-      for (const step of STEP_ORDER) insert.run(id, step);
+      for (const step of PIPELINES[pipeline]) insert.run(id, step);
       this.recordEvent(id, { type: 'run.status', status: 'queued' });
     });
   }
@@ -150,7 +158,7 @@ export class Store {
   getSteps(id: string): StepRow[] {
     const rows = this.sql.prepare(`SELECT step, status, attempt, started_at AS startedAt, finished_at AS finishedAt,
       summary, resumed AS resumedFromCheckpoint, output_json FROM steps WHERE run_id = ?`).all(id) as unknown as StepRow[];
-    return STEP_ORDER.flatMap(step => {
+    return ALL_STEPS.flatMap(step => {
       const row = rows.find(row => row.step === step);
       return row ? [{ ...row, label: stepLabels[step], resumedFromCheckpoint: Boolean(row.resumedFromCheckpoint) }] : [];
     });

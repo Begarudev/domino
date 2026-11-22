@@ -1,0 +1,1039 @@
+{
+ "label": "live-cached",
+ "retrievedAt": [
+  "2026-11-22T08:20:09.254Z",
+  "2026-11-22T08:20:32.284Z",
+  "2026-11-22T08:22:59.708Z",
+  "2026-11-22T08:23:33.216Z",
+  "2026-11-22T08:24:19.813Z",
+  "2026-11-22T08:25:03.595Z",
+  "2026-11-22T08:27:32.961Z",
+  "2026-11-22T08:27:54.421Z"
+ ],
+ "source": "Crustdata POST /person/search (x-api-version 2025-11-01)",
+ "request": {
+  "filters": {
+   "op": "and",
+   "conditions": [
+    {
+     "field": "experience.employment_details.current.start_date",
+     "type": "=>",
+     "value": "2026-08-24"
+    },
+    {
+     "op": "or",
+     "conditions": [
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "inference"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "serving"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "ML platform"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "ML infrastructure"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "MLOps"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "GPU"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "LLM infrastructure"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "AI infrastructure"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "ML systems"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "machine learning platform"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "machine learning infrastructure"
+      },
+      {
+       "field": "experience.employment_details.past.title",
+       "type": "[.]",
+       "value": "model deployment"
+      }
+     ]
+    }
+   ]
+  },
+  "limit": 200,
+  "fields": [
+   "basic_profile.name",
+   "crustdata_person_id",
+   "social_handles.professional_network_identifier.profile_url",
+   "experience.employment_details.current.name",
+   "experience.employment_details.current.title",
+   "experience.employment_details.current.start_date",
+   "experience.employment_details.current.end_date",
+   "experience.employment_details.current.crustdata_company_id",
+   "experience.employment_details.current.company_headcount_latest",
+   "experience.employment_details.current.company_website",
+   "experience.employment_details.current.company_industries",
+   "experience.employment_details.past.name",
+   "experience.employment_details.past.title",
+   "experience.employment_details.past.start_date",
+   "experience.employment_details.past.end_date",
+   "experience.employment_details.past.crustdata_company_id",
+   "experience.employment_details.past.company_headcount_latest",
+   "experience.employment_details.past.company_website",
+   "experience.employment_details.past.company_industries"
+  ]
+ },
+ "total_count": 1410,
+ "fetched": 1410,
+ "credits": 324.3,
+ "note": "Departure groups with >=2 departures in one role family (roles + initials only; no names, ids or profile URLs).",
+ "groups": [
+  {
+   "company": "Intel",
+   "company_id": 680974,
+   "family": "gpu_llm_infra",
+   "headcount": 109705,
+   "departures": [
+    {
+     "initial": "L",
+     "title": "GPU Software Engineer",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "CIQ",
+     "start": "2026-09",
+     "newtitle": "Principal Software Engineer"
+    },
+    {
+     "initial": "L",
+     "title": "Director of Engineering - AI GPU",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "MosChip\u00ae",
+     "start": "2026-09",
+     "newtitle": "Associate Vice President"
+    },
+    {
+     "initial": "J",
+     "title": "GPU Software Development Engineer",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "NAGA Labs",
+     "start": "2026-10",
+     "newtitle": "Founder"
+    },
+    {
+     "initial": "V",
+     "title": "GPU Timing Methodology Engineer",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "AMD",
+     "start": "2026-09",
+     "newtitle": "Sr SDE"
+    },
+    {
+     "initial": "A",
+     "title": "Senior GPU Software Engineer",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Samsung Semiconductor",
+     "start": "2026-10",
+     "newtitle": "Senior Staff Engineer,  GPU Modelling Architect"
+    },
+    {
+     "initial": "P",
+     "title": "GPU Logic Design Engineer",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Palo Alto Networks",
+     "start": "2026-09",
+     "newtitle": "Principal ASIC Design Verification Engineer"
+    },
+    {
+     "initial": "S",
+     "title": "GPU Solutions Architect",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "SWI Compute",
+     "start": "2026-10",
+     "newtitle": "Director, GPU software"
+    },
+    {
+     "initial": "K",
+     "title": "GPU Architect, Senior Principal Engineer",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Aalto University",
+     "start": "2026-10",
+     "newtitle": "Doctoral Researcher"
+    },
+    {
+     "initial": "A",
+     "title": "GPU Logic Design Engineer",
+     "end": "2026-11",
+     "conclusive": false,
+     "hirer": "Qualcomm",
+     "start": "2026-11",
+     "newtitle": "Senior Design Verification Engineer"
+    }
+   ],
+   "conclusive": 4,
+   "last_departure_month": "2026-09",
+   "same_hirer": false,
+   "hirers": [
+    "AMD",
+    "Aalto University",
+    "CIQ",
+    "MosChip\u00ae",
+    "NAGA Labs",
+    "Palo Alto Networks",
+    "Qualcomm",
+    "SWI Compute",
+    "Samsung Semiconductor"
+   ],
+   "size_guard": [
+    "headcount 109705 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Google",
+   "company_id": 4926893,
+   "family": "ml_platform",
+   "headcount": 330379,
+   "departures": [
+    {
+     "initial": "D",
+     "title": "Head of AI Infrastructure Business EMEA North",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Databricks",
+     "start": "2026-09",
+     "newtitle": "Genie Sales EMEA"
+    },
+    {
+     "initial": "X",
+     "title": "Sr. Manager of NPI Supply Chain Operations, Cloud/AI/ML Infrastructure",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Cerebras",
+     "start": "2026-09",
+     "newtitle": "Senior Director, NPI TPM, AI Infrastructure"
+    },
+    {
+     "initial": "M",
+     "title": "Global Lead - AI Infrastructure, Network Delivery & Supply Chain Systems, Technical Lead Manager",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Stealth AI Startup",
+     "start": "2026-09",
+     "newtitle": "Chief Technology Officer"
+    },
+    {
+     "initial": "D",
+     "title": "Execution Lead | Emergent AI Infrastructure",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Cerebras",
+     "start": "2026-10",
+     "newtitle": "Senior Director | Head of Capacity Planning & Delivery"
+    },
+    {
+     "initial": "H",
+     "title": "Group Product Manager - Agentic AI Platforms, Ask Advisor & Ads APIs",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "HG Signal",
+     "start": "2026-10",
+     "newtitle": "Principal - Fractional Product Leadership & AI Advisory"
+    },
+    {
+     "initial": "M",
+     "title": "Software Developer, AI Infrastructure",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "GoodRx",
+     "start": "2026-10",
+     "newtitle": "Data Engineer"
+    }
+   ],
+   "conclusive": 3,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Cerebras",
+    "Databricks",
+    "GoodRx",
+    "HG Signal",
+    "Stealth AI Startup"
+   ],
+   "size_guard": [
+    "headcount 330379 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Meta",
+   "company_id": 6033736,
+   "family": "ml_platform",
+   "headcount": 165736,
+   "departures": [
+    {
+     "initial": "D",
+     "title": "Director, AI Infrastructure Ecosystem and Partnerships",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Astera Labs",
+     "start": "2026-09",
+     "newtitle": "Head of Ecosystem & Partnerships, AI Infrastructure"
+    },
+    {
+     "initial": "K",
+     "title": "Product TPM \u2014 Ads AI Infrastructure & Monetization",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Amazon Web Services (AWS)",
+     "start": "2026-09",
+     "newtitle": "Principal Technical Program Manager"
+    },
+    {
+     "initial": "J",
+     "title": "Commercial Sourcing Manager, Memory | AI Infrastructure",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Undisclosed",
+     "start": "2026-10",
+     "newtitle": "Sourcing Manager"
+    },
+    {
+     "initial": "Q",
+     "title": "Staff Data Engineer, AI Infrastructure",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "OpenAI",
+     "start": "2026-10",
+     "newtitle": "Member of Technical Staff"
+    },
+    {
+     "initial": "S",
+     "title": "Technical Program Manager - AI/ML Infrastructure",
+     "end": "2026-11",
+     "conclusive": false,
+     "hirer": "Google",
+     "start": "2026-11",
+     "newtitle": "Technical Program Manager - AI/ML Infrastructure"
+    }
+   ],
+   "conclusive": 3,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Amazon Web Services (AWS)",
+    "Astera Labs",
+    "Google",
+    "OpenAI",
+    "Undisclosed"
+   ],
+   "size_guard": [
+    "headcount 165736 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Microsoft",
+   "company_id": 2110301,
+   "family": "gpu_llm_infra",
+   "headcount": 231126,
+   "departures": [
+    {
+     "initial": "B",
+     "title": "Principal Technical Program Manager (Azure AI GPU Computing Infrastructure)",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Crusoe",
+     "start": "2026-09",
+     "newtitle": "Senior Staff Technical Program Manager"
+    },
+    {
+     "initial": "C",
+     "title": "AI | GPU - Senior Demand Planner / Strategic Planner / PMO",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Google",
+     "start": "2026-10",
+     "newtitle": "Project Manager III"
+    },
+    {
+     "initial": "J",
+     "title": "DC GPU SENIOR PROGRAM MGR, METRO",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "IES Communications",
+     "start": "2026-10",
+     "newtitle": "Regional Director"
+    }
+   ],
+   "conclusive": 3,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Crusoe",
+    "Google",
+    "IES Communications"
+   ],
+   "size_guard": [
+    "headcount 231126 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Oracle",
+   "company_id": 681042,
+   "family": "gpu_llm_infra",
+   "headcount": 202588,
+   "departures": [
+    {
+     "initial": "A",
+     "title": "Director of Software Development, GPU Infrastructure Provisioning & Health",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "NVIDIA",
+     "start": "2026-09",
+     "newtitle": "Architect, Compute Infrastructure"
+    },
+    {
+     "initial": "T",
+     "title": "Principal Program Manager (AI/GPU Capacity)",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Oracle",
+     "start": "2026-10",
+     "newtitle": "Lead Principal Program Manager (AI/GPU Capacity)"
+    },
+    {
+     "initial": "B",
+     "title": "Senior Principle Engineer (IC5) - Global Product Lead (GPU)",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Nscale",
+     "start": "2026-10",
+     "newtitle": "Head of Infrastructure Support"
+    }
+   ],
+   "conclusive": 3,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "NVIDIA",
+    "Nscale",
+    "Oracle"
+   ],
+   "size_guard": [
+    "headcount 202588 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Qualcomm",
+   "company_id": 6050,
+   "family": "gpu_llm_infra",
+   "headcount": 57473,
+   "departures": [
+    {
+     "initial": "M",
+     "title": "GPU Compiler Engineer",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Hewlett Packard Enterprise",
+     "start": "2026-10",
+     "newtitle": "Research Engineer"
+    },
+    {
+     "initial": "R",
+     "title": "Senior Director of Engineering: GPU & NPU Implementation/PD/PPA",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Tesla",
+     "start": "2026-09",
+     "newtitle": "Head of Physical Design and DFT(India), AI Hardware"
+    },
+    {
+     "initial": "S",
+     "title": "Senior Engineer (GPU Engineering)",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Google",
+     "start": "2026-09",
+     "newtitle": "Senior System Power Engineer, Google Pixel"
+    },
+    {
+     "initial": "A",
+     "title": "Staff Digital Design Engineer GPU",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Tenstorrent",
+     "start": "2026-10",
+     "newtitle": "Staff AI RTL Digital Design Engineer"
+    },
+    {
+     "initial": "A",
+     "title": "GPU Architecture Modeling Engineer",
+     "end": "2026-11",
+     "conclusive": false,
+     "hirer": "Cerebras",
+     "start": "2026-11",
+     "newtitle": "ML Performance"
+    },
+    {
+     "initial": "A",
+     "title": "Senior GPU Research Engineer",
+     "end": "2026-11",
+     "conclusive": false,
+     "hirer": "Apple",
+     "start": "2026-11",
+     "newtitle": "GPU Performance Engineer"
+    }
+   ],
+   "conclusive": 3,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Apple",
+    "Cerebras",
+    "Google",
+    "Hewlett Packard Enterprise",
+    "Tenstorrent",
+    "Tesla"
+   ],
+   "size_guard": [
+    "headcount 57473 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Abacus.AI",
+   "company_id": 632052,
+   "family": "ml_platform",
+   "headcount": 288,
+   "departures": [
+    {
+     "initial": "Y",
+     "title": "Machine Learning Platform Engineer",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Patronus AI",
+     "start": "2026-09",
+     "newtitle": "Member of Technical Staff"
+    },
+    {
+     "initial": "P",
+     "title": "ML Platform Engineer",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Arcfront",
+     "start": "2026-10",
+     "newtitle": "Member of Technical Staff"
+    },
+    {
+     "initial": "P",
+     "title": "ML Platform Engineer",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Bravebird",
+     "start": "2026-11",
+     "newtitle": "Founding Engineer"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Arcfront",
+    "Bravebird",
+    "Patronus AI"
+   ],
+   "size_guard": []
+  },
+  {
+   "company": "Amazon Web Services (AWS)",
+   "company_id": 1033829,
+   "family": "ml_platform",
+   "headcount": 147229,
+   "departures": [
+    {
+     "initial": "A",
+     "title": "Principal, AI Infrastructure",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Odyssey",
+     "start": "2026-09",
+     "newtitle": "Compute Lead"
+    },
+    {
+     "initial": "T",
+     "title": "Sr. Specialist Solutions Architect - GenAI Platform | Enterprise AI Infrastructure at AWS",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Eminence Grey",
+     "start": "2026-10",
+     "newtitle": "Solutions Architect"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Eminence Grey",
+    "Odyssey"
+   ],
+   "size_guard": [
+    "headcount 147229 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Apple",
+   "company_id": 680979,
+   "family": "gpu_llm_infra",
+   "headcount": 223993,
+   "departures": [
+    {
+     "initial": "s",
+     "title": "GPU STA Manager",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Marvell Technology",
+     "start": "2026-09",
+     "newtitle": "Director"
+    },
+    {
+     "initial": "T",
+     "title": "GPU Power",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Google",
+     "start": "2026-09",
+     "newtitle": "TPU RTL Design"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-09",
+   "same_hirer": false,
+   "hirers": [
+    "Google",
+    "Marvell Technology"
+   ],
+   "size_guard": [
+    "headcount 223993 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Meta",
+   "company_id": 6033736,
+   "family": "inference",
+   "headcount": 165736,
+   "departures": [
+    {
+     "initial": "I",
+     "title": "Senior Engineering Manager, AI Infra - PyTorch Inference Acceleration",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Baseten",
+     "start": "2026-09",
+     "newtitle": "Head of Inference Platform"
+    },
+    {
+     "initial": "C",
+     "title": "Senior Software Engineer, Meta Superintelligence Labs - Inference Infrastructure",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Baseten",
+     "start": "2026-09",
+     "newtitle": "Software Engineer"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-09",
+   "same_hirer": true,
+   "hirers": [
+    "Baseten"
+   ],
+   "size_guard": [
+    "headcount 165736 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Optum",
+   "company_id": 3153035,
+   "family": "mlops",
+   "headcount": 115339,
+   "departures": [
+    {
+     "initial": "I",
+     "title": "MLOps & Machine Learning Engineer",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Quillbot",
+     "start": "2026-09",
+     "newtitle": "AI Applied Engineer II"
+    },
+    {
+     "initial": "S",
+     "title": "Gen AI Engineer | MLOps Engineer",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "AT&T",
+     "start": "2026-10",
+     "newtitle": "Generative AI Engineer | LLM & RAG Applications"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "AT&T",
+    "Quillbot"
+   ],
+   "size_guard": [
+    "headcount 115339 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "Poolside",
+   "company_id": 1060388,
+   "family": "inference",
+   "headcount": 302,
+   "departures": [
+    {
+     "initial": "L",
+     "title": "Member of Engineering (Inference)",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "NVIDIA",
+     "start": "2026-09",
+     "newtitle": "Senior ML Systems Engineer"
+    },
+    {
+     "initial": "A",
+     "title": "Member of Engineering (Inference)",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "NVIDIA",
+     "start": "2026-09",
+     "newtitle": "LLM Inference"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-09",
+   "same_hirer": true,
+   "hirers": [
+    "NVIDIA"
+   ],
+   "size_guard": []
+  },
+  {
+   "company": "TikTok",
+   "company_id": 1034655,
+   "family": "mlops",
+   "headcount": 95762,
+   "departures": [
+    {
+     "initial": "D",
+     "title": "Senior SWE - TikTok RecArch MLOps Platform",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "OKX Singapore",
+     "start": "2026-10",
+     "newtitle": "Staff Engineer"
+    },
+    {
+     "initial": "N",
+     "title": "Site Reliability Engineer II, MLOps",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Google",
+     "start": "2026-11",
+     "newtitle": "Software Engineer"
+    }
+   ],
+   "conclusive": 2,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Google",
+    "OKX Singapore"
+   ],
+   "size_guard": [
+    "headcount 95762 outside 20\u20135,000"
+   ]
+  },
+  {
+   "company": "EY",
+   "company_id": 891049,
+   "family": "inference",
+   "headcount": 412027,
+   "departures": [
+    {
+     "initial": "A",
+     "title": "Client Serving Contractor",
+     "end": "2026-07",
+     "conclusive": false,
+     "hirer": "Change for Youth Foundation",
+     "start": "2026-09",
+     "newtitle": "Director"
+    },
+    {
+     "initial": "S",
+     "title": "Client Serving Contractor",
+     "end": "2026-07",
+     "conclusive": false,
+     "hirer": "Change for Youth Foundation",
+     "start": "2026-09",
+     "newtitle": "Director"
+    },
+    {
+     "initial": "A",
+     "title": "Client Serving Contractor",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "KPMG US",
+     "start": "2026-10",
+     "newtitle": "Advisory Associate"
+    }
+   ],
+   "conclusive": 1,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Change for Youth Foundation",
+    "KPMG US"
+   ],
+   "size_guard": [
+    "headcount 412027 outside 20\u20135,000",
+    "month-only dates cannot settle the 90-day window"
+   ]
+  },
+  {
+   "company": "NVIDIA",
+   "company_id": 6034612,
+   "family": "ml_platform",
+   "headcount": 52809,
+   "departures": [
+    {
+     "initial": "D",
+     "title": "Strategic Partnerships  - AI Infrastructure & Services",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "Rivian",
+     "start": "2026-10",
+     "newtitle": "Director - Corporate Development and BD"
+    },
+    {
+     "initial": "A",
+     "title": "Strategy & Transformation, AI Infrastructure",
+     "end": "2026-11",
+     "conclusive": false,
+     "hirer": "Zipline",
+     "start": "2026-11",
+     "newtitle": "Senior Business Operations Manager \u2013 Supply Chain"
+    }
+   ],
+   "conclusive": 1,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "Rivian",
+    "Zipline"
+   ],
+   "size_guard": [
+    "headcount 52809 outside 20\u20135,000",
+    "month-only dates cannot settle the 90-day window"
+   ]
+  },
+  {
+   "company": "Oracle",
+   "company_id": 681042,
+   "family": "ml_platform",
+   "headcount": 202588,
+   "departures": [
+    {
+     "initial": "J",
+     "title": "HPC | AI Infrastructure | GenAI | GTM",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "NVIDIA",
+     "start": "2026-09",
+     "newtitle": "Financial Services @ NVIDIA: Market Data Providers & Exchanges"
+    },
+    {
+     "initial": "J",
+     "title": "VP, AI Infrastructure",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "CorePhase",
+     "start": "2026-09",
+     "newtitle": "EVP, Construction & Delivery"
+    },
+    {
+     "initial": "B",
+     "title": "AI Infrastructure and GPU Team",
+     "end": "2026-10",
+     "conclusive": true,
+     "hirer": "DoiT",
+     "start": "2026-10",
+     "newtitle": "Founding SDR - US"
+    }
+   ],
+   "conclusive": 1,
+   "last_departure_month": "2026-10",
+   "same_hirer": false,
+   "hirers": [
+    "CorePhase",
+    "DoiT",
+    "NVIDIA"
+   ],
+   "size_guard": [
+    "headcount 202588 outside 20\u20135,000",
+    "month-only dates cannot settle the 90-day window"
+   ]
+  },
+  {
+   "company": "Walmart",
+   "company_id": 681009,
+   "family": "ml_platform",
+   "headcount": 506899,
+   "departures": [
+    {
+     "initial": "A",
+     "title": "Principal Product Manager - Last Mile Delivery & AI/ML Platform",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Products That Count",
+     "start": "2026-08",
+     "newtitle": "Product Advisor - AI Council"
+    },
+    {
+     "initial": "A",
+     "title": "Senior Product Manager - \u202fISA (ML platform) & Receiving Platform (Walmart\u202fStores &\u202fSam\u2019s\u00a0Club)",
+     "end": "2026-09",
+     "conclusive": true,
+     "hirer": "Walmart Data Ventures",
+     "start": "2026-10",
+     "newtitle": "Staff Product Manager"
+    }
+   ],
+   "conclusive": 1,
+   "last_departure_month": "2026-09",
+   "same_hirer": false,
+   "hirers": [
+    "Products That Count",
+    "Walmart Data Ventures"
+   ],
+   "size_guard": [
+    "headcount 506899 outside 20\u20135,000",
+    "month-only dates cannot settle the 90-day window"
+   ]
+  },
+  {
+   "company": "Multiverse Computing",
+   "company_id": 674476,
+   "family": "mlops",
+   "headcount": 383,
+   "departures": [
+    {
+     "initial": "W",
+     "title": "Mid MLOps Engineer",
+     "end": "2026-07",
+     "conclusive": false,
+     "hirer": "SpaceXAI Community",
+     "start": "2026-09",
+     "newtitle": "AI Ambassador"
+    },
+    {
+     "initial": "M",
+     "title": "MLOps Engineer",
+     "end": "2026-07",
+     "conclusive": false,
+     "hirer": "Talky Labs",
+     "start": "2026-09",
+     "newtitle": "MLOps Engineer"
+    }
+   ],
+   "conclusive": 0,
+   "last_departure_month": "2026-07",
+   "same_hirer": false,
+   "hirers": [
+    "SpaceXAI Community",
+    "Talky Labs"
+   ],
+   "size_guard": [
+    "month-only dates cannot settle the 90-day window"
+   ]
+  },
+  {
+   "company": "SANI | \u0635\u0627\u0646\u0639",
+   "company_id": 2015900,
+   "family": "ml_platform",
+   "headcount": 34,
+   "departures": [
+    {
+     "initial": "A",
+     "title": "AI Infrastructure Phase",
+     "end": "2026-07",
+     "conclusive": false,
+     "hirer": "MawHub - The Talent Hub",
+     "start": "2026-09",
+     "newtitle": "Full Stack Engineer"
+    },
+    {
+     "initial": "H",
+     "title": "AI Infrastructure",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "King Abdulaziz City for Science and Technology (KACST)",
+     "start": "2026-08",
+     "newtitle": "AI Engineer"
+    },
+    {
+     "initial": "B",
+     "title": "AI Infrastructure & Agent Development",
+     "end": "2026-08",
+     "conclusive": false,
+     "hirer": "Qiddiya | \u0627\u0644\u0642\u062f\u064a\u0629",
+     "start": "2026-09",
+     "newtitle": "IT Portfolio and Change Management"
+    }
+   ],
+   "conclusive": 0,
+   "last_departure_month": "2026-08",
+   "same_hirer": false,
+   "hirers": [
+    "King Abdulaziz City for Science and Technology (KACST)",
+    "MawHub - The Talent Hub",
+    "Qiddiya | \u0627\u0644\u0642\u062f\u064a\u0629"
+   ],
+   "size_guard": [
+    "month-only dates cannot settle the 90-day window"
+   ]
+  }
+ ]
+}

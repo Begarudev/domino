@@ -17,6 +17,9 @@ export const STEP_SHORT: Record<StepName, string> = {
   draft_messages: 'Draft + verify',
   approval_gate: 'Approval',
   score_replay: 'Replay score',
+  scope_search: 'Scope', pull_departures: 'Departures', resolve_departures: 'Resolve', check_replacements: 'Replacements',
+  detect_openings: 'Openings', score_openings: 'Replay score', fetch_profile: 'Profile', parse_profile: 'Read profile',
+  match_openings: 'Match', draft_intro: 'Draft intro', intro_gate: 'Approval',
 };
 
 export const MECHANISM_LABEL: Record<Mechanism, string> = {
@@ -439,6 +442,17 @@ const STEP_DOING: Record<StepName, string> = {
   draft_messages: 'Writing first messages from numbered, dated claims only',
   approval_gate: 'Nothing is sent until a person approves',
   score_replay: 'Checking what actually happened after the frozen date',
+  scope_search: 'Choosing the role families and companies to watch',
+  pull_departures: 'Finding people who left these roles in the last 90 days',
+  resolve_departures: 'Working out which companies they left',
+  check_replacements: 'Checking whether a replacement was posted or hired',
+  detect_openings: 'Predicting openings, and holding the ones that could be something else',
+  score_openings: 'Checking which predicted openings were later posted or filled',
+  fetch_profile: 'Reading the public profile the candidate shared',
+  parse_profile: 'Reading role, skills and history from the profile',
+  match_openings: 'Matching the candidate to predicted openings',
+  draft_intro: 'Drafting an intro where every claim cites a source',
+  intro_gate: 'Waiting for a person to approve the intro',
 };
 
 export function narrate(events: StoredEvent[], snap: RunSnapshot): { seq: number; text: string; tone: 'info' | 'warn' | 'fail' | 'ok' } | null {
