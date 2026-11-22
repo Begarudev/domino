@@ -210,3 +210,18 @@ test('draft verifier removes unsupported claims and keeps valid citations', () =
   assert.equal(rendered.unverifiable[0].reason, 'It has no date.');
   assert.deepEqual(rendered.citations, [{ marker: 1, evidenceId: first.id }]);
 });
+
+test('placeholder identifiers never merge unrelated companies (live regression: id 0, self-employed, shared hosts)', () => {
+  const m = (key: string, name: string, extra: Record<string, unknown> = {}) => ({ key, name, evidenceIds: [], ...extra });
+  const result = resolveEntities([
+    m('a', 'ENKRE', { crustdataId: 0 }),
+    m('b', 'The Hershey Company', { crustdataId: 0 }),
+    m('c', 'Self-employed', { crustdataId: 12345 }),
+    m('d', 'Hexalia', { crustdataId: 12345, domain: 'linkedin.com' }),
+    m('e', 'Hanse', { domain: 'links.sarvam.io' }),
+    m('f', 'Sarvam AI', { domain: 'links.sarvam.io' }),
+  ], []);
+  const names = result.companies.map(company => company.name).sort();
+  assert.ok(names.includes('ENKRE') && names.includes('The Hershey Company') && names.includes('Hexalia') && names.includes('Hanse'));
+  assert.equal(result.merges.length, 0);
+});

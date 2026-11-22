@@ -73,13 +73,29 @@ const europe = ['Albania', 'Andorra', 'Austria', 'Belarus', 'Belgium', 'Bosnia a
   'San Marino', 'Serbia', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'Türkiye', 'Ukraine',
   'United Kingdom', 'Vatican City'];
 
-export function geographyFilter(field: string, geography: string | null): Filter[] {
+// Model or user wording like "Worldwide", "global", "anywhere" means no geography filter at all.
+const NO_GEOGRAPHY = /^(world ?wide|global(ly)?|anywhere|any|all|international|everywhere|remote|n\/?a|none)$/i;
+const US_ALIASES = /^(us|usa|u\.s\.a?\.?|united states( of america)?|america)$/i;
+const INDIA_ALIASES = /^(india|in|bharat)$/i;
+
+export function normalizeGeography(geography: string | null | undefined): string | null {
+  const value = geography?.trim();
+  if (!value || NO_GEOGRAPHY.test(value)) return null;
+  if (US_ALIASES.test(value)) return 'US';
+  if (INDIA_ALIASES.test(value)) return 'India';
+  if (/^europe(an union)?$|^eu$/i.test(value)) return 'Europe';
+  return value;
+}
+
+export function geographyFilter(field: string, raw: string | null): Filter[] {
+  const geography = normalizeGeography(raw);
   if (!geography) return [];
   return [geography === 'Europe' ? condition(field, 'in', europe) :
     condition(field, '=', geography === 'US' ? 'United States' : geography)];
 }
 
-export function matchesGeography(country: string | null | undefined, geography: string | null): boolean {
+export function matchesGeography(country: string | null | undefined, raw: string | null): boolean {
+  const geography = normalizeGeography(raw);
   if (!country || !geography) return true;
   const normalized = ({ IND: 'India', USA: 'United States', US: 'United States', GBR: 'United Kingdom' } as Record<string, string>)[country] ?? country;
   const filter = geographyFilter('country', geography)[0];
