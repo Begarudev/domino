@@ -1,10 +1,11 @@
 // Company dossier: the full company analysis for one company, shaped from a run snapshot. OWNER: lead.
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
-import type { CompanyDossier, CompanySummary, Departure, DossierRule, Opening, TalentFlow, WhyThisTarget } from '../../shared/desk.ts';
+import type { CompanyDossier, Departure, DossierRule, Opening, TalentFlow, WhyThisTarget } from '../../shared/desk.ts';
 import type { Company, Evidence } from '../../shared/types.ts';
 import type { CompanyFacts } from '../domain/openings.ts';
-import { openingsSnapshot, type OpeningsSnapshot } from './store.ts';
-import { compareCompanies, compareOpenings, whyThisTarget } from './why.ts';
+// companySummaries is the exact row set and order of GET /api/companies, so the placement quoted matches the list on screen.
+import { companySummaries, openingsSnapshot } from './store.ts';
+import { compareOpenings, whyThisTarget } from './why.ts';
 import type { RunSnapshot } from '../../shared/types.ts';
 import type { Store } from '../db.ts';
 import { snapshot } from '../snapshot.ts';
@@ -180,19 +181,6 @@ export function companyDossier(store: Store, companyId: string, runId?: string):
   }
   result ??= runId ? null : scanDossier(store, companyId);
   return result && withScanFacts(store, result);
-}
-
-// Same order and counts as GET /api/companies (desk routes), so the placement quoted here matches the list on screen.
-function companySummaries(scan: OpeningsSnapshot): CompanySummary[] {
-  const byId = new Map<string, Company>();
-  for (const company of [...scan.companies, ...scan.openings.map(row => ({ id: row.companyId, name: row.companyName, aliases: [], evidenceIds: [] }))]) {
-    if (!byId.has(company.id)) byId.set(company.id, company);
-  }
-  return [...byId.values()].map(company => ({
-    id: company.id, name: company.name, domain: company.domain ?? null, headcount: company.headcount ?? null,
-    openings: scan.openings.filter(row => row.companyId === company.id && row.status === 'open').length,
-    departures90d: scan.departures.filter(row => row.companyId === company.id).length,
-  })).filter(row => row.departures90d || scan.openings.some(opening => opening.companyId === row.id)).sort(compareCompanies);
 }
 
 // "Why this target?" (the company's top O1 opening: its clauses and the ranking rule) and the headcount series, both from
