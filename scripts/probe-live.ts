@@ -32,7 +32,7 @@ type Call = {
   examples: Pick<Evidence, 'claim' | 'observedAt'>[];
   error?: string;
 };
-type Options = { searchLimit: number; maxCredits: number; cacheDir?: string; onCall?: (row: Call) => void };
+type Options = { searchLimit?: number; maxCredits: number; cacheDir?: string; onCall?: (row: Call) => void };
 class BudgetExceeded extends Error {}
 
 function get(value: unknown, key: string): unknown {
@@ -112,10 +112,10 @@ export class LiveProbe {
 
       const built = spec.build(input);
       const responseKey = searchRows[spec.path];
-      const limit = this.options.searchLimit;
+      const limit = this.options.searchLimit ?? get(built, 'limit');
       const body = typeof built === 'object' && built && 'limit' in built ? { ...built, limit } : built;
       const requestJson = JSON.stringify(canonical(body));
-      const estimatedPage = responseKey ? { [responseKey]: Array.from({ length: limit }) } : null;
+      const estimatedPage = responseKey && typeof limit === 'number' ? { [responseKey]: Array.from({ length: limit }) } : null;
       const reservedCredits = spec.estimateCredits(estimatedPage, input);
       if (this.creditsUsed + reservedCredits > this.options.maxCredits + 1e-9) {
         throw new BudgetExceeded(`Credit cap ${this.options.maxCredits} would be exceeded (${this.creditsUsed.toFixed(2)} used, ${reservedCredits} needed)`);
@@ -222,7 +222,7 @@ async function main() {
     const value = args[i + 1];
     if (flag === '--write-cache' && value && !value.startsWith('--')) cacheDir = value;
     else if (flag === '--max-credits' && value?.trim() && Number.isFinite(Number(value)) && Number(value) >= 0) maxCredits = Number(value);
-    else throw new Error('Usage: node scripts/probe-live.ts [--write-cache DIR] [--max-credits N]');
+    else throw new Error('Usage: bun scripts/probe-live.ts [--write-cache DIR] [--max-credits N]');
   }
   if (cacheDir) await mkdir(cacheDir, { recursive: true, mode: 0o700 });
 

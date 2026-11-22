@@ -70,12 +70,14 @@ export function fixtureFor(name: string, body: unknown): unknown {
       return { job_listings: rows.slice(0, limit), next_cursor: null, total_count: rows.length };
     }
     case 'person_recent_moves':
+    case 'person_cohort_departures':
     case 'person_deciders':
     case '/person/search': {
       const rows = profiles.filter(row => applyFilter(row, request.filters));
       return { profiles: rows.slice(0, limit), next_cursor: null, total_count: rows.length, remarks: [] };
     }
     case 'company_growth':
+    case 'company_cohort':
     case '/company/search': {
       const asOf = companyCutoff(request);
       const rows = firms.map(firm => companyRow(firm, asOf, false)).filter(row => applyFilter(row, request.filters));

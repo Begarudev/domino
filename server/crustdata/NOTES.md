@@ -53,3 +53,11 @@ Response is a **bare array** of `{matched_on, match_type, matches: [{confidence_
 This logical endpoint uses two separate requests. Run `endpoints.outcome_check` for job posts and `endpoints.outcome_check.hires` for person records, then concatenate `outcomes` and `evidence`. Each spec parses a real response envelope and has its own estimate. The job leg uses the same shape as job search, adding target-company filters on `company.basic_info.company_id`, `primary_domain`, or `name`. The person leg uses the same shape as recent moves, with employer filters on both current and past roles. Neither leg applies geography again. The date range is `(asOf, horizonEnd]`. Outcome dates measure when hires started or jobs were posted. The 30-day profile lag applies to prediction inputs. Talent-drain validation additionally requires a serving or infrastructure title at the losing company within 60 days of the cutoff, capped at the horizon end.
 
 **List cost:** up to 0.03/job result plus 0.23/person result. [Published pricing](https://docs.crustdata.com/general/pricing.md)
+
+## Cohort departure experiment
+
+`company_cohort` selects up to 40 AI/ML companies with 20 to 5,000 employees and either funding within 18 months or positive one-month headcount growth. The page sorts on latest funding first. `person_cohort_departures` requests up to 200 profiles with a cohort employer ID and a serving or infrastructure title in past roles, plus a current role start within 90 days. Crustdata indexes the past Crustdata ID as `experience.employment_details.past.company_id` and sorts on `experience.employment_details.start_date`. The corresponding response field is `crustdata_company_id`.
+
+The person parser checks that the cohort ID, qualifying title, and recent end date occur on the same past role. It pairs that departure with a recent start at a different employer and counts each person once per origin company. The experiment reports months from those past role end dates and uses the third-most-recent departure to test the November threshold.
+
+Run `bun --env-file=/Users/garudev/dev/domino/.env scripts/probe-yield.ts`. The experiment defaults to a 150-credit cap and writes its summary and raw cache under `data/`.
