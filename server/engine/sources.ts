@@ -7,7 +7,9 @@ import type { CrustReadMeta } from '../runtime/tool.ts';
 import { describeRead } from './source-theatre.ts';
 import * as deps from './deps.ts';
 
-export type SourceResult = Pick<TriggerBatch, 'evidence'> & Partial<Omit<TriggerBatch, 'evidence'>>;
+export type SourceResult = Pick<TriggerBatch, 'evidence'> & Partial<Omit<TriggerBatch, 'evidence'>> & {
+  nextCursor?: string | null;
+};
 type SourceTime = Pick<ParseMeta, 'asOf' | 'windowDays'>;
 
 export const dateShift = (date: string, days: number) =>
@@ -19,7 +21,7 @@ export function predictionEvidence(evidence: Evidence[], intent: Intent): Eviden
 }
 
 const specs = [
-  deps.jobSearch, deps.jobSearchDisplacement, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
+  deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
   deps.jobSearchOutcomes, deps.personSearchOutcomes,
 ];
 
@@ -50,7 +52,7 @@ export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, Sour
 
   return {
     evidence, sources, mentions: withIds(raw.mentions), people: withIds(raw.people), triggers: withIds(raw.triggers),
-    observation, endpoint: spec.name, path: spec.path, input, time,
+    observation, endpoint: spec.name, path: spec.path, input, time, nextCursor: raw.nextCursor,
   };
 }
 

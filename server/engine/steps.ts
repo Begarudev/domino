@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type {
   Approval, Ask, CascadeGraph, Company, Draft, Evidence, Intent, Person, ReplayScore, RunEvent, StepName, Target, Trigger,
 } from '../../shared/types.ts';
-import type { EndpointSpec } from '../crustdata/spec.ts';
 import { now } from '../db.ts';
 import type { OutcomeFact, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { root } from '../env.ts';
@@ -13,6 +12,10 @@ import { mapLimit } from '../runtime/pool.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 import { dateShift, predictionEvidence, publishSource, readSource } from './sources.ts';
+import { candidateSteps } from './candidate-steps.ts';
+import type { CandidateOutputs } from './candidate-steps.ts';
+import { openingsSteps } from './openings-steps.ts';
+import type { OpeningsOutputs } from './openings-steps.ts';
 
 const sellerFile = resolve(root, 'config/seller.json');
 const seller: SellerProfile = existsSync(sellerFile) ? JSON.parse(readFileSync(sellerFile, 'utf8')) : {
@@ -25,7 +28,7 @@ type Resolved = ReturnType<typeof deps.resolveEntities> & { triggers: Trigger[];
 type Ranked = ReturnType<typeof deps.rankTargets>;
 type Deciders = { targets: Target[]; people: Person[]; evidence: Evidence[] };
 type Drafted = { targets: Target[]; drafts: Draft[] };
-export interface Outputs {
+export interface Outputs extends OpeningsOutputs, CandidateOutputs {
   parse_request: Intent;
   pull_triggers: TriggerBatch;
   resolve_entities: Resolved;
@@ -40,8 +43,8 @@ export interface Outputs {
 }
 
 export type Checkpoints = Partial<Outputs>;
-type StepResult<K extends StepName> = { output: Outputs[K]; summary: string; events?: RunEvent[] };
-type Runner<K extends StepName> = (ctx: ToolContext, checkpoints: Checkpoints) => Promise<StepResult<K>> | StepResult<K>;
+export type StepResult<K extends StepName> = { output: Outputs[K]; summary: string; events?: RunEvent[] };
+export type Runner<K extends StepName> = (ctx: ToolContext, checkpoints: Checkpoints) => Promise<StepResult<K>> | StepResult<K>;
 const unique = <T>(items: T[]) => [...new Set(items)];
 const byId = <T extends { id: string }>(rows: T[]) => [...new Map(rows.map(row => [row.id, row])).values()];
 function publishTriggers(ctx: ToolContext, triggers: Trigger[]) {
@@ -166,12 +169,12 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
   };
 }
 
-type TriggerSource<I> = EndpointSpec<I, TriggerBatch>;
-async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpoints): Promise<StepResult<'pull_triggers'>> {
+async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): Promise<StepResult<'pull_triggers'>> {
+  const intent = parse_request!;
+  const input = { intent };
   const output = emptyBatch();
-  for (const spec of [deps.jobSearch, deps.jobSearchDisplacement, deps.personSearchRecentMoves, deps.companySearchGrowth] satisfies TriggerSource<{ intent: Intent }>[]) {
-    const batch = await readSource(ctx, spec, { intent: intent! }, intent!);
-    const kept = guardBatch(batch, intent!);
+  const append = (batch: Awaited<ReturnType<typeof readSource>>) => {
+    const kept = guardBatch(batch, intent);
     ctx.store.transaction(() => {
       publishSource(ctx, batch, kept.evidence, kept.triggers.flatMap(trigger => trigger.evidenceIds));
       publishTriggers(ctx, kept.triggers);
@@ -180,7 +183,12 @@ async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpo
     output.people.push(...kept.people);
     output.triggers.push(...kept.triggers);
     output.evidence.push(...kept.evidence);
+  };
+  append(await readSource(ctx, deps.jobSearch, input, intent));
+  for await (const page of deps.readMovesPages(intent, request => readSource(ctx, deps.personSearchRecentMoves, request, intent))) {
+    append(page);
   }
+  append(await readSource(ctx, deps.companySearchGrowth, input, intent));
   output.evidence = byId(output.evidence);
   output.triggers = byId(output.triggers);
   return { output, summary: `${output.triggers.length} triggers from ${output.evidence.length} evidence rows` };
@@ -278,7 +286,7 @@ async function findDeciders(ctx: ToolContext, c: Checkpoints): Promise<StepResul
   const { companies, people } = c.enrich_companies!;
   const output: Deciders = { targets: [], people: [...people], evidence: [] };
   for (const target of c.rank_targets!.targets) {
-    if (target.hold) {
+    if (target.hold || target.watch) {
       output.targets.push(target);
       continue;
     }
@@ -340,7 +348,7 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
   // Each attempt reserves its cost inside the ledger transaction before making a model request.
   const results = await mapLimit(c.warm_paths!, draftConcurrency, async target => {
     const company = companies.find(row => row.id === target.companyId);
-    if (!company || target.hold) return { target };
+    if (!company || target.hold || target.watch) return { target };
     const claims = deps.buildClaims(target, company, triggers, evidence, c.cascade!);
     const template = deps.templateDraft(target, target.decider, claims, profile);
     const prompt = deps.llmDraftPrompt(target, target.decider, claims.filter(claim => claim.verifiable), profile);
@@ -384,7 +392,7 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
 function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_gate'> {
   const { targets, drafts } = c.draft_messages!;
   const output = targets.flatMap(target => {
-    if (target.hold) return [];
+    if (target.hold || target.watch) return [];
     const draft = drafts.find(row => row.id === target.draftId);
     return !draft ? [] : (['send_message', 'book_meeting'] as const).map((kind): Approval => {
       const idempotencyKey = hash([ctx.runId, target.companyId, draft.personId ?? '', draft.body, kind].join('|')).slice(0, 16);
@@ -455,6 +463,7 @@ export const steps: { [K in StepName]: Runner<K> } = {
   parse_request: parseRequest, pull_triggers: pullTriggers, resolve_entities: resolveEntities, enrich_companies: enrichCompanies,
   cascade, rank_targets: rankTargets, find_deciders: findDeciders, warm_paths: warmPaths, draft_messages: draftMessages,
   approval_gate: approvalGate, score_replay: scoreReplay,
+  ...openingsSteps, ...candidateSteps,
 };
 
 function safeJson<T>(text: string, shape: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): T | null {

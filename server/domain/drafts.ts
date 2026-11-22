@@ -18,7 +18,7 @@ function isPublicCompanyFact(row: Evidence) {
 }
 
 export function buildClaims(target: Target, company: Company, triggers: Trigger[], evidence: Evidence[], graph: CascadeGraph): Claim[] {
-  if (target.companyId !== company.id || target.hold) return [];
+  if (target.companyId !== company.id || target.hold || target.watch) return [];
   const own = new Set([
     ...company.evidenceIds,
     ...triggers.filter(trigger => trigger.companyId === company.id && ['job_post', 'post', 'headcount_jump', 'funding'].includes(trigger.kind))
@@ -107,7 +107,7 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
     remaining -= words;
   }
   const cited = included.map(claim => claim.text.replace(/[.!?]+$/, '') + '. [' + claim.n + ']');
-  const body = target.hold ? '' : [greeting, ...(cited.length ? [cited.join(' ')] : []), pitch, cta, signoff].join('\n\n');
+  const body = target.hold || target.watch ? '' : [greeting, ...(cited.length ? [cited.join(' ')] : []), pitch, cta, signoff].join('\n\n');
   const checks: DraftSentenceCheck[] = [
     { sentence: greeting, status: 'no_claim', evidenceIds: [] },
     ...included.map((claim, i): DraftSentenceCheck => ({ sentence: cited[i], status: 'cited', evidenceIds: claim.evidenceIds })),
@@ -119,7 +119,7 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
     checks, unverifiable: claims.filter(claim => !claim.verifiable).map(claim => ({
       claim: claim.text, reason: claim.reason || 'No dated evidence was supplied.',
     })),
-    generator: 'template', verified: !target.hold,
+    generator: 'template', verified: !target.hold && !target.watch,
     meeting: { title: seller.meeting.title, durationMin: 20, proposedSlots: [...seller.meeting.slots] },
   };
 }

@@ -35,7 +35,7 @@ flowchart LR
 
   DB[("SQLite data/domino.db<br/>runs · step checkpoints · events<br/>ledger · tool_cache · evidence<br/>approvals · outbox · inbox_received")]
   CD["Crustdata API<br/>job · person · company · enrich · posts"]
-  LLM["OpenAI gpt-5-mini<br/>(Anthropic optional)"]
+  LLM["OpenAI gpt-6-luna<br/>(Anthropic optional)"]
   FX["Fixture world<br/>only when no key or DOMINO_DATA=fixture"]
 
   REQ -->|POST /api/runs| API

@@ -227,8 +227,9 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
           <div className="mc-crash__bars" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} style={{ ['--i' as string]: i } as CSSProperties} />)}</div>
           <div className="mc-crash__text">
             <span className="mc-crash__sig">SIGKILL · pid {crashed.pid}</span>
-            <strong>The engine died during {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start-up'}.</strong>
-            <span className="mc-crash__saved">{doneCount} of {STEP_ORDER.length} steps saved. Finished steps won't run again, and nothing is sent twice.</span>
+            <strong>Engine killed during {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start-up'}</strong>
+            <span className="mc-crash__saved">{doneCount} of {STEP_ORDER.length} steps saved</span>
+            <span className="mc-crash__next">Resuming at step {crashed.atStep ? STEP_ORDER.indexOf(crashed.atStep) + 1 : 1} · {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start'}. Finished steps won't run again; nothing is sent twice.</span>
             {controls?.resume && !controls.autoResume ? (
               <button type="button" className="mc-crash__resume" onClick={() => controls.resume?.()}>Resume from the checkpoint</button>
             ) : (

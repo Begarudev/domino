@@ -6,7 +6,7 @@ import { MockRun } from './mock/player.ts';
 
 export interface StartRequest { request: string; limits?: Partial<RunLimits>; chaos?: ChaosConfig }
 export interface DecideResult { ok?: boolean; duplicate?: boolean }
-export interface Health { ok: boolean; dataMode: string; crustdataKey: boolean; llm: string; version: string }
+export interface Health { ok: boolean; dataMode: string; crustdataKey: boolean; llm: string; version: string; cacheRows?: number; cacheFetchedAt?: string | null }
 
 export interface Backend {
   mock: boolean;

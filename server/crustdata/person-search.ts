@@ -12,6 +12,7 @@ import type { CompanyInput } from './common.ts';
 import type { EndpointSpec } from './spec.ts';
 
 export const MOVES_LIMIT = 50;
+const LIVE_MOVES_LIMIT = 200;
 const DECIDERS_LIMIT = 12;
 const COHORT_DEPARTURES_LIMIT = 200;
 const COHORT_LOOKBACK_DAYS = 90;
@@ -25,6 +26,7 @@ const roleFields = [
   'company_professional_network_profile_url', 'company_professional_network_industry',
   'company_industries', 'company_headcount_latest', 'company_headquarters_country',
 ];
+const moveFields = [...basicFields, ...[CURRENT, PAST].flatMap(prefix => roleFields.map(field => prefix + '.' + field))];
 const deciderRoleFields = ['position_id', 'name', 'title', 'start_date', 'end_date', 'crustdata_company_id', 'company_website'];
 const roleSchema = z.object({
   position_id: z.union([z.number().int(), z.string()]).nullish(), name: str, title: str, start_date: str, end_date: str, is_default: z.boolean().nullish(),
@@ -34,6 +36,7 @@ const roleSchema = z.object({
 }).passthrough();
 
 const personResponse = z.object({
+  next_cursor: str,
   profiles: z.array(z.object({
     crustdata_person_id: int,
     basic_profile: z.object({ name: str }).passthrough().nullish(),
@@ -82,7 +85,7 @@ export function buildPeopleMoves(intent: Intent, after: IsoDate, through: IsoDat
       ...geographyFilter(prefix + '.company_headquarters_country', companies ? null : intent.geography),
       ...(companies ? [companyFilter(companies, employerPaths(prefix))] : []),
     ]))),
-    fields: [...basicFields, ...[CURRENT, PAST].flatMap(prefix => roleFields.map(field => prefix + '.' + field))],
+    fields: moveFields,
     sorts: [{ field: EMPLOYMENT + '.start_date', order: 'desc' }],
     limit: MOVES_LIMIT,
   };
@@ -117,6 +120,7 @@ function employer(role: RoleEntry, key: string, historical: boolean): CompanyMen
   return {
     ...identity, key, linkedinUrl: data.company_professional_network_profile_url, hq: data.company_headquarters_country,
     industry: historical ? undefined : data.company_industries?.[0] || data.company_professional_network_industry,
+    categories: historical ? undefined : data.company_industries ?? undefined,
     headcount: historical ? undefined : data.company_headcount_latest, evidenceIds: [],
   };
 }
@@ -139,42 +143,58 @@ function pastEmployers(work: RoleEntry[], through: IsoDate, companyKeys?: Map<Ro
   });
 }
 
-export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, after: IsoDate, through: IsoDate,
-  companies?: CompanyInput[]): TriggerBatch {
+function previousRole(work: RoleEntry[], current: RoleEntry, startedAt: IsoDate) {
+  return work.filter(other => {
+    const earliestEnd = other.end ?? other.endMonth?.[0];
+    const latestEnd = other.end ?? other.endMonth?.[1];
+    return other !== current && !other.current && earliestEnd && latestEnd && earliestEnd <= startedAt &&
+      daysBetween(latestEnd, current.startMonth?.[0] ?? startedAt) <= 60 && other.data.name &&
+      (!other.start || other.start <= latestEnd);
+  }).sort((a, b) => (b.end ?? b.endMonth?.[1] ?? '').localeCompare(a.end ?? a.endMonth?.[1] ?? ''))[0];
+}
+
+function normalizePeopleMoves(response: z.infer<typeof personResponse>, intent: Intent, meta: ParseMeta,
+  after: IsoDate, through: IsoDate, companies?: CompanyInput[], departures = false): TriggerBatch {
   const batch = emptyBatch();
   const historical = !companies && intent.runKind === 'replay';
   const seen = new Set<string>();
-  for (const profile of validate(personResponse, raw).profiles) {
+  const keywords = [...intent.signalKeywords, ...servingSignalKeywords];
+  for (const profile of response.profiles) {
     const name = profile.basic_profile?.name?.trim();
     if (!name) continue;
     const recordId = profileId(profile);
     const url = profileUrl(profile);
     const work = roles(profile);
-    const eligible = work.filter(role => {
+    const eligible = work.flatMap(role => {
       const title = role.data.title;
-      if (!title || !matchesSignal(title, [...intent.signalKeywords, ...servingSignalKeywords])) return false;
+      if (!title || (!departures && !matchesSignal(title, keywords))) return [];
       const earliest = role.start ?? role.startMonth?.[0];
       const latest = datedRoleStart(role, through, !historical);
+      const previous = !companies && latest ? previousRole(work, role, latest) : undefined;
+      const candidate = { role, title, startedAt: latest, previous };
       if (companies) {
         const company = employer(role, '', true);
-        return Boolean(company && companies.some(target => sameEmployer(target, company)) && earliest &&
-          earliest > after && inWindow(latest, after, through));
+        return company && companies.some(target => sameEmployer(target, company)) && earliest &&
+          earliest > after && inWindow(latest, after, through) ? [candidate] : [];
       }
-      if (!matchesGeography(role.data.company_headquarters_country, intent.geography)) return false;
+      if (departures) {
+        return role.current && !role.end && !role.endMonth && earliest && earliest <= through &&
+          inWindow(latest, after, through) && previous?.data.title && matchesSignal(previous.data.title, servingSignalKeywords) &&
+          matchesGeography(previous.data.company_headquarters_country, intent.geography) ? [candidate] : [];
+      }
+      if (!matchesGeography(role.data.company_headquarters_country, intent.geography)) return [];
       if (historical) {
         const firstPossibleEnd = role.end ?? role.endMonth?.[0];
         return inWindow(latest, after, shiftDays(through, -PROFILE_LAG_DAYS)) && (firstPossibleEnd
-          ? firstPossibleEnd > through : role.current);
+          ? firstPossibleEnd > through : role.current) ? [candidate] : [];
       }
-      if (!role.current || role.end || role.endMonth) return false;
-      if (role.startMonth) return role.startMonth[1] > after && role.startMonth[0] <= through;
-      return role.start === null || inWindow(role.start, after, through);
-    }).sort((a, b) => Number(Boolean(b.data.is_default)) - Number(Boolean(a.data.is_default)) ||
-      (b.start ?? '').localeCompare(a.start ?? ''));
+      if (!role.current || role.end || role.endMonth) return [];
+      if (role.startMonth) return role.startMonth[1] > after && role.startMonth[0] <= through ? [candidate] : [];
+      return role.start === null || inWindow(role.start, after, through) ? [candidate] : [];
+    }).sort((a, b) => Number(Boolean(b.role.data.is_default)) - Number(Boolean(a.role.data.is_default)) ||
+      (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
 
-    for (const role of companies ? eligible : eligible.slice(0, 1)) {
-      const title = role.data.title!;
-      const at = datedRoleStart(role, through, !historical);
+    for (const { role, title, startedAt: at, previous: recentPrevious } of companies ? eligible : eligible.slice(0, 1)) {
       const movementDate = at;
       const dateLabel = role.startMonth ? formatMonth(role.startMonth[0]) : at;
       const precisionNote = role.startMonth ? ' (month precision)' : '';
@@ -191,14 +211,6 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
       batch.evidence.push(hireFact);
       batch.mentions.push(next);
       const companyKeys = new Map<RoleEntry, string>();
-      const recentPrevious = movementDate && !companies ? work.filter(other => {
-        const earliestEnd = other.end ?? other.endMonth?.[0];
-        const latestEnd = other.end ?? other.endMonth?.[1];
-        return other !== role && earliestEnd && latestEnd && earliestEnd <= movementDate &&
-          daysBetween(latestEnd, role.startMonth?.[0] ?? movementDate) <= 60 && other.data.name &&
-          (!other.start || other.start <= latestEnd);
-      }).sort((a, b) => (b.end ?? b.endMonth?.[1] ?? '').localeCompare(a.end ?? a.endMonth?.[1] ?? ''))[0] : undefined;
-
       const previous = recentPrevious && employer(recentPrevious, mentionKey + ':previous', historical);
       let moveEvidence = [hireFact.id];
       if (recentPrevious && previous) {
@@ -244,12 +256,62 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
   return batch;
 }
 
-export const personSearchRecentMoves: EndpointSpec<{ intent: Intent }, TriggerBatch> = {
+export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, after: IsoDate, through: IsoDate,
+  companies?: CompanyInput[]): TriggerBatch {
+  return normalizePeopleMoves(validate(personResponse, raw), intent, meta, after, through, companies);
+}
+
+type RecentMovesInput = { intent: Intent; cursor?: string };
+type RecentMovesPage = TriggerBatch & { nextCursor: string | null };
+
+export function movesPageLimit(value = process.env.DOMINO_MOVES_PAGES): number {
+  const requested = Number(value);
+  return Number.isSafeInteger(requested) && requested > 0 ? requested : 2;
+}
+
+export async function* readMovesPages<T extends { nextCursor?: string | null }>(
+  intent: Intent, read: (input: RecentMovesInput) => Promise<T>, limit = intent.runKind === 'live' ? movesPageLimit() : 1,
+): AsyncGenerator<T> {
+  let cursor: string | undefined;
+  const seen = new Set<string>();
+  for (let page = 0; page < limit; page++) {
+    const result = await read(cursor ? { intent, cursor } : { intent });
+    yield result;
+    const next = result.nextCursor;
+    if (!next || seen.has(next)) return;
+    seen.add(next);
+    cursor = next;
+  }
+}
+
+export const personSearchRecentMoves: EndpointSpec<RecentMovesInput, RecentMovesPage> = {
   name: 'person_recent_moves', path: '/person/search', method: 'POST',
-  build: ({ intent }) => buildPeopleMoves(intent, shiftDays(intent.asOf, -(intent.runKind === 'replay' ? DRAIN_REPLAY_HISTORY_DAYS : DRAIN_HISTORY_DAYS)),
-    intent.runKind === 'replay' ? shiftDays(intent.asOf, -PROFILE_LAG_DAYS) : intent.asOf),
-  parse: (raw, { intent }, meta) => parsePeopleMoves(raw, intent, meta, shiftDays(intent.asOf, -(intent.runKind === 'replay' ? DRAIN_REPLAY_HISTORY_DAYS : DRAIN_HISTORY_DAYS)), intent.asOf),
-  estimateCredits: raw => estimate(raw, 'profiles', MOVES_LIMIT, 0.23),
+  build({ intent, cursor }) {
+    const cursorField = cursor ? { cursor } : {};
+    if (intent.runKind === 'replay') {
+      const { sorts: _sorts, ...query } = buildPeopleMoves(intent, shiftDays(intent.asOf, -DRAIN_REPLAY_HISTORY_DAYS),
+        shiftDays(intent.asOf, -PROFILE_LAG_DAYS));
+      return { ...query, ...cursorField };
+    }
+    return {
+      filters: group('and', [
+        group('or', servingSignalKeywords.map(keyword => condition(PAST + '.title', '[.]', keyword))),
+        ...dates(CURRENT + '.start_date', shiftDays(intent.asOf, -DRAIN_HISTORY_DAYS - 1), intent.asOf),
+        ...geographyFilter(PAST + '.company_headquarters_country', intent.geography),
+      ]),
+      fields: moveFields,
+      limit: LIVE_MOVES_LIMIT,
+      ...cursorField,
+    };
+  },
+  parse(raw, { intent }, meta) {
+    const response = validate(personResponse, raw);
+    const live = intent.runKind === 'live';
+    const after = shiftDays(intent.asOf, live ? -DRAIN_HISTORY_DAYS - 1 : -DRAIN_REPLAY_HISTORY_DAYS);
+    const batch = normalizePeopleMoves(response, intent, meta, after, intent.asOf, undefined, live);
+    return { ...batch, nextCursor: response.next_cursor || null };
+  },
+  estimateCredits: (raw, { intent }) => estimate(raw, 'profiles', intent.runKind === 'live' ? LIVE_MOVES_LIMIT : MOVES_LIMIT, 0.23),
 };
 
 type CohortInput = { intent: Intent; companies: CompanyInput[] };
@@ -278,7 +340,7 @@ export const personCohortDepartures: EndpointSpec<CohortInput, TriggerBatch> = {
         group('or', cohortKeywords(intent).map(keyword => condition(PAST + '.title', '[.]', keyword))),
         ...dates(CURRENT + '.start_date', shiftDays(since, -1), through),
       ]),
-      fields: [...basicFields, ...[CURRENT, PAST].flatMap(prefix => roleFields.map(field => prefix + '.' + field))],
+      fields: moveFields,
       // Person Search supports sorting on the employment-level date index.
       sorts: [{ field: EMPLOYMENT + '.start_date', order: 'desc' }],
       limit: COHORT_DEPARTURES_LIMIT,

@@ -156,7 +156,8 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
   const mention: CompanyMention = {
     key: prefix + ':' + recordId + ':company', name, domain, linkedinUrl: basic.professional_network_url,
     crustdataId: id, headcount, headcountGrowthPct: growth, firmographicsAsOf: headcountDate,
-    industry, hq: row.locations?.headquarters || row.locations?.country, foundedYear: hasFirmographics ? basic.year_founded : undefined,
+    industry, categories: hasFirmographics ? row.taxonomy?.categories ?? undefined : undefined,
+    hq: row.locations?.headquarters || row.locations?.country, foundedYear: hasFirmographics ? basic.year_founded : undefined,
     lastFunding: funding, acquisitions, competitorNames: [], competitorDomains, evidenceIds: evidence.map(row => row.id),
   };
   return { mention, evidence, recordId, growth, growthFact, fundingFact };

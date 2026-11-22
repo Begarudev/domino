@@ -87,7 +87,7 @@ replay. **For live data**, create `.env` in the repo root. It is gitignored and 
 
 ```
 CRUSTDATA_API_KEY=...      # live Crustdata reads; with a key the default data mode is live
-OPENAI_API_KEY=...         # model-written request parsing and drafts (OPENAI_MODEL, default gpt-5-mini)
+OPENAI_API_KEY=...         # model-written request parsing and drafts (OPENAI_MODEL, default gpt-6-luna)
 ANTHROPIC_API_KEY=...      # optional alternative provider (ANTHROPIC_MODEL, default claude-opus-5-5); used only without an OpenAI key
 DOMINO_DATA=live           # optional: live | cache | fixture
 DOMINO_PORT=4321           # optional
@@ -114,14 +114,12 @@ Other scripts: `bun run dev` (hot-reload UI and server), `bun run probe` (checks
 | Frontend | React 19 + Vite, built to static files that the server serves |
 | State | SQLite in WAL mode (`data/domino.db`): runs, step checkpoints, append-only events, ledger, tool cache, evidence, approvals, outbox, inbox, asks |
 | Data | Crustdata REST API, `x-api-version: 2025-11-01`: `/job/search`, `/person/search`, `/company/search`, `/company/enrich`, `/social_post/search` |
-| Models | OpenAI `gpt-5-mini` (reasoning effort minimal) for request parsing and the claim-backed middle of each draft; deterministic template fallback; Anthropic `claude-opus-5-5` supported but unused today |
+| Models | OpenAI `gpt-6-luna` (reasoning effort none; $0.10 / $0.50 per million tokens) for request parsing and the claim-backed middle of each draft; deterministic template fallback; Anthropic `claude-opus-5-5` supported but unused today |
 | Validation | zod schemas on every provider response (a nonsense response is rejected and retried) |
 
 ## Architecture, data, state and hosting
 
-![DOMINO architecture](docs/architecture.png)
-
-Same diagram as Mermaid (GitHub renders it; source in [`docs/architecture.mmd`](docs/architecture.mmd)):
+Rendered by GitHub from [`docs/architecture.mmd`](docs/architecture.mmd):
 
 ```mermaid
 flowchart LR
@@ -161,7 +159,7 @@ flowchart LR
 
   DB[("SQLite data/domino.db<br/>runs · step checkpoints · events<br/>ledger · tool_cache · evidence<br/>approvals · outbox · inbox_received")]
   CD["Crustdata API<br/>job · person · company · enrich · posts"]
-  LLM["OpenAI gpt-5-mini<br/>(Anthropic optional)"]
+  LLM["OpenAI gpt-6-luna<br/>(Anthropic optional)"]
   FX["Fixture world<br/>only when no key or DOMINO_DATA=fixture"]
 
   REQ -->|POST /api/runs| API
@@ -453,7 +451,7 @@ queue in 4 s on the fixture world, with 7 accounts, 5 drafts, 10 approvals, 0 cr
 
 ## Models and tools
 
-- **OpenAI `gpt-5-mini`** (reasoning effort minimal): request parsing to a structured intent, and the cited middle of
+- **OpenAI `gpt-6-luna`** (reasoning effort none): request parsing to a structured intent, and the cited middle of
   each draft. Timeouts of 20 s (parse) and 30 s (draft), 2 attempts, every call on the ledger.
 - **Deterministic template**: drafts when no model key is set or the model keeps failing; it goes through the same
   verifier.

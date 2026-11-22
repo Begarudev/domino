@@ -1,4 +1,4 @@
-import { STEP_ORDER } from '../../shared/types.ts';
+import { ALL_STEPS } from '../../shared/types.ts';
 import type { Evidence, Intent, SourceItem, SourceReadEvent, StepName } from '../../shared/types.ts';
 import type { MoveTrigger, ParseMeta, TriggerBatch } from '../domain/types.ts';
 import type { CrustReadMeta } from '../runtime/tool.ts';
@@ -65,7 +65,7 @@ function querySummary(endpoint: string, path: string, request: unknown, input: u
 }
 
 function eventStep(step: string, endpoint: string): StepName {
-  const normal = STEP_ORDER.find(name => name === step);
+  const normal = ALL_STEPS.find(name => name === step);
   if (normal) return normal;
   if (endpoint === 'company_enrich') return 'enrich_companies';
   if (endpoint === 'person_deciders') return 'find_deciders';
