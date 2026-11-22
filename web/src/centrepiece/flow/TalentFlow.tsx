@@ -324,7 +324,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
         )}
       </header>
 
-      {fixture && <div className="tf-badge">Fixture · synthetic companies and people</div>}
+      {fixture && <div className="tf-badge">Sample data · fictional companies, not live results</div>}
 
       {sc && (
         <aside ref={scoreRef} className="tf-score" aria-label="Replay score" style={{ visibility: 'hidden' }}>

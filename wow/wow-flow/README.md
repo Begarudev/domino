@@ -45,7 +45,7 @@ The view is driven only by `RunSnapshot`, through `CentrepieceProps`:
 
 While `running` is true, the view holds at the start. It plays from 0 when the run finishes. `replayToken` restarts it. `reducedMotion` jumps to the end state.
 
-`fixture.ts` is a labelled synthetic replay of fictional companies: the same world as `web/src/mock`, plus bystander companies and their ordinary moves. Every row has `mode: 'fixture'`, and the view shows "Fixture · synthetic companies and people". `engine-*.json` are snapshots recorded from the real engine with `DOMINO_DATA=fixture`, so they are synthetic too.
+`fixture.ts` is a labelled synthetic replay of fictional companies: the same world as `web/src/mock`, plus bystander companies and their ordinary moves. Every row has `mode: 'fixture'`, and the view shows "Sample data · fictional companies, not live results". `engine-*.json` are snapshots recorded from the real engine with `DOMINO_DATA=fixture`, so they are synthetic too.
 
 ## Screenshots
 
