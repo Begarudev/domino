@@ -7,7 +7,7 @@ import type {
 import { now } from '../db.ts';
 import type { OutcomeFact, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { root } from '../env.ts';
-import { modelClient } from '../llm/client.ts';
+import { modelClient, modelLabel } from '../llm/client.ts';
 import { mapLimit } from '../runtime/pool.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
@@ -121,8 +121,20 @@ async function parseRequest(ctx: ToolContext): Promise<StepResult<'parse_request
     system: 'Refine an outbound search intent from the request and confirmed offering. Return only buyerProfile, geography, deciderTitles and signalKeywords. Omit any field you cannot infer.',
     user: JSON.stringify({ request: run.request, offering: intent.offering, rules: intent }),
   });
-  if (completion) Object.assign(intent, refineIntent(intent, run.request, JSON.parse(completion.text)));
-  return { output: intent, summary: `${intent.runKind === 'replay' ? 'Replay' : 'Run'} for ${intent.offering}` };
+  let modelResult: unknown = null;
+  try { modelResult = completion ? JSON.parse(completion.text) : null; } catch { modelResult = null; }
+  const refined = completion && modelResult ? refineIntent(intent, run.request, modelResult) : intent;
+  const added = (after: string[], before: string[]) => after.filter(value => !before.some(old => old.toLowerCase() === value.toLowerCase()));
+  const modelAdded = refined !== intent && completion ? {
+    label: `Terms added by ${modelLabel(completion.model)} (schema-checked)`,
+    signalKeywords: added(refined.signalKeywords, intent.signalKeywords), deciderTitles: added(refined.deciderTitles, intent.deciderTitles),
+    buyerProfile: refined.buyerProfile !== intent.buyerProfile ? refined.buyerProfile : null,
+    geography: refined.geography !== intent.geography ? refined.geography : null,
+  } : null;
+  Object.assign(intent, refined, { modelAdded });
+  const addedTerms = modelAdded ? [...modelAdded.signalKeywords, ...modelAdded.deciderTitles] : [];
+  return { output: intent, summary: `${intent.runKind === 'replay' ? 'Replay' : 'Run'} for ${intent.offering}` +
+    (modelAdded ? `; ${modelAdded.label}: ${addedTerms.length ? addedTerms.join(', ') : 'buyer profile only'}` : '; parsed by rules') };
 }
 
 function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
@@ -393,6 +405,11 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
       }
     }
     draft.unverifiable = [...unverifiable.values()];
+    const cited = new Set(draft.citations.map(cite => cite.evidenceId)).size;
+    const excluded = draft.unverifiable.length ? ` · ${draft.unverifiable.length} excluded (can't verify)` : '';
+    draft.generatorLabel = draft.generator === 'template'
+      ? `Template from ${cited} verified claim${cited === 1 ? '' : 's'}${excluded}`
+      : `Drafted by ${modelLabel(draft.generator)} from ${cited} verified claim${cited === 1 ? '' : 's'}${excluded}`;
     // Hub rule (14:35): outreach needs >= 2 verified, dated, cited facts AND a named decider role, else "Not drafted".
     const gate = draftGate(draft, target, evidence);
     if (gate) return { target: { ...target, draftId: null, notDrafted: gate }, draft: { ...draft, status: 'not_drafted' as const, blockedReason: gate.reason } };

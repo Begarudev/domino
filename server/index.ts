@@ -14,6 +14,7 @@ import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts
 import { decode, Store } from './db.ts';
 import type { RunChaos } from './db.ts';
 import { companyDossier } from './desk/dossier.ts';
+import { rulesRegistry } from './desk/rules.ts';
 import { deskRoutes } from './desk/routes.ts';
 import { recheckSource } from './engine/sources.ts';
 import { config, defaultLimits, redactSecrets, root } from './env.ts';
@@ -145,6 +146,13 @@ export function createApp(store: Store) {
   app.use('/api/*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     await next();
+    // Privacy boundary: every JSON response shows people as role + initial; full names never leave the server.
+    if (c.res.headers.get('content-type')?.includes('application/json')) {
+      const body = await c.res.clone().json().catch(() => undefined);
+      if (body !== undefined) {
+        c.res = new Response(JSON.stringify(store.redactor.value(body)), { status: c.res.status, headers: c.res.headers });
+      }
+    }
   });
 
   app.get('/api/health', c => c.json({
@@ -177,6 +185,8 @@ export function createApp(store: Store) {
     const result = store.transaction(() => companyDossier(store, c.req.param('id'), c.req.query('run') || undefined), 'read');
     return result ? c.json(result) : c.json({ error: 'No analysis run has this company yet' }, 404);
   });
+  // Rules registry: statements, thresholds, guards, lock times and live fire counts (lead-owned).
+  app.get('/api/rules', c => c.json(store.transaction(() => rulesRegistry(store), 'read')));
   app.route('/api', deskRoutes({ store, launch }));
 
   app.get('/api/runs', c => c.json(store.listRuns()));
@@ -199,7 +209,7 @@ export function createApp(store: Store) {
         const events = store.getEvents(id, after);
         for (const event of events) {
           if (stream.aborted) break;
-          await stream.writeSSE({ id: String(event.seq), data: JSON.stringify(event) });
+          await stream.writeSSE({ id: String(event.seq), data: JSON.stringify(store.redactor.value(event)) });
           after = event.seq;
         }
         if (Date.now() - heartbeat >= 10_000) {
@@ -296,6 +306,13 @@ export function createApp(store: Store) {
   });
 
   app.all('/api/*', c => c.json({ error: 'API route not found' }, 404));
+  // The original run view, built with base /classic/ (bun run build:classic), stays reachable at /classic.
+  const classic = resolve(root, 'web/dist-classic');
+  if (existsSync(resolve(classic, 'index.html'))) {
+    app.get('/classic', c => c.redirect('/classic/', 302));
+    app.get('/classic/*', serveStatic({ root: classic, rewriteRequestPath: path => path.replace(/^\/classic/, '') }),
+      serveStatic({ path: resolve(classic, 'index.html') }));
+  }
   // DOMINO_UI=web2 serves the Search Desk app (web2/); the default stays the original app (web/) until the UI freeze.
   const dist = resolve(root, process.env.DOMINO_UI === 'web2' ? 'web2/dist' : 'web/dist');
   if (existsSync(resolve(dist, 'index.html'))) {

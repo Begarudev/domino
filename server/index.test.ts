@@ -306,13 +306,15 @@ test('receiver commits before dispatcher SIGKILL and run resume reconciles only 
   assert.equal(sender()?.executed_at, null);
   assert.equal((await get(id)).outbox.length, 0);
   assert.equal((await get(id)).approvals.find(row => row.id === send.id)?.status, 'pending');
+  assert.deepEqual((await get(id)).receipts.map(row => [row.idempotencyKey, row.attempts, row.deliveries]), [[key, 1, 1]]);
 
   const resume = await http<{ pid: number }>(`/api/runs/${id}/resume`, {});
   assert(resume.pid > 0);
   const recovered = await state(id, snap => snap.outbox.length === 1);
   assert.equal(recovered.approvals.find(row => row.id === send.id)?.status, 'approved');
   assert.equal(sender()?.status, 'delivered');
-  assert.deepEqual(inbox(), receiverRows);
+  assert.deepEqual(inbox().map(row => ({ ...row })), [{ ...receiverRows[0], attempts: 2 }], 'the retry is counted, the message is not stored again');
+  assert.deepEqual(recovered.receipts.map(row => [row.idempotencyKey, row.attempts, row.deliveries]), [[key, 2, 1]]);
   const rows = read(db => db.prepare(`SELECT payload_json FROM events WHERE run_id = ? AND type = 'delivery.receipt'`).all(id));
   assert.equal(rows.length, 1);
   const receipt = JSON.parse(rows[0].payload_json as string);

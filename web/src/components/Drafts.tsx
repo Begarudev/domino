@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Approval, DeliveryReceipt, Draft, RunSnapshot, Target } from '../../../shared/types.ts';
+import type { Approval, DeliveryReceipt, Draft, InboxReceipt, RunSnapshot, Target } from '../../../shared/types.ts';
 import { fmtDate } from '../dates.ts';
 import type { UIState } from '../state.ts';
 import { shortKey } from '../state.ts';
@@ -31,7 +31,7 @@ function Body(props: { text: string; draft: Draft; onHover: (id: string | null) 
   );
 }
 
-function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][string]; receipt?: DeliveryReceipt; onDecide: (id: string, d: 'approve' | 'reject') => void; busy: boolean; blocked?: string }) {
+function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][string]; receipt?: DeliveryReceipt; inbox?: InboxReceipt; onDecide: (id: string, d: 'approve' | 'reject') => void; busy: boolean; blocked?: string }) {
   const { ap, note } = props;
   const isMsg = ap.kind === 'send_message';
   const label = isMsg ? 'Approve and send to test inbox' : 'Approve meeting hold (test mode)';
@@ -55,6 +55,7 @@ function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][s
           ) : (
             <p className="approval-note is-sent">{isMsg ? 'Sent once to test inbox' : 'Meeting hold booked once (test mode)'}, key <code>{shortKey(ap.idempotencyKey)}</code></p>
           )}
+          {props.inbox && <p className="approval-note is-receipt">Test inbox receipt <code>{shortKey(props.inbox.idempotencyKey)}</code> · Attempts: {props.inbox.attempts} · Deliveries: {props.inbox.deliveries}</p>}
           <button type="button" className="btn btn-quiet btn-xs" disabled={props.busy} onClick={() => props.onDecide(ap.id, 'approve')} title="Approve again to show the outbox blocks a second send">{isMsg ? 'Send again' : 'Book again'}</button>
         </div>
       )}
@@ -151,7 +152,7 @@ export function DraftsTab(props: {
           <div className="approvals">
             {approvals.length === 0 && <p className="muted">Approvals are created at the approval gate.</p>}
             {approvals.map((ap) => (
-              <ApprovalControls key={ap.id} ap={ap} note={actionNotes[ap.id]} receipt={props.state.receipts[ap.id]} blocked={current.decider ? undefined : 'No decision-maker found, so this cannot be sent. Reject it or re-run.'} onDecide={props.onDecide} busy={props.busy === ap.id} />
+              <ApprovalControls key={ap.id} ap={ap} note={actionNotes[ap.id]} receipt={props.state.receipts[ap.id]} inbox={props.state.snap.receipts.find((row) => row.idempotencyKey === ap.idempotencyKey)} blocked={current.decider ? undefined : 'No decision-maker found, so this cannot be sent. Reject it or re-run.'} onDecide={props.onDecide} busy={props.busy === ap.id} />
             ))}
           </div>
         </aside>

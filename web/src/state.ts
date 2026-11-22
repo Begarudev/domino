@@ -72,7 +72,7 @@ export function emptySnapshot(id: string, request: string): RunSnapshot {
   return {
     id, request, status: 'queued', dataMode: 'fixture', llm: 'template', createdAt: now, updatedAt: now,
     intent: null, steps: emptySteps(), budget: emptyBudget(), companies: [], people: [], triggers: [], merges: [],
-    keptApart: [], graph: { nodes: [], edges: [] }, targets: [], drafts: [], evidence: [], approvals: [], outbox: [],
+    keptApart: [], graph: { nodes: [], edges: [] }, targets: [], drafts: [], evidence: [], approvals: [], outbox: [], receipts: [],
     ledger: [], asks: [], baseline: { hiringFilterCompanyIds: [] }, engine: { pid: null, alive: false, crashes: 0, resumes: 0 },
     replay: null,
   };

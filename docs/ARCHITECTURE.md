@@ -4,66 +4,57 @@ One product in two parts on one signal, dated moves between companies: (1) hirin
 
 ```mermaid
 flowchart LR
-  subgraph Browser["Browser · React UI · persona switcher"]
-    CAND["Candidate<br/>onboard + consent · likely hiring for you<br/>request intro · companies reaching out"]
-    HIRE["Company · hiring<br/>drain monitor · predicted openings<br/>matched candidates · intro outreach"]
-    INTEL["Company · analysis<br/>news + talent flows · cross-company chains<br/>predicted needs · verified outreach"]
-    SHARED["Ledger · replay · live activity feed"]
+  LOGIN(["Sign in<br/>choose role"])
+
+  subgraph CAPP["Candidate app · web2 (React + Vite + motion)"]
+    C1["Onboarding<br/>LinkedIn · live enrich · consent"]
+    C2["Dashboard<br/>companies likely hiring you · intros"]
   end
 
-  subgraph Server["server/index.ts · Hono"]
-    API["REST API"]
-    SSE["SSE stream<br/>tails the events table"]
-    GATE["Approval gate<br/>reserve in one transaction"]
-    DISPATCH["Dispatcher<br/>child process per delivery"]
-    INBOX["Test inbox receiver<br/>unique idempotency key"]
+  subgraph COAPP["Company app · web2 (React + Vite + motion)"]
+    K1["Act<br/>Recruitment · Outreach"]
+    K2["Read<br/>Reading log · Company file · Chains · Verifier"]
+    K4["Check<br/>Replay · Ledger"]
   end
 
-  subgraph Engine["engine · child process per run · checkpoint per step"]
-    direction TB
-    SIG["Dated signals<br/>departures from → to · job posts<br/>growth · funding · posts/news"]
-    RES["Entity resolution<br/>merge on id/domain, keep namesakes apart"]
-    GUARD["False-drain guards<br/>acqui-hire · shared parent · team lift<br/>ambiguous id · month-level intervals"]
-    O1["Part 1 · rule O1<br/>open · provisional · watch · held"]
-    PROF["Candidate profile<br/>live enrich → model parse → confirm"]
-    MATCH["Match<br/>role family + skills, every reason cited"]
-    CHAIN["Part 2 · R1 TALENT_DRAIN · CONTAGION<br/>DISPLACEMENT · DIRECT baseline"]
-    DEC["Rank needs · find the decider"]
-    DRAFT["Draft from numbered claims<br/>verifier deletes uncited sentences"]
-    REPLAY["Replay scorer<br/>as of 1 Sep, 0 later facts"]
-    SIG --> RES --> GUARD
-    GUARD --> O1 --> MATCH --> DRAFT
-    PROF --> MATCH
-    GUARD --> CHAIN --> DEC --> DRAFT
-    O1 --> REPLAY
-    CHAIN --> REPLAY
+  subgraph API["Bun API · Hono"]
+    DESK["Desk routes<br/>+ SSE events"]
+    RUN["Run runtime<br/>journal · checkpoints<br/>kill / resume"]
+    R["Rules engine<br/>O1 · R1 · CONTAGION<br/>DISPLACEMENT"]
+    G["Guards<br/>acqui-hire from news · restructure<br/>stale data · month-interval dates"]
+    VER["Verifier<br/>cites or deletes"]
+    LED["Ledger<br/>credits · tokens · USD · caps"]
+    OUT["Outbox<br/>approve → idempotency key"]
+    RCV["Receiver<br/>send once · team test inbox"]
+    RED["Redaction<br/>people as role + initial<br/>journal · API · SSE"]
+    DB[("SQLite")]
   end
 
-  subgraph Tool["runtime/tool.ts · every external call"]
-    T["budget check before the call<br/>timeout · retry with backoff<br/>schema check · ledger row per attempt<br/>live → cache (never live → fixture)"]
+  subgraph EXT["External"]
+    CD["Crustdata<br/>person search/enrich · company<br/>job search · web search/news · credits"]
+    LLM["OpenAI GPT-6 Luna<br/>parse · refine · draft only"]
   end
 
-  DB[("SQLite data/domino.db<br/>runs · checkpoints · events · ledger<br/>tool_cache · evidence · approvals<br/>outbox · inbox_received")]
-  CD["Crustdata API<br/>person enrich/search · job search<br/>company search/enrich · posts"]
-  LLM["OpenAI gpt-6-luna<br/>(Anthropic optional)"]
-  FX["Fixture world<br/>only when no key or DOMINO_DATA=fixture"]
-
-  CAND --> API
-  HIRE --> API
-  INTEL --> API
-  API -->|fork · kill · resume| Engine
-  Engine --> Tool
-  Tool --> CD
-  Tool --> LLM
-  Tool -.-> FX
-  Engine -->|output + done in one transaction| DB
-  Tool -->|ledger · cache| DB
-  DB --> SSE --> SHARED
-  HIRE -->|approve intro| GATE
-  INTEL -->|approve message| GATE
-  GATE -->|outbox row: pending| DB
-  GATE --> DISPATCH --> INBOX
-  INBOX -->|insert once per key| DB
+  LOGIN -->|candidate| C1 --> C2
+  LOGIN -->|company| K1
+  K1 --- K2 --- K4
+  C2 --> DESK
+  K1 --> DESK
+  K2 --> DESK
+  K4 --> DESK
+  DESK --> RUN --> R
+  G -.->|hold| R
+  R --> VER --> OUT --> RCV
+  RUN --> RED --> DB
+  DESK --> RED
+  RUN --> LED
+  OUT --> DB
+  RCV --> DB
+  LED --> DB
+  RUN --> CD
+  RUN --> LLM
+  CD -.->|credits| LED
+  LLM -.->|tokens| LED
 ```
 
 **Flow.** A candidate onboards with their LinkedIn URL and consent (live Crustdata person enrich, model parse, confirmation). The engine reads dated departures across a cohort of AI companies, resolves entities, applies shared false-drain guards, then rule O1 (open, provisional, watch, held) to match opted-in candidates to predicted openings with cited fit reasons, and the cross-company rules (R1 talent drain, contagion, displacement, with a first-order hiring baseline) to rank company needs and find the decider. Every intro or outreach draft is written only from numbered, dated claims and checked by a verifier. A person approves it, and it is delivered once to a test inbox under an idempotency key. Every external call goes through one wrapper that enforces budgets, timeouts, retries and schema checks and writes a ledger row per attempt. State lives in SQLite, with a checkpoint per step, so a killed engine resumes without repeating calls.

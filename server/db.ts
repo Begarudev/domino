@@ -2,9 +2,10 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ALL_STEPS, PIPELINES } from '../shared/types.ts';
+import { PeopleRedactor } from './runtime/redact.ts';
 import type { Pipeline } from '../shared/types.ts';
 import type {
-  Approval, Ask, BudgetState, ChaosConfig, DataMode, Evidence, Intent, LedgerEntry, OutboxAction, RunEvent,
+  Approval, Ask, BudgetState, ChaosConfig, DataMode, Evidence, InboxReceipt, Intent, LedgerEntry, OutboxAction, RunEvent,
   RunLimits, RunStatus, StepName, StepState, StoredEvent,
 } from '../shared/types.ts';
 import { config } from './env.ts';
@@ -53,6 +54,9 @@ export type EvidenceSource = { endpoint: string; path?: string; input: unknown; 
 
 export class Store {
   readonly sql: DatabaseSync;
+  // Lazily built from the tool cache; redacts people at every boundary data leaves the server.
+  private redactorInstance?: PeopleRedactor;
+  get redactor(): PeopleRedactor { return this.redactorInstance ??= new PeopleRedactor(this.sql); }
 
   constructor(path = config.dbPath) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -105,9 +109,10 @@ export class Store {
       "UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL");
     this.ensureColumn('ledger', 'error', 'TEXT');
     this.ensureColumn('runs', 'pipeline', "TEXT NOT NULL DEFAULT 'outbound'");
+    this.ensureColumn('inbox_received', 'attempts', 'INTEGER NOT NULL DEFAULT 1');
   }
 
-  private ensureColumn(table: 'ledger' | 'outbox' | 'runs', name: string, definition: string, backfill?: string) {
+  private ensureColumn(table: 'ledger' | 'outbox' | 'runs' | 'inbox_received', name: string, definition: string, backfill?: string) {
     const exists = () => this.sql.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === name);
     if (exists()) return;
     this.transaction(() => {
@@ -166,10 +171,13 @@ export class Store {
 
   getOutput<T>(id: string, step: StepName): T | undefined {
     const row = this.sql.prepare("SELECT output_json FROM steps WHERE run_id = ? AND step = ? AND status = 'done'").get(id, step);
-    return typeof row?.output_json === 'string' ? decode<T>(row.output_json) : undefined;
+    const output = typeof row?.output_json === 'string' ? decode<T>(row.output_json) : undefined;
+    if (output !== undefined) this.redactor.observe(output);
+    return output;
   }
 
   setOutput(id: string, step: StepName, output: unknown) {
+    this.redactor.observe(output);
     this.sql.prepare('UPDATE steps SET output_json = ? WHERE run_id = ? AND step = ?').run(encode(output), id, step);
     if (step === 'parse_request') {
       this.sql.prepare('UPDATE runs SET intent_json = ? WHERE id = ?').run(encode(output as Intent), id);
@@ -181,7 +189,9 @@ export class Store {
   }
 
   // This variant participates in the caller's transaction.
-  recordEvent(runId: string, event: JournalEvent): JournalRecord {
+  recordEvent(runId: string, input: JournalEvent): JournalRecord {
+    // Privacy boundary: the journal never stores a person's full name or profile URL (role + initial only).
+    const event = this.redactor.value(input);
     const ts = now();
     const { lastInsertRowid } = this.sql.prepare('INSERT INTO events (run_id, ts, type, payload_json) VALUES (?, ?, ?, ?)')
       .run(runId, ts, event.type, encode(event));
@@ -270,6 +280,14 @@ export class Store {
 
   getApprovals(runId: string): Approval[] {
     return this.sql.prepare('SELECT json FROM approvals WHERE run_id = ? ORDER BY rowid').all(runId).map(row => decode(row.json as string));
+  }
+
+  // Receiver-side view, independent of the sender's outbox status: one stored row (delivery) per key,
+  // however many times the sender tried.
+  getReceipts(runId: string): InboxReceipt[] {
+    return this.sql.prepare(`SELECT i.idempotency_key AS key, i.received_at, i.attempts
+      FROM inbox_received i JOIN outbox o ON o.idempotency_key = i.idempotency_key WHERE o.run_id = ? ORDER BY o.rowid`).all(runId)
+      .map(row => ({ idempotencyKey: row.key as string, receivedAt: row.received_at as string, attempts: Number(row.attempts), deliveries: 1 }));
   }
 
   getOutbox(runId: string): OutboxAction[] {

@@ -45,7 +45,7 @@ export function snapshot(store: Store, id: string): RunSnapshot {
     graph: output.cascade ?? partialGraph,
     targets: output.draft_messages?.targets ?? output.warm_paths ?? output.find_deciders?.targets ?? output.rank_targets?.targets ?? [],
     drafts: output.draft_messages?.drafts ?? [], evidence: store.getEvidence(id), approvals: store.getApprovals(id),
-    outbox: store.getOutbox(id), ledger: store.getLedger(id), asks: store.getAsks(id),
+    outbox: store.getOutbox(id), receipts: store.getReceipts(id), ledger: store.getLedger(id), asks: store.getAsks(id),
     baseline: output.rank_targets?.baseline ?? { hiringFilterCompanyIds: [] },
     engine: { pid, alive: isAlive(pid), crashes: run.crashes, resumes: run.resumes }, replay: output.score_replay ?? null,
   };

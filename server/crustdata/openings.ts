@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import type { Evidence, IsoDate } from '../../shared/types.ts';
 import type { RoleFamily } from '../../shared/desk.ts';
+import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import { shiftDays } from '../domain/facts.ts';
 import { FAMILY_PHRASES, monthInterval, roleFamily } from '../domain/openings.ts';
 import type { DepartureFact, ReplacementFact } from '../domain/openings.ts';
@@ -31,6 +32,7 @@ const peopleResponse = z.object({
   next_cursor: str, total_count: int,
 }).passthrough();
 
+const dayName = (day: IsoDate) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const monthName = (day: IsoDate) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 const domainOf = (website?: string | null) => website ? website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase() || null : null;
 const initialOf = (name?: string | null) => (name?.trim()?.[0]?.toUpperCase() ?? '?') + '.';
@@ -102,8 +104,26 @@ export const personDepartures: EndpointSpec<{ window: ScanWindow; cursor?: strin
   estimateCredits: raw => 0.23 * ((raw as { profiles?: unknown[] } | null)?.profiles?.length ?? DEPARTURE_PAGE),
 };
 
-export interface ReplacementCheck { companyId: string; crustdataId: number; roleFamily: RoleFamily; since: IsoDate }
-export interface ReplacementBatch { replacements: ReplacementFact[]; evidence: Evidence[]; checked: string[] }
+export interface ReplacementCheck { companyId: string; crustdataId: number; roleFamily: RoleFamily; since: IsoDate; companyName?: string }
+export interface ReplacementBatch { replacements: ReplacementFact[]; evidence: Evidence[]; checked: string[]; checkEvidence: Record<string, string> }
+
+/** A dated, citable row for the check itself: "job search … 0 records" is a fact, not an absence of facts. */
+function checkRows(meta: ParseMeta, kind: 'Job search' | 'Person search', path: string, asOf: IsoDate, checks: ReplacementCheck[], found: ReplacementFact[]) {
+  const evidence: Evidence[] = [];
+  const ids: Record<string, string> = {};
+  for (const check of checks) {
+    const n = found.filter(r => r.companyId === check.companyId && r.roleFamily === check.roleFamily).length;
+    const what = kind === 'Job search' ? 'job posts' : 'hires (current role start)';
+    const scope = `${FAMILY_PHRASES[check.roleFamily].join(' / ')} titles at company_id ${check.crustdataId}, ${check.since} to ${asOf}`;
+    const row = evidenceRow(meta, `check:${check.companyId}:${check.roleFamily}:${check.since}`, `$.total_count [${scope}]`,
+      `Crustdata ${kind.toLowerCase()} for ${ROLE_FAMILY_LABELS[check.roleFamily]} ${what} at ${check.companyName ?? 'company ' + check.crustdataId}, ` +
+      `${dayName(check.since)}–${dayName(asOf)}: ${n} record${n === 1 ? '' : 's'}.`, asOf, n);
+    row.source.endpoint = path;
+    evidence.push(row);
+    ids[check.companyId] = row.id;
+  }
+  return { evidence, ids };
+}
 const familyTitle = (field: string, family: RoleFamily) => group('or', FAMILY_PHRASES[family].map(phrase => condition(field, '[.]', phrase)));
 const through = (asOf: IsoDate) => shiftDays(asOf, 1);
 
@@ -145,7 +165,8 @@ export const jobReplacements: EndpointSpec<{ asOf: IsoDate; checks: ReplacementC
       replacements.push({ companyId: check.companyId, roleFamily: check.roleFamily, kind: 'job_post', date: [day, day],
         label: `posted “${title}” on ${day}`, evidenceId: row.id });
     }
-    return { replacements, evidence, checked: [...new Set(checks.map(check => check.companyId))] };
+    const rows = checkRows(meta, 'Job search', '/job/search', asOf, checks, replacements);
+    return { replacements, evidence: [...evidence, ...rows.evidence], checked: [...new Set(checks.map(check => check.companyId))], checkEvidence: rows.ids };
   },
   estimateCredits: raw => 0.03 * ((raw as { job_listings?: unknown[] } | null)?.job_listings?.length ?? 20),
 };
@@ -167,7 +188,7 @@ export const personReplacements: EndpointSpec<{ asOf: IsoDate; checks: Replaceme
       fields: ['crustdata_person_id', ...['title', 'start_date', 'crustdata_company_id', 'name'].map(field => current + field)],
     };
   },
-  parse(raw, { checks }, meta) {
+  parse(raw, { asOf, checks }, meta) {
     const body = validate(peopleResponse, raw);
     const replacements: ReplacementFact[] = [];
     const evidence: Evidence[] = [];
@@ -186,7 +207,8 @@ export const personReplacements: EndpointSpec<{ asOf: IsoDate; checks: Replaceme
           label: `hired a ${row.title} (${monthName(started[0])})`, evidenceId: ev.id });
       }
     }
-    return { replacements, evidence, checked: [...new Set(checks.map(check => check.companyId))] };
+    const rows = checkRows(meta, 'Person search', '/person/search', asOf, checks, replacements);
+    return { replacements, evidence: [...evidence, ...rows.evidence], checked: [...new Set(checks.map(check => check.companyId))], checkEvidence: rows.ids };
   },
   estimateCredits: raw => 0.23 * ((raw as { profiles?: unknown[] } | null)?.profiles?.length ?? 10),
 };
@@ -197,7 +219,10 @@ const enrichResponse = z.array(z.object({ matches: z.array(z.object({ company_da
   headcount: z.object({ total: int, timeseries: z.array(z.object({ date: str, employee_count: int }).passthrough()).nullish() }).passthrough().nullish(),
 }).passthrough().nullish() }).passthrough()).nullish() }).passthrough());
 
-export interface HeadcountFact { crustdataId: number; headcount: number | null; change90d: number | null; change30d?: number | null; evidenceId: string | null }
+export interface HeadcountFact {
+  crustdataId: number; headcount: number | null; change90d: number | null; change30d?: number | null; evidenceId: string | null;
+  series?: { date: IsoDate; count: number }[];   // the enrich timeseries up to asOf (last 13 points), for the company file chart
+}
 
 /** Company enrich for size (as of the cutoff) and the 90-day headcount change behind the restructure guard. */
 export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: number[] }, { facts: HeadcountFact[]; evidence: Evidence[] }> = {
@@ -234,7 +259,8 @@ export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: numbe
         evidence.push(row);
         evidenceId = row.id;
       }
-      facts.push({ crustdataId: id, headcount, change90d: change, change30d, evidenceId });
+      facts.push({ crustdataId: id, headcount, change90d: change, change30d, evidenceId,
+        series: series.slice(-13).map(point => ({ date: point.date!.slice(0, 10), count: point.employee_count! })) });
     }
     return { facts, evidence };
   },

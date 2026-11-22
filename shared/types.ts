@@ -33,6 +33,8 @@ export interface Intent {
   runKind: 'live' | 'replay';       // replay = freeze the world at asOf, predict, then score against what happened after
   horizonEnd: IsoDate | null;       // replay only: outcomes are checked in (asOf, horizonEnd]
   assumptions: string[];            // defaults the parser filled in, shown to the user
+  // The model's only say in the intent: terms it appended (zod-checked, append-only). Shown under its label.
+  modelAdded?: { label: string; signalKeywords: string[]; deciderTitles: string[]; buyerProfile: string | null; geography: string | null } | null;
 }
 
 // ---------- evidence ----------
@@ -51,6 +53,7 @@ export interface Evidence {
   value?: string | number | null;   // the atomic value the claim rests on
   source: SourceRef;
   observedAt: IsoDate | null;       // when the fact happened / was true. null => undated
+  precision?: 'day' | 'month';      // 'month': observedAt is the 1st of the month and only the month is known ("Oct 2026")
   retrievedAt: IsoDateTime;         // when DOMINO fetched it
   mode: DataMode;                   // live / cache / fixture (synthetic)
   verifiable: boolean;              // false => "I can't verify" (undated or unsourced)
@@ -113,6 +116,7 @@ export interface Trigger {
   date: IsoDate;                    // inside the run window
   summary: string;
   relatedCompanyId?: string | null; // for hires/departures: the other company
+  precision?: 'day' | 'month';      // hires/departures from person profiles are month-level
   personId?: string | null;
   evidenceIds: string[];
 }
@@ -213,6 +217,7 @@ export interface Draft {
   unverifiable: { claim: string; reason: string }[];  // "I can't verify" list, never in the body
   checks: DraftSentenceCheck[];
   generator: string;                // 'llm:claude-haiku-5-5' | 'template'
+  generatorLabel?: string;          // "Drafted by GPT-6 Luna from 2 verified claims · 1 excluded (can't verify)" | "Template from 2 verified claims"
   verified: boolean;                // every factual sentence cites evidence
   meeting: { title: string; durationMin: number; proposedSlots: IsoDateTime[] };
   // 'not_drafted': fewer than 2 verified, dated, cited facts survived, or no named decider role. Never sent or approved;
@@ -245,6 +250,15 @@ export interface DeliveryReceipt {
   idempotencyKey: string;
   status: 'delivered' | 'already_delivered';
   receivedAt: IsoDateTime;
+}
+
+// What the test-inbox receiver holds for one send key: every attempt is counted, but it stores (delivers) the
+// message once, so a retried send shows attempts 2 and deliveries 1. The visible proof of send-once.
+export interface InboxReceipt {
+  idempotencyKey: string;           // the receipt id
+  receivedAt: IsoDateTime;          // first (only) delivery
+  attempts: number;
+  deliveries: number;
 }
 
 export interface OutboxAction {
@@ -377,6 +391,7 @@ export interface RunSnapshot {
   evidence: Evidence[];
   approvals: Approval[];
   outbox: OutboxAction[];
+  receipts: InboxReceipt[];         // receiver-side, one per send key the test inbox accepted
   ledger: LedgerEntry[];
   asks: Ask[];
   baseline: { hiringFilterCompanyIds: string[] };   // what a plain "is hiring" filter returns
@@ -460,6 +475,7 @@ export interface SourceItem {
   precision?: 'day' | 'month' | null;
   signal: string | null;            // what DOMINO extracted: "serving role posted", "infra engineer left", "Series B raised"
   matched: boolean;                 // true if it fed a trigger/edge; false = read and discarded (shown dimmed)
+  decision?: { kept: boolean; reason: string } | null; // decision log: why this record was kept or discarded
 }
 
 export interface SourceReadEvent {

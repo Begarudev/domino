@@ -4,7 +4,7 @@
 // intro: draft_intro (sourced draft through the shared verifier) -> intro_gate (one approval; the existing outbox +
 // receiver deliver it once to the test inbox).
 import { z } from 'zod';
-import type { Approval, Company, Draft, Evidence, SourceItem } from '../../shared/types.ts';
+import type { Approval, Company, Draft, Evidence, SourceItem, Target } from '../../shared/types.ts';
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import type { Candidate, CandidateHistoryItem, IntroRequest, Match, Opening, RoleFamily } from '../../shared/desk.ts';
 import { now } from '../db.ts';
@@ -19,7 +19,11 @@ import type { CrustReadMeta } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 import type { Runner } from './steps.ts';
 
-export type ParsedProfile = Pick<Candidate, 'displayName' | 'headline' | 'roleFamily' | 'skills' | 'history' | 'parsedBy'>;
+export type ParsedProfile = Pick<Candidate, 'displayName' | 'headline' | 'roleFamily' | 'skills' | 'history' | 'parsedBy' | 'fieldSource'>;
+// The LLM is labelled wherever its output is shown (anti-wrapper rule 3).
+const modelLabel = (model: string) => /gpt-6-luna/i.test(model) ? 'GPT-6 Luna' : model;
+export const llmFieldSource = (model: string) => `Filled by ${modelLabel(model)} · confirm each field`;
+export const RULES_FIELD_SOURCE = 'Read by rules from your profile · confirm each field';
 export interface IntroDraft {
   introId: string;
   direction: IntroRequest['direction'];
@@ -134,14 +138,16 @@ async function parseProfile(ctx: ToolContext, c: Partial<CandidateOutputs>): Pro
       // Keep only skills that appear in the source fields, so every skill stays traceable to the profile.
       const grounded = [...new Set(parsed.data.skills.map(skill => skill.trim()).filter(skill => skill && source.includes(skill.toLowerCase())))];
       const roleFamily = parsed.data.roleFamily ?? classifyProfile(title, headline, skills);
-      return { output: { ...base, skills: grounded.length ? grounded : skills, roleFamily, parsedBy: 'llm' },
-        summary: `Read as ${label(roleFamily)} (${completion.model})` };
+      const fieldSource = llmFieldSource(completion.model);
+      return { output: { ...base, skills: grounded.length ? grounded : skills, roleFamily, parsedBy: 'llm', fieldSource },
+        summary: `${fieldSource} (read as ${label(roleFamily)})` };
     }
   } catch (error) {
     if (error instanceof BudgetError || ctx.signal?.aborted) throw error;
   }
   const roleFamily = classifyProfile(title, headline, skills);
-  return { output: { ...base, roleFamily, parsedBy: 'rules' }, summary: `Read as ${label(roleFamily)} (rules)` };
+  return { output: { ...base, roleFamily, parsedBy: 'rules', fieldSource: RULES_FIELD_SOURCE },
+    summary: `${RULES_FIELD_SOURCE} (read as ${label(roleFamily)})` };
 }
 
 async function matchOpenings(ctx: ToolContext) {
@@ -150,7 +156,8 @@ async function matchOpenings(ctx: ToolContext) {
   const snapshot = openingsSnapshot(ctx.store);
   const output: CandidateOutputs['match_openings'] = { matches: [], openingsRunId: null };
   if (!snapshot) return { output, summary: 'No completed openings scan to match against yet' };
-  output.matches = matchesFor(candidate, snapshot.openings, snapshot.evidence);
+  // Ranked internally; the stored output carries no bare score (anti-wrapper rule 4).
+  output.matches = matchesFor(candidate, snapshot.openings, snapshot.evidence).map(({ score: _score, ...match }) => match);
   output.openingsRunId = snapshot.runId;
   const n = output.matches.length;
   return { output, summary: `${n} predicted opening${n === 1 ? '' : 's'} fit this profile` };
@@ -169,6 +176,31 @@ const article = (word: string) => /^[A-Z]{2,}/.test(word) ? ('AEFHILMNORSX'.incl
 const monthOf = (date: string | null) => date
   ? new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
 
+// Exactly the candidate fields an intro message carries, given consent. The preview route and the draft share this.
+export interface SharedField { field: string; label: string; value: string; evidenceId: string; claim: string }
+export function introSharedFields(candidate: Candidate, candidateEvidence: Evidence[]): SharedField[] {
+  const fields: SharedField[] = [];
+  const name = candidate.displayName;
+  const title = candidateEvidence.find(row => row.source.field === 'basic_profile.current_title');
+  if (title) fields.push({ field: 'title', label: 'Current title', value: String(title.value), evidenceId: title.id,
+    claim: `${name} lists the current title ${title.value}` });
+  const skills = candidateEvidence.find(row => row.source.field === SKILLS_FIELD);
+  // Cite only skills the enriched row actually lists; skills the candidate added are not sourced facts.
+  const sourced = skills ? candidate.skills.filter(skill => String(skills.value).split('; ').includes(skill)) : [];
+  if (candidate.consent.shareSkills && skills && sourced.length) {
+    const top = sourced.slice(0, 3).join(', ');
+    fields.push({ field: 'skills', label: 'Skills (top 3)', value: top, evidenceId: skills.id, claim: `${name} lists skills including ${top}` });
+  }
+  const current = candidate.consent.shareHistory ? candidate.history.find(item => item.to === null) : undefined;
+  const role = current && candidateEvidence.find(row => row.source.field?.startsWith('experience.employment_details.current'));
+  if (current && role) {
+    const since = monthOf(current.from) ?? 'recently';
+    fields.push({ field: 'history', label: 'Current role', value: `${current.title} at ${current.company} since ${since}`, evidenceId: role.id,
+      claim: `${name} has worked as ${current.title} at ${current.company} since ${since}` });
+  }
+  return fields;
+}
+
 // Claims avoid "left"/"departures" wording on purpose: the shared verifier strikes it (tactless to a hiring team).
 export function introClaims(opening: Opening, candidate: Candidate, candidateEvidence: Evidence[], evidence: Map<string, Evidence>): Claim[] {
   const claims: Claim[] = [];
@@ -181,19 +213,49 @@ export function introClaims(opening: Opening, candidate: Candidate, candidateEvi
   const drainIds = drainReasons.flatMap(reason => reason.evidenceId ?? []);
   const drainMonth = monthOf(drainReasons[0]?.date ?? null);
   const family = ROLE_FAMILY_LABELS[opening.roleFamily];
-  add(`DOMINO predicts ${article(opening.roleTitle)} ${opening.roleTitle} opening at ${opening.companyName}${drainMonth ? ` after ${family} team changes in ${drainMonth}` : ''}`,
-    drainIds.length ? drainIds : opening.evidenceIds);
+  const after = drainMonth ? ` after ${family} team changes in ${drainMonth}` : '';
+  // A watch is not a prediction (rule O1 needs 2 departures and a settled gap); the claim says so.
+  add(opening.status === 'watch'
+    ? `DOMINO is watching ${opening.companyName} for a possible ${opening.roleTitle} opening${after}`
+    : `DOMINO predicts ${article(opening.roleTitle)} ${opening.roleTitle} opening at ${opening.companyName}${after}`,
+  drainIds.length ? drainIds : opening.evidenceIds);
   const gap = opening.reasons.find(reason => reason.kind === 'no_replacement');
   if (gap) add(`No ${family} job post or hire at ${opening.companyName} has been found since then`,
     gap.evidenceId ? [gap.evidenceId] : [], gap.evidenceId ? undefined : 'The no-replacement check has no dated source record.');
-  const title = candidateEvidence.find(row => row.source.field === 'basic_profile.current_title');
-  if (title) add(`${candidate.displayName} lists the current title ${title.value}`, [title.id]);
-  const skills = candidateEvidence.find(row => row.source.field === SKILLS_FIELD);
-  if (skills && candidate.skills.length) add(`${candidate.displayName} lists skills including ${candidate.skills.slice(0, 3).join(', ')}`, [skills.id]);
-  const current = candidate.history.find(item => item.to === null);
-  const role = current && candidateEvidence.find(row => row.source.field?.startsWith('experience.employment_details.current'));
-  if (current && role) add(`${candidate.displayName} has worked as ${current.title} at ${current.company} since ${monthOf(current.from) ?? 'recently'}`, [role.id]);
+  for (const shared of introSharedFields(candidate, candidateEvidence)) add(shared.claim, [shared.evidenceId]);
   return claims;
+}
+
+type OutboundGate = (draft: Draft, target: Target, evidence: Evidence[]) => { reason: string; have: number; need: number } | null;
+const MIN_OPENING_FACTS = 1;
+
+// An intro is sent only if the outbound gate passes (>= 2 verified, dated, cited facts and a named role) AND at least
+// one of those facts is about the opening; otherwise it would be a profile with no reason to reach out.
+// The reason lists every missing item: "Not sent: not enough verified evidence (1 of 2 verified facts, 0 of 1 about
+// the opening); missing: 1 more verified, dated, cited fact, a verified, dated fact about the opening".
+export function introSendGate(draft: Draft, roleTitle: string, evidence: Evidence[], openingEvidenceIds: Set<string>,
+  outboundGate: OutboundGate): { reason: string; missing: string[] } | null {
+  const rows = new Map(evidence.map(row => [row.id, row]));
+  const factIds = new Set(draft.citations.filter(cite => {
+    const row = rows.get(cite.evidenceId);
+    return Boolean(row?.verifiable && row.observedAt && draft.body.includes(`[${cite.marker}]`));
+  }).map(cite => cite.evidenceId));
+  const openingFacts = [...factIds].filter(id => openingEvidenceIds.has(id)).length;
+  const role = { decider: { personId: '', name: roleTitle, title: roleTitle, reason: 'Intro role', evidenceIds: [] } } as unknown as Target;
+  const outbound = outboundGate(draft, role, evidence);
+  const need = outbound?.need ?? 2;
+  const have = outbound?.have ?? factIds.size;
+  const missing = [
+    ...(have < need ? [`${need - have} more verified, dated, cited fact${need - have === 1 ? '' : 's'}`] : []),
+    ...(openingFacts < MIN_OPENING_FACTS ? ['a verified, dated fact about the opening'] : []),
+    ...(!roleTitle.trim() || (outbound && have >= need) ? ['a named role'] : []),
+  ];
+  if (!missing.length) return null;
+  const counts = [
+    ...(have < need || openingFacts >= MIN_OPENING_FACTS ? [`${have} of ${need} verified facts`] : []),
+    ...(openingFacts < MIN_OPENING_FACTS ? [`${openingFacts} of ${MIN_OPENING_FACTS} about the opening`] : []),
+  ];
+  return { reason: `Not sent: not enough verified evidence (${counts.join(', ')}); missing: ${missing.join(', ')}`, missing };
 }
 
 async function draftIntro(ctx: ToolContext) {
@@ -224,12 +286,19 @@ async function draftIntro(ctx: ToolContext) {
     generator: 'template', verified: checked.verified && checked.body.trim().length > 0,
     meeting: { title: `Intro: ${opening.roleTitle}`, durationMin: 20, proposedSlots: [] },
   };
+  // Same gate as outbound (steps.ts draftGate), plus a verified fact about the opening. Loaded lazily: steps.ts
+  // imports this module, so a static import would be circular.
+  const { draftGate } = await import('./steps.ts');
+  const gate = introSendGate(draft, opening.roleTitle, [...evidence.values()], new Set(snapshot.evidence.map(item => item.id)), draftGate);
+  draft.status = gate ? 'not_drafted' : 'ready';
+  draft.blockedReason = gate?.reason ?? null;
   const cited = new Set(draft.citations.map(item => item.evidenceId));
   const removed = checked.checks.filter(item => item.status === 'removed').length;
   const output: IntroDraft = {
     introId: intro.id, direction: intro.direction, draft, company, recipient: toCompany ? 'Hiring team' : candidate.displayName,
     need: familyNoun[opening.roleFamily], roleTitle: opening.roleTitle, evidence: [...evidence.values()].filter(item => cited.has(item.id)),
   };
+  if (gate) return { output, summary: gate.reason };
   return {
     output,
     summary: `Intro drafted with ${draft.citations.length} citations` +
@@ -241,12 +310,12 @@ async function draftIntro(ctx: ToolContext) {
 function introGate(ctx: ToolContext, c: Partial<CandidateOutputs>) {
   const { draft, introId } = c.draft_intro!;
   const output: Approval[] = [];
-  if (draft?.verified) {
+  if (draft?.verified && draft.status !== 'not_drafted') {
     const idempotencyKey = hash([ctx.runId, introId, draft.body, 'send_message'].join('|')).slice(0, 16);
     output.push({ id: `ap_${idempotencyKey}`, runId: ctx.runId, companyId: draft.companyId, draftId: draft.id, kind: 'send_message',
       status: 'pending', idempotencyKey, createdAt: now() });
   }
-  return { output, summary: output.length ? 'Intro ready for approval (test inbox only)' : 'No verified intro to send',
+  return { output, summary: output.length ? 'Intro ready for approval (test inbox only)' : draft?.blockedReason ?? 'No verified intro to send',
     events: output.map(approval => ({ type: 'approval.requested' as const, approval })) };
 }
 

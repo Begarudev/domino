@@ -20,6 +20,9 @@ export interface Consent {
 
 export interface CandidateHistoryItem { company: string; companyId?: string | null; title: string; from: IsoDate | null; to: IsoDate | null }
 
+// 'Edited by candidate' once the candidate changed the field at confirm; otherwise who parsed it.
+export type FieldProvenance = 'Edited by candidate' | 'Parsed by GPT-6 Luna' | 'Parsed by rules' | string;
+
 export interface Candidate {
   id: string;
   status: 'enriching' | 'ready' | 'failed';
@@ -35,6 +38,8 @@ export interface Candidate {
   evidenceIds: string[];            // the person-enrich evidence rows behind the profile
   runId: string;                    // the candidate pipeline run (stream its events at /api/runs/:runId/stream)
   parsedBy: 'llm' | 'rules';
+  fieldSource?: string;             // "Filled by GPT-6 Luna · confirm each field" (llm) or "Read by rules from your profile · confirm each field"
+  provenance?: { roleFamily: FieldProvenance; skills: FieldProvenance }; // who set each editable field
   fixture?: boolean;                // labelled fictional demo candidate
 }
 
@@ -60,6 +65,17 @@ export interface RuleCard {
   sourceRunId: string | null;
 }
 
+// "Why this target?": the exact eligibility (O1 clauses) and the ranking rules that placed an opening. No score is used.
+export interface RankPlacement { position: number; of: number; rule: string; because: string[] }
+export interface WhyThisTarget {
+  rule: 'O1';
+  statement: string;                // the pre-registered O1 rule text
+  verdict: string;                  // "Open: every O1 clause met" | "Open, provisional: ..." | "Watch: ..." | "Held: ..."
+  eligibility: RuleClause[];        // the opening's clauses (met / open / failed / cant_verify), with sources
+  ranking: RankPlacement;           // place among all openings in the scan
+  companyRanking: RankPlacement;    // the company's place in GET /api/companies
+}
+
 export type OpeningReasonKind = 'talent_drain' | 'no_replacement' | 'funding' | 'news' | 'headcount';
 export interface OpeningReason { kind: OpeningReasonKind; label: string; date: IsoDate | null; evidenceId: string | null }
 
@@ -80,6 +96,7 @@ export interface Opening {
   watch?: { have: number; need: number; reason?: string }; // status 'watch' (e.g. stale job data: can't verify no replacement)
   provisional?: boolean;            // open, but the 30-day no-replacement leg is not settled yet (month-level dates)
   windowClosesBy?: IsoDate | null;  // provisional: the date by which the replacement window closes ("closes by 30 Nov")
+  why?: WhyThisTarget;              // CompanyView only: the O1 eligibility clauses and the ranking rule that placed it
   evidenceIds: string[];
   runId: string;                    // the openings scan run that produced it
 }
@@ -109,10 +126,12 @@ export interface IntroRequest {
   openingId: string;
   roleTitle: string;
   message: string;                  // the verified intro draft
-  status: 'new' | 'awaiting_approval' | 'accepted' | 'declined' | 'delivered';
+  status: 'new' | 'awaiting_approval' | 'accepted' | 'declined' | 'delivered' | 'not_drafted';
+  blockedReason?: string | null;    // status 'not_drafted': fewer than 2 verified, dated, cited facts, no opening fact, or no named role
   runId: string | null;             // intro pipeline run: draft, approval, outbox (send once)
   approvalId?: string | null;       // POST /api/approvals/:id with this id to approve or reject the send
   evidenceIds?: string[];           // rows the message cites
+  receipt?: { idempotencyKey: string; receivedAt: IsoDateTime } | null; // from the test-inbox receiver (inbox_received); set once delivered
   receivedAt: IsoDateTime;
 }
 
@@ -135,10 +154,11 @@ export interface OpeningForCandidate extends Opening { fit: FitReason[]; matchSc
 // A per-company view of the latest analysis run (outbound pipeline: triggers, entities, cascade rules, targets,
 // drafts, approvals, outbox). People who moved appear only as role + initial + date.
 
-export interface DossierEvent { id: string; date: IsoDate; kind: TriggerKind; summary: string; evidenceIds: string[] }
+// 'check' = a replacement search and its record count; 'news' = a dated article.
+export interface DossierEvent { id: string; date: IsoDate; kind: TriggerKind | 'check' | 'news'; summary: string; evidenceIds: string[] }
 export interface TalentFlow {
   direction: 'in' | 'out';          // in = joined this company, out = left it
-  role: string; initial: string | null; date: IsoDate;
+  role: string; initial: string | null; date: IsoDate; precision: 'day' | 'month';
   otherCompanyId: string | null; otherCompanyName: string | null; evidenceIds: string[];
 }
 export interface DossierChain { edge: GraphEdge; fromName: string; toName: string; side: 'cause' | 'effect' }
@@ -150,8 +170,21 @@ export interface DossierOutreach {
   decider: Decider | null; draft: Draft; approvals: Approval[]; outbox: OutboxAction[];
   verifier: { verified: boolean; removed: string[]; cantVerify: { claim: string; reason: string }[] };
 }
+// One row per rule for this company: met / not met / held / open (provisional) / not evaluated, with its clauses.
+export interface DossierRule {
+  id: 'O1' | 'R1' | 'CONTAGION' | 'DISPLACEMENT';
+  name: string;
+  state: 'met' | 'not_met' | 'held' | 'open' | 'not_evaluated';
+  summary: string;
+  clauses: RuleClause[];
+}
+
 export interface CompanyDossier {
   runId: string; asOf: IsoDate | null; dataMode: DataMode; company: Company;
+  source: 'analysis_run' | 'openings_scan';  // which run the file was built from (labelled on screen)
+  rules: DossierRule[];
+  whyTarget: WhyThisTarget | null;           // eligibility clauses + the ranking rule that placed this company (its top O1 opening)
+  headcountSeries: { date: IsoDate; count: number }[];  // Crustdata enrich timeseries up to the scan's as-of date; [] if not read
   timeline: DossierEvent[];         // news/posts, funding, headcount jumps, hires, departures; newest first
   jobPosts: DossierEvent[];
   talentFlows: TalentFlow[];
@@ -160,4 +193,15 @@ export interface CompanyDossier {
   openings: Opening[];              // Search Desk openings for this company (latest openings scan), if any
   outreach: DossierOutreach[];
   evidence: Evidence[];
+}
+
+// GET /api/candidates/:id/intros/preview?openingId= : exactly what an intro would share, before the candidate consents.
+export interface IntroPreviewField { field: string; label: string; value: string; evidenceId?: string }
+export interface IntroPreview {
+  candidateId: string;
+  openingId: string;
+  companyName: string;
+  roleTitle: string;
+  shared: IntroPreviewField[];      // fields the intro message will contain, given the current consent
+  withheld: { field: string; label: string; reason: string }[]; // never or not shared, and why
 }
