@@ -2,7 +2,7 @@ import { z } from 'zod';
 import sellerJson from '../../config/seller.json' with { type: 'json' };
 import type { DataMode, Evidence, Intent } from '../../shared/types.ts';
 import { containsPhrase, inWindow, isoDay, shiftDays } from '../domain/facts.ts';
-import type { SellerProfile, TriggerBatch } from '../domain/types.ts';
+import type { AcquisitionEvent, AcquisitionLead, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { emptyBatch, evidenceRow, publicUrl, str, validate } from './common.ts';
 import type { EndpointSpec } from './spec.ts';
 
@@ -168,3 +168,155 @@ export const newsFetch: EndpointSpec<FetchInput, TriggerBatch> = {
   },
   estimateCredits: (_raw, input) => (newsFetch.build(input) as { urls: string[] }).urls.length,
 };
+
+export type AcquihirePair = { loser: string; hirers: string[] };
+type AcquihireSearchInput = { intent: Intent; pairs: AcquihirePair[] };
+type AcquihireResolveInput = { intent: Intent; lead: AcquisitionLead };
+type AcquihireFetchInput = { intent: Intent; leads: AcquisitionLead[] };
+const ACQUIHIRE_WINDOW_DAYS = 180;
+const acquisitionWords = /\b(?:acquir\w*|acquisit\w*|acqui[-\s]?hir\w*|buy|buys|bought|absorb\w*|licen[cs]\w*|hire[sd]?\s+\d+\s+staff|join(?:s|ing)?)\b/i;
+const pairSchema = z.object({ loser: z.string().trim().min(1), hirers: z.array(z.string().trim().min(1)).min(1) });
+
+function acquisitionHirers(title: string, pair: AcquihirePair): string[] {
+  return containsPhrase(title, pair.loser) && acquisitionWords.test(title)
+    ? [...new Set(pair.hirers)].filter(hirer => containsPhrase(title, hirer)) : [];
+}
+
+function acquisitionSearchBatch(raw: unknown, pair: AcquihirePair, source: 'news' | 'web',
+  meta: Parameters<typeof newsSearch.parse>[2], endpoint: string): TriggerBatch {
+  const batch = emptyBatch();
+  batch.acquisitionLeads = [];
+  const seen = new Set<string>();
+  for (const row of validate(searchResponse, raw).results) {
+    if (row.source !== source || !row.title.trim() || !publicUrl(row.url) || seen.has(row.url)) continue;
+    seen.add(row.url);
+    const fact = evidenceRow({ ...meta, endpoint }, row.url, '$.results.title',
+      `News result: “${row.title}”`, null, row.title, row.url);
+    batch.evidence.push(fact);
+    for (const hirer of acquisitionHirers(row.title, pair)) {
+      batch.acquisitionLeads.push({ acquisitionLead: true, loser: pair.loser, hirer,
+        title: row.title, url: row.url, evidenceIds: [fact.id] });
+    }
+  }
+  return batch;
+}
+
+export const newsAcquihireSearch: EndpointSpec<AcquihireSearchInput, TriggerBatch> = {
+  name: 'news_acquihire_search', path: '/web/search/live', method: 'POST',
+  build({ intent, pairs }) {
+    // One request per call. The orchestrator invokes this separately for at most three pairs.
+    const pair = validate(pairSchema, pairs[0]);
+    return {
+      query: `${JSON.stringify(pair.loser)} (${[...new Set(pair.hirers)].map(hirer => JSON.stringify(hirer)).join(' OR ')}) (acquire OR acquires OR acquisition OR acqui-hire OR "to hire" OR license OR licensing)`,
+      sources: ['news'], start_date: Date.parse(shiftDays(intent.asOf, -ACQUIHIRE_WINDOW_DAYS)) / 1000,
+      end_date: Date.parse(intent.asOf) / 1000,
+    };
+  },
+  parse(raw, { pairs }, meta) {
+    const pair = validate(pairSchema, pairs[0]);
+    const batch = acquisitionSearchBatch(raw, pair, 'news', meta, 'news_acquihire_search');
+    batch.readSummary = `${batch.acquisitionLeads!.length} acquisition leads for ${pair.loser}; publication dates unverified`;
+    return batch;
+  },
+  estimateCredits: () => 1,
+};
+
+/** Spend one extra search credit to replace a Google redirect with a publisher URL. */
+export const newsAcquihireResolve: EndpointSpec<AcquihireResolveInput, TriggerBatch> = {
+  name: 'news_acquihire_resolve', path: '/web/search/live', method: 'POST',
+  build: ({ lead }) => ({ query: lead.title, sources: ['web'] }),
+  parse(raw, { lead }, meta) {
+    const batch = acquisitionSearchBatch(raw, { loser: lead.loser, hirers: [lead.hirer] }, 'web', meta, 'news_acquihire_resolve');
+    batch.acquisitionLeads = batch.acquisitionLeads!.filter(item => newsPublisherUrl(item.url));
+    batch.readSummary = batch.acquisitionLeads.length ? `Found a direct publisher URL for ${lead.loser}`
+      : `No direct publisher URL for ${lead.loser}; can't verify date`;
+    return batch;
+  },
+  estimateCredits: () => 1,
+};
+
+export const newsAcquihireFetch: EndpointSpec<AcquihireFetchInput, TriggerBatch> = {
+  name: 'news_acquihire_fetch', path: '/web/enrich/live', method: 'POST',
+  build: ({ intent, leads }) => newsFetch.build({ intent, urls: leads.map(lead => lead.url) }),
+  parse(raw, input, meta) {
+    const batch = emptyBatch();
+    batch.acquisitions = [];
+    const requested = new Set((newsAcquihireFetch.build(input) as { urls: string[] }).urls);
+    const seen = new Set<string>();
+    let unverified = 0;
+    for (const page of validate(fetchResponse, raw)) {
+      if (page.success !== true || !page.url || page.content == null || !requested.has(page.url) || seen.has(page.url)) continue;
+      seen.add(page.url);
+      const title = decodeHtml(page.title?.trim() || page.content.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || 'Untitled article');
+      const date = publicationDate(page.content);
+      const leads = input.leads.filter(lead => lead.url === page.url);
+      for (const lead of leads) {
+        if (!date || !inWindow(date.day, shiftDays(input.intent.asOf, -ACQUIHIRE_WINDOW_DAYS), input.intent.asOf)
+          || !acquisitionHirers(title, { loser: lead.loser, hirers: [lead.hirer] }).length) {
+          unverified++;
+          continue;
+        }
+        const fact = evidenceRow({ ...meta, endpoint: 'news_acquihire_fetch' },
+          JSON.stringify([page.url, lead.loser, lead.hirer]), date.field,
+          `“${title}” (${new URL(page.url).hostname}, ${date.day}) reports that ${lead.hirer} acquired, licensed or hired the team of ${lead.loser}.`,
+          date.day, title, page.url);
+        batch.evidence.push(fact);
+        batch.acquisitions.push({ acquirer: lead.hirer, acquired: lead.loser, date: date.day,
+          sourceUrl: page.url, fixtureOnly: meta.mode === 'fixture' });
+      }
+    }
+    const missing = [...requested].filter(url => !seen.has(url)).length;
+    batch.readSummary = `${batch.acquisitions.length} dated acquisition reports${unverified + missing
+      ? `; ${unverified + missing} pages unverified; can't verify date or acquisition headline` : ''}`;
+    return batch;
+  },
+  estimateCredits: (_raw, input) => (newsAcquihireFetch.build(input) as { urls: string[] }).urls.length,
+};
+
+export type AcquihireReader = <I>(spec: EndpointSpec<I, TriggerBatch>, input: I) => Promise<TriggerBatch>;
+export type AcquihireResult = { evidence: Evidence[]; acquisitions: AcquisitionEvent[]; reason?: string };
+export type AcquihireOptions = { publisherHints?: { title: string; url: string }[] };
+
+/** Context-free orchestration: inject a live, fixture, or engine reader; never infer a date from search. */
+export async function acquihireCheck(intent: Intent, pairs: AcquihirePair[], read: AcquihireReader,
+  options: AcquihireOptions = {}): Promise<AcquihireResult> {
+  const result: AcquihireResult = { evidence: [], acquisitions: [] };
+  if (intent.runKind === 'replay') return { ...result, reason: 'Skipped acqui-hire news in replay: web search has no as-of-safe dating' };
+  let unverified = 0;
+  const collect = (batch: TriggerBatch) => {
+    result.evidence.push(...batch.evidence);
+    result.acquisitions.push(...(batch.acquisitions ?? []));
+  };
+  for (const pair of pairs.slice(0, 3)) {
+    const search = await read(newsAcquihireSearch, { intent, pairs: [pair] });
+    collect(search);
+    const leads: AcquisitionLead[] = [];
+    // Bound discovery/fetch spend per pair; configured search requests still read a single page.
+    for (const lead of (search.acquisitionLeads ?? []).slice(0, 5)) {
+      if (newsPublisherUrl(lead.url)) leads.push(lead);
+      else {
+        const resolved = await read(newsAcquihireResolve, { intent, lead });
+        collect(resolved);
+        // Explicit caller-supplied publisher links may disambiguate a headline when Search still returns redirects.
+        // They supply a URL only: Fetch must independently verify the headline and publication metadata.
+        const hint = options.publisherHints?.find(item => newsPublisherUrl(item.url)
+          && containsPhrase(item.title, lead.title) && containsPhrase(lead.title, item.title));
+        const direct = resolved.acquisitionLeads?.find(item => newsPublisherUrl(item.url));
+        if (hint) leads.push({ ...lead, url: hint.url });
+        else if (direct) leads.push(direct);
+        else unverified++;
+      }
+    }
+    if (leads.length) {
+      const uniqueLeads = [...new Map(leads.map(lead => [JSON.stringify([lead.url, lead.loser, lead.hirer]), lead])).values()];
+      const fetched = await read(newsAcquihireFetch, { intent, leads: uniqueLeads });
+      collect(fetched);
+      unverified += leads.filter(lead => !fetched.acquisitions?.some(event =>
+        event.acquirer === lead.hirer && event.acquired === lead.loser && event.sourceUrl === lead.url)).length;
+    }
+  }
+  result.evidence = [...new Map(result.evidence.map(row => [row.id, row])).values()];
+  result.acquisitions = [...new Map(result.acquisitions.map(event => [JSON.stringify(event), event])).values()];
+  if (unverified) result.reason = `${unverified} acquisition leads: can't verify date or acquisition headline`;
+  return result;
+}

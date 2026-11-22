@@ -33,6 +33,16 @@ export interface AcquisitionEvent {
   fixtureOnly?: boolean;
 }
 
+// A search headline is a lead until a publisher page supplies its publication date.
+export interface AcquisitionLead {
+  acquisitionLead: true;
+  loser: string;
+  hirer: string;
+  title: string;
+  url: string;
+  evidenceIds: string[];
+}
+
 export interface ResolvedCompany extends Company {
   categories?: string[];
   acquisitions?: AcquisitionEvent[];
@@ -72,6 +82,8 @@ export interface PersonMention {
 // the engine remaps them with the idMap returned by resolveEntities.
 export interface TriggerBatch {
   readSummary?: string;
+  acquisitionLeads?: AcquisitionLead[];
+  acquisitions?: AcquisitionEvent[];
   mentions: CompanyMention[];
   people: PersonMention[];
   triggers: Trigger[];
