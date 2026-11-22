@@ -287,3 +287,9 @@ target/held/watch with hold reasons), `openings`, `outreach` (decider, verified 
 sentences and "I can't verify" claims, approvals, outbox actions sent once), `evidence` (every cited row).
 Company ids are canonical (`co_…`, stable for the same Crustdata id/domain); an alias name is also accepted.
 Start an analysis run with the existing `POST /api/runs {request}` and approve with `POST /api/approvals/:id`.
+
+### Rules registry
+
+`GET /api/rules` → `RuleCard[]` (`shared/desk.ts`): O1, R1, CONTAGION, DISPLACEMENT, DIRECT, each with its statement,
+thresholds, guards, lock time and live fire counts (O1 from the latest openings scan: open / provisional / held /
+watch; R1/CONTAGION/DISPLACEMENT/DIRECT from the latest analysis run).

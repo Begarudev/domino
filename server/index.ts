@@ -14,6 +14,7 @@ import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts
 import { decode, Store } from './db.ts';
 import type { RunChaos } from './db.ts';
 import { companyDossier } from './desk/dossier.ts';
+import { rulesRegistry } from './desk/rules.ts';
 import { deskRoutes } from './desk/routes.ts';
 import { recheckSource } from './engine/sources.ts';
 import { config, defaultLimits, redactSecrets, root } from './env.ts';
@@ -184,6 +185,8 @@ export function createApp(store: Store) {
     const result = store.transaction(() => companyDossier(store, c.req.param('id'), c.req.query('run') || undefined), 'read');
     return result ? c.json(result) : c.json({ error: 'No analysis run has this company yet' }, 404);
   });
+  // Rules registry: statements, thresholds, guards, lock times and live fire counts (lead-owned).
+  app.get('/api/rules', c => c.json(store.transaction(() => rulesRegistry(store), 'read')));
   app.route('/api', deskRoutes({ store, launch }));
 
   app.get('/api/runs', c => c.json(store.listRuns()));
