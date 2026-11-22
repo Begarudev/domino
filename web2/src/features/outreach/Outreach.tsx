@@ -12,7 +12,7 @@ import { useEnterOnce } from '../../lib/motion.ts';
 import { sourceName } from '../../shell/EvidenceDrawer.tsx';
 import { openEvidence } from '../../shell/ui.ts';
 import type { IntroView, StepKey, StepState } from './model.ts';
-import { STEP_LABEL, citationMap, dedupeIntros, draftLabel, isMonthly, markersIn, pieces, tidyClaim } from './model.ts';
+import { STEP_CUR, STEP_LABEL, citationMap, dedupeIntros, draftLabel, isMonthly, markersIn, pieces, tidyClaim } from './model.ts';
 import './outreach.css';
 
 const initialOf = (label: string | null | undefined) => (label?.trim()?.[0] ?? '?').toUpperCase() + '.';
@@ -99,6 +99,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
   const [busy, setBusy] = useState<null | 'approve' | 'retry' | 'kill' | 'resume'>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [engineMsg, setEngineMsg] = useState<string | null>(null);
+  const [resumedDelivery, setResumedDelivery] = useState(false); // resume re-ran a pending delivery (no engine.resumed event)
   const duplicate = outcome?.kind === 'duplicate' || note?.kind === 'duplicate' || runReceipt?.status === 'already_delivered';
 
   const refresh = () => {
@@ -107,6 +108,8 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
   };
   // A drafting intro (no approval yet) settles when its run gates: refetch the desk once the run's approval lands.
   useEffect(() => { if (mine && approvals.length && !approvalId) invalidate(`company:${routeId}`); }, [mine, approvals.length, approvalId, routeId]);
+  // A delivery receipt (first or already_delivered) lands as a run event: refetch the desk so intro.receipt follows.
+  useEffect(() => { if (mine && runReceipt) invalidate(`company:${routeId}`); }, [mine, runReceipt, routeId]);
 
   async function approve(retry: boolean) {
     if (!approvalId) return;
@@ -131,7 +134,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
   }
   async function resume() {
     setBusy('resume'); setEngineMsg(null);
-    try { await runStore.resume(); refresh(); }
+    try { await runStore.resume(); if (!engine.alive) setResumedDelivery(true); refresh(); }
     catch (e) { const m = (e as Error).message; setEngineMsg(/cannot be resumed/i.test(m) ? `Nothing to resume: ${statusWords(runStatus)}, so there is no stopped step to continue.` : `Not resumed: ${m}.`); }
     finally { setBusy(null); }
   }
@@ -145,6 +148,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
   const dispatchKill = timeline.some((t) => /dispatcher SIGKILL/i.test(t.text));
   const crashed = mine && (engine.crashes > 0 || !!crashNote || dispatchKill);
   const resumed = mine && (engine.resumes > 0 || !!resumeNote);
+  const deliveryResumed = mine && !resumed && resumedDelivery;
 
   const blocked = intro.status === 'not_drafted';
   const drafting = !blocked && !approvalId;
@@ -225,7 +229,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
                 return (
                   <li key={k} className={s} aria-current={s === 'cur' ? 'step' : undefined}>
                     <span className="n">{s === 'done' ? '✓' : i + 1}</span>
-                    <div><b>{STEP_LABEL[k]}</b><small>{stepNote(k, s, { intro, verifiedCount, approvalAt: approval?.decidedAt ?? undefined, receivedAt, draftedAt: mine ? steps.find((x) => x.step === "draft_intro")?.finishedAt ?? null : null })}</small></div>
+                    <div><b>{s === 'cur' ? STEP_CUR[k] : STEP_LABEL[k]}</b><small>{stepNote(k, s, { intro, verifiedCount, approvalAt: approval?.decidedAt ?? undefined, receivedAt, draftedAt: mine ? steps.find((x) => x.step === "draft_intro")?.finishedAt ?? null : null })}</small></div>
                   </li>
                 );
               })}
@@ -259,13 +263,14 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
 
         {intro.runId && !blocked && (
           <section className="panel out-engine" data-testid="engine">
-            <header><h2>Crash test</h2><span className="faint">{mine && engine.alive ? 'engine running' : 'engine idle'}</span></header>
+            <header><h2>Crash test</h2><span className="faint">{resumed || deliveryResumed ? 'resumed from checkpoint' : crashed ? 'stopped' : mine && engine.alive ? 'engine running' : 'engine idle'}</span></header>
             <div className="pad">
               {crashed && <EngineLine tone="stop" text={dispatchKill && !crashStep
                 ? 'Delivery process stopped after the test inbox accepted (deliberate crash test)'
                 : `Engine stopped during ${crashStep ? `“${crashStep[0].toUpperCase()}${crashStep.slice(1)}”` : 'a step'} (deliberate crash test)`} />}
               {resumed && <EngineLine tone="ok" text={`Resumed from checkpoint: ${reused} step${reused === 1 ? '' : 's'} reused, no paid call repeated`} />}
-              {!crashed && !resumed && <p className="muted out-engine-p">Kill the engine, then resume the same run from its checkpoint. A retried delivery is skipped with the same receipt.</p>}
+              {deliveryResumed && <EngineLine tone="ok" text={runReceipt?.status === 'already_delivered' ? 'Resumed from checkpoint: the test inbox already had this key, so nothing was sent again' : 'Resumed from checkpoint: re-running the pending delivery, no paid call repeated'} />}
+              {!crashed && !resumed && !deliveryResumed && <p className="muted out-engine-p">Kill the engine, then resume the same run from its checkpoint. A retried delivery is skipped with the same receipt.</p>}
               {engineMsg && <p className="muted out-engine-p" role="status" data-testid="engine-msg">{engineMsg}</p>}
               <div className="out-actions">
                 <button className="btn sm ghost" data-testid="kill" disabled={!mine || busy != null} onClick={kill}>{busy === 'kill' ? 'Killing…' : 'Kill engine'}</button>
@@ -344,7 +349,7 @@ function stepNote(k: StepKey, s: StepState, c: { intro: IntroView; verifiedCount
   switch (k) {
     case 'draft': { const at = c.draftedAt ?? (c.intro.status === 'delivered' ? null : c.intro.receivedAt); return s === 'done' ? (at ? `${fmtDate(at)}, ${fmtTime(at)}` : 'Drafted by the intro run') : 'Waiting for the intro run'; }
     case 'verified': return s === 'done' ? `Every claim cites a dated row (${c.verifiedCount} claims)` : 'Each sentence checked against its source';
-    case 'approved': return s === 'done' ? (c.approvalAt ? `You approved, ${fmtTime(c.approvalAt)}` : 'You approved') : s === 'cur' ? 'Waiting for your approval' : 'Your approval';
+    case 'approved': return s === 'done' ? (c.approvalAt ? `You approved, ${fmtTime(c.approvalAt)}` : 'You approved') : s === 'cur' ? 'Nothing is sent until you approve' : 'Your approval';
     case 'delivered': return s === 'done' ? (c.receivedAt ? `Test inbox, ${fmtTime(c.receivedAt)}` : 'Test inbox') : 'Team inbox, at most once';
   }
 }
