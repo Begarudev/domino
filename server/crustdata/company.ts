@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Company, Evidence, Intent, IsoDate } from '../../shared/types.ts';
-import { inWindow, isoDay, normalizeDomain, shiftDays, stableId } from '../domain/facts.ts';
+import { inWindow, isoDay, normalizeDomain, shiftDays, stableId, withArticle } from '../domain/facts.ts';
 import type { CompanyMention, ParseMeta, TriggerBatch } from '../domain/types.ts';
 import {
   companyNumber, condition, dates, emptyBatch, estimate, evidenceRow, geographyFilter, group, int, matchesGeography,
@@ -125,7 +125,7 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
     const fundingField = useMilestone ? `funding.milestones[${historicRound.index}]`
       : 'funding.' + (amountUsd != null ? 'last_round_amount_usd' : round ? 'last_round_type' : 'last_fundraise_date');
     fundingFact = add(fundingField,
-      `${name} reported a ${round ? round + ' round' : 'funding round'}${amount}${fundingDate ? ' on ' + fundingDate : ''}.`,
+      `${name} reported ${withArticle(round ? round + ' round' : 'funding round')}${amount}${fundingDate ? ' on ' + fundingDate : ''}.`,
       fundingDate, amountUsd ?? round ?? fundingDate);
   }
 

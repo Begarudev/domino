@@ -150,7 +150,8 @@ function splitSentences(text: string): string[] {
   for (const line of text.split(/\n/)) {
     let carry = '';
     const segments: string[] = [];
-    for (const { segment } of sentenceBreaks.segment(line.trim())) {
+    // "fact.[1] Next" (or 'fact."[1]') segments as "fact.[" + "1] Next"; a space before the bracket keeps it whole.
+    for (const { segment } of sentenceBreaks.segment(line.trim().replace(/([.!?]["'”’)]*)(?=\[)/g, '$1 '))) {
       const joined = (carry + segment);
       if (ABBREVIATION_END.test(joined.trim())) { carry = joined; continue; }
       segments.push(joined);

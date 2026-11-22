@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Company, Intent, IsoDate, Person } from '../../shared/types.ts';
-import { daysBetween, deciderPhrases, DRAIN_HISTORY_DAYS, DRAIN_REPLAY_HISTORY_DAYS, formatMonth, inWindow, isoDay, matchesDecider, matchesSignal, servingSignalKeywords, shiftDays, stableId } from '../domain/facts.ts';
+import { daysBetween, deciderPhrases, DRAIN_HISTORY_DAYS, DRAIN_REPLAY_HISTORY_DAYS, formatMonth, inWindow, isoDay, matchesDecider, matchesSignal, servingSignalKeywords, shiftDays, stableId, withArticle } from '../domain/facts.ts';
 import { PROFILE_LAG_DAYS } from '../domain/replay-guard.ts';
 import type { ProfileEvidence } from '../domain/replay-guard.ts';
 import type { CompanyMention, MoveTrigger, ParseMeta, PersonMention, TriggerBatch } from '../domain/types.ts';
@@ -227,7 +227,7 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
       };
       const hire: MoveTrigger = {
         id: stableId('tr_', 'hire', recordId, position), companyId: next.key, kind: 'hire', date: movementDate,
-        summary: `filled a ${title} role ${role.startMonth ? 'in' : 'on'} ${dateLabel}`,
+        summary: `filled ${withArticle(title)} role ${role.startMonth ? 'in' : 'on'} ${dateLabel}`,
         personId: mentionKey, relatedCompanyId: previous?.key ?? null, evidenceIds: moveEvidence, move,
       };
       batch.triggers.push(hire);
@@ -346,7 +346,7 @@ export const personCohortDepartures: EndpointSpec<CohortInput, TriggerBatch> = {
         });
         const hireTrigger: MoveTrigger = {
           id: stableId('tr_', 'cohort_hire', moveKey), companyId: next.key, kind: 'hire', date: hiredAt,
-          summary: `filled a ${newTitle} role ${startLabel}`, personId: name ? moveKey : null,
+          summary: `filled ${withArticle(newTitle)} role ${startLabel}`, personId: name ? moveKey : null,
           relatedCompanyId: origin.key, evidenceIds,
           move: { currentTitle: newTitle, previousTitle: pastTitle, datePrecision: hire.startMonth ? 'month' : 'day',
             startInterval: hire.startMonth ? [hire.startMonth[0], hiredAt] : undefined,
@@ -354,7 +354,7 @@ export const personCohortDepartures: EndpointSpec<CohortInput, TriggerBatch> = {
         };
         const departureTrigger: MoveTrigger = { ...hireTrigger,
           id: stableId('tr_', 'cohort_departure', moveKey), companyId: origin.key, kind: 'departure', date: departedAt,
-          summary: `an employee left a ${pastTitle} role ${endLabel}`, relatedCompanyId: next.key,
+          summary: `an employee left ${withArticle(pastTitle)} role ${endLabel}`, relatedCompanyId: next.key,
         };
         batch.triggers.push(departureTrigger, hireTrigger);
       }

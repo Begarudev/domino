@@ -4,7 +4,8 @@
 
 /* ---------- tiles ---------- */
 .tile-mech {
-  font-size: 16px; font-variation-settings: 'wdth' 78; font-weight: 600; fill: var(--text-2);
+  font-size: 16px; line-height: 26px; font-variation-settings: 'wdth' 78; font-weight: 600; color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tile-body { cursor: pointer; outline: none; transform: rotate(0deg); }
 .tile-shadow { fill: #04060A; filter: url(#tile-shadow); }
@@ -85,6 +86,7 @@
   font-size: 17px; line-height: 1.16; font-variation-settings: 'wdth' 78; font-weight: 540; color: var(--text-2);
   padding: 0 2px 4px; border-radius: 3px; opacity: 0.5;
 }
+.edge-label > span:first-child { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .edge-meta { font-size: 14px; font-weight: 620; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
 .is-playing .edge-line { animation: edge-draw 520ms cubic-bezier(0.5, 0, 0.3, 1) var(--draw-delay) forwards; }
