@@ -1,0 +1,11 @@
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PW || '/Users/garudev/dev/umbra/node_modules/playwright-core');
+const url = process.argv[2] || 'http://127.0.0.1:4400/';
+const out = process.argv[3] || '/tmp/peek.png';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
+await p.goto(url); await p.waitForTimeout(+(process.argv[4]||2500));
+await p.screenshot({ path: out });
+console.log(await p.evaluate(() => document.body.innerText.slice(0, 1500)));
+await b.close();
