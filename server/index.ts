@@ -320,14 +320,20 @@ export function createApp(store: Store) {
     app.get('*', serveStatic({ root: dist }), serveStatic({ path: resolve(dist, 'index.html') }));
   }
   app.get('*', c => c.html(missingWeb));
-  return { app, reapMissingWorkers };
+  return { app, reapMissingWorkers, launch };
 }
 
 export function startServer() {
   const store = new Store();
   importCache(store);
-  const { app, reapMissingWorkers } = createApp(store);
+  const { app, reapMissingWorkers, launch } = createApp(store);
   reapMissingWorkers();
+  // A keyless first start has nothing to show: one scan of the labelled fixture world (0 credits, a few seconds) fills
+  // both the candidate and the company side. Live and cache servers never scan on their own.
+  const scanned = store.sql.prepare("SELECT 1 FROM runs WHERE pipeline = 'openings' LIMIT 1").get();
+  if (config.dataMode === 'fixture' && !scanned) {
+    launch('openings', 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles', { dataMode: 'fixture' });
+  }
   const timer = setInterval(reapMissingWorkers, 1000).unref();
   const server = serve({ fetch: app.fetch, port: config.port, hostname: '127.0.0.1' }, ({ port }) => {
     console.log(`DOMINO http://127.0.0.1:${port} · data ${config.dataMode} · LLM ${config.llm}`);

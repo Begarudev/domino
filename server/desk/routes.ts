@@ -116,7 +116,11 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   api.post('/openings/scan', async c => {
     const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string; confirmLive?: boolean };
     // dataMode 'cache' replays a previous live scan from the tool cache (0 credits); 'fixture' uses fictional companies.
-    const dataMode = body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
+    let dataMode: 'live' | 'cache' | 'fixture' | undefined =
+      body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
+    // A fresh clone without a key has no recorded read to replay: a cache scan there runs on the labelled fixture world.
+    const emptyCache = (store.sql.prepare("SELECT count(*) AS n FROM tool_cache WHERE provider = 'crustdata'").get() as { n: number }).n === 0;
+    if (dataMode === 'cache' && config.dataMode === 'fixture' && emptyCache) dataMode = 'fixture';
     // A live scan can spend hundreds of credits on cache misses, so it never starts by accident (a script, a page load).
     if ((dataMode ?? config.dataMode) === 'live' && body.confirmLive !== true) {
       return c.json({ error: 'A live scan reads Crustdata and can spend 300–600 credits. Send dataMode "cache" to replay the ' +
