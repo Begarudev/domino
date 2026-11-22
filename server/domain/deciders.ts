@@ -28,6 +28,8 @@ export function pickDecider(intent: Intent, company: Company, candidates: Person
 export function findWarmPath(decider: Decider, person: Person, company: Company, seller: SellerProfile,
   triggers: Trigger[], companies: Company[]): WarmPath | null {
   if (person.id !== decider.personId || person.companyId !== company.id) return null;
+  const you = { label: seller.company, kind: 'you' } as const;
+  const to = { label: decider.name, kind: 'decider' } as const;
   for (const past of person.pastEmployers) {
     const former = companies.find(item => item.id === past.companyId);
     const names = [past.name, ...(former?.aliases ?? [])].map(companyNameKey);
@@ -36,23 +38,21 @@ export function findWarmPath(decider: Decider, person: Person, company: Company,
         role.from && role.to && past.from && past.to && role.from <= past.to && past.from <= role.to);
       if (overlap) return {
         strength: 'warm', score: 0.9, evidenceIds: person.evidenceIds,
-        hops: [{ label: seller.company, kind: 'you' }, { label: teammate.name, kind: 'teammate' },
-          { label: past.name, kind: 'shared_employer' }, { label: decider.name, kind: 'decider' }],
+        hops: [you, { label: teammate.name, kind: 'teammate' }, { label: past.name, kind: 'shared_employer' }, to],
         explanation: `${teammate.name} and ${decider.name} were at ${past.name} during overlapping dates.`,
       };
     }
     const customer = past.to && seller.customers.find(name => names.includes(companyNameKey(name)));
     if (customer) return {
       strength: 'warm', score: 0.75, evidenceIds: person.evidenceIds,
-      hops: [{ label: seller.company, kind: 'you' }, { label: customer, kind: 'customer' },
-        { label: decider.name, kind: 'decider' }],
+      hops: [you, { label: customer, kind: 'customer' }, to],
       explanation: `${decider.name} previously worked at ${customer}, an existing customer.`,
     };
   }
   const trigger = triggers.filter(item => item.companyId === company.id).sort((a, b) => b.date.localeCompare(a.date))[0];
   return {
     strength: 'cold', score: 0.25, evidenceIds: [...new Set([...(trigger?.evidenceIds ?? []), ...person.evidenceIds])],
-    hops: [{ label: seller.company, kind: 'you' }, { label: 'via trigger', kind: 'trigger' }, { label: decider.name, kind: 'decider' }],
-    explanation: `Reach out to ${decider.name} via the trigger at ${company.name}.`,
+    hops: trigger ? [you, { label: `trigger at ${company.name}`, kind: 'trigger' }, to] : [you, to],
+    explanation: trigger ? `Reach out to ${decider.name} via the trigger at ${company.name}.` : `Reach out to ${decider.name} at ${company.name}.`,
   };
 }

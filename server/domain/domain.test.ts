@@ -242,6 +242,15 @@ test('draft verifier removes unsupported claims and keeps valid citations', () =
   assert.deepEqual(rendered.citations, [{ marker: 1, evidenceId: first.id }]);
 });
 
+test('draft verifier keeps a cited sentence whole when a company name contains an abbreviation', () => {
+  const text = 'Kestrel Labs Pvt. Ltd. reported a Series B of $24,000,000 on 2026-11-05.';
+  const claims: Claim[] = [{ n: 1, text, evidenceIds: [first.id], numbers: ['$24,000,000', '2026-11-05'], verifiable: true,
+    recipientCompany: 'Kestrel Labs' }];
+  const rendered = verifyDraft({ subject: 'Hello', body: 'Hi Niko,\n\n' + text + ' [1]' }, claims, [first]);
+  assert.match(rendered.body, /Kestrel Labs Pvt\. Ltd\. reported a Series B of \$24,000,000 on 2026-11-05\. \[1\]/);
+  assert.equal(rendered.checks.filter(check => check.status === 'removed').length, 0);
+});
+
 test('placeholder identifiers never merge unrelated companies (live regression: id 0, self-employed, shared hosts)', () => {
   const m = (key: string, name: string, extra: Record<string, unknown> = {}) => ({ key, name, evidenceIds: [], ...extra });
   const result = resolveEntities([
