@@ -40,6 +40,7 @@ export function Onboarding() {
   const api = useRef<DeskApi>(deskApi);
   const alive = useRef(true);
   const startedAt = useRef(0);
+  const urlInput = useRef<HTMLInputElement>(null);
   const pollTimer = useRef<number | null>(null);
   const slow = useRunSel((v) => v.feeds.slow);
 
@@ -136,8 +137,11 @@ export function Onboarding() {
     setCand(null);
     setFailReason(null);
     setConfirmError(null);
+    // Back to the form with the link kept: put the cursor on it, where the fix is.
+    window.setTimeout(() => urlInput.current?.focus(), 0);
   }
 
+  const demo = api.current !== deskApi;
   const folded = phase !== 'form';
   const sharing = CONSENT_ITEMS.filter((c) => consent[c.key] && c.key !== 'discoverable').map((c) => c.label.toLowerCase());
 
@@ -149,10 +153,11 @@ export function Onboarding() {
             <span className="onb-title-wide">Find the job</span>
             <span className="onb-title-narrow">before it’s posted</span>
           </h1>
-          <p className="onb-how">DOMINO watches for companies that just lost someone in your role and haven’t replaced them yet.</p>
+          <p className="onb-how">DOMINO watches for companies where two people in your role just left and nobody has been hired or posted to replace them.</p>
           <p className="onb-rule">
             The model reads your profile and drafts intros, nothing more. The prediction is rule O1 over dated Crustdata
-            records: two or more people in one role family leave within 90 days, and no replacement is hired or posted for.
+            records: at a company of 20–5,000 staff, two or more people in one role family leave within 90 days, and no
+            replacement is hired or posted within 30 days of the last one.
           </p>
         </header>
       )}
@@ -163,7 +168,7 @@ export function Onboarding() {
             <label className="onb-field">
               <span className="onb-label">Your LinkedIn profile</span>
               <input
-                data-testid="linkedin-input" className={`onb-input ${urlError ? 'has-error' : ''}`} type="url" inputMode="url"
+                ref={urlInput} data-testid="linkedin-input" className={`onb-input ${urlError ? 'has-error' : ''}`} type="url" inputMode="url"
                 autoComplete="url" placeholder="linkedin.com/in/your-name" value={url} aria-invalid={!!urlError}
                 aria-describedby={urlError ? 'li-err' : undefined}
                 onChange={(e) => { setUrl(e.target.value); if (urlError) setUrlError(null); }}
@@ -213,8 +218,8 @@ export function Onboarding() {
       {(phase === 'enriching' || phase === 'confirm') && (
         <section className="onb-confirm">
           <div className="onb-card-col">
-            <h2 className="onb-h2">{phase === 'confirm' ? 'Is this you?' : 'Reading your profile'}</h2>
-            <ProfileCard cand={cand} evidence={evidence} reading={phase === 'enriching'} slow={slow?.text ?? null} />
+            <h2 className="onb-h2">{phase === 'confirm' ? 'Is this you?' : demo ? 'Loading the demo profile' : 'Reading your profile'}</h2>
+            <ProfileCard cand={cand} evidence={evidence} reading={phase === 'enriching'} slow={slow?.text ?? null} demo={demo} />
             <SourceNote source={source} error={null} />
           </div>
           <aside className="onb-side">
@@ -263,7 +268,7 @@ function ConsentList({ consent, onToggle, compact }: { consent: Consent; onToggl
 }
 
 /** Ghost lines until each field arrives; each real field fades in once, on its own. */
-function ProfileCard({ cand, evidence, reading, slow }: { cand: Candidate | null; evidence: Evidence[]; reading: boolean; slow: string | null }) {
+function ProfileCard({ cand, evidence, reading, slow, demo }: { cand: Candidate | null; evidence: Evidence[]; reading: boolean; slow: string | null; demo: boolean }) {
   const by = cand?.parsedBy === 'llm' ? 'Read by the model' : 'Read by rules';
   const ev = findEvidence(evidence, cand?.evidenceIds[0]);
   return (
@@ -315,10 +320,14 @@ function ProfileCard({ cand, evidence, reading, slow }: { cand: Candidate | null
         {reading ? (
           <span className={`pcard-reading ${slow ? 'is-slow' : ''}`}>
             <span className="pulse" aria-hidden="true" />
-            {slow ?? 'Reading the public profile from Crustdata. Each call shows in the activity rail.'}
+            {slow ?? (demo ? 'Loading the fictional demo candidate. No live call is made.' : 'Reading the public profile from Crustdata. Each call shows in the activity rail.')}
           </span>
         ) : (
-          <span>{ev ? `${sourceName(ev)}, ${retrievedLine(ev)}` : 'Crustdata person record'}</span>
+          <span>
+            {ev && ev.mode !== 'fixture' ? `${sourceName(ev)}, ${retrievedLine(ev)}`
+              : ev || cand?.fixture ? 'Fictional fixture shaped like a Crustdata person record, not a live call'
+              : 'Crustdata person record'}
+          </span>
         )}
       </footer>
     </article>

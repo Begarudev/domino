@@ -7,7 +7,7 @@
 .onb-title { margin: 0 0 var(--s4); display: grid; line-height: 0.9; letter-spacing: -0.02em; font-weight: 820; font-size: clamp(56px, 6vw, 112px); }
 .onb-title-wide { font-variation-settings: 'wdth' 125; }
 .onb-title-narrow { font-variation-settings: 'wdth' 76; font-weight: 700; color: var(--paper-2); }
-.onb-how { margin: 0 0 var(--s3); font-size: 22px; line-height: 1.35; max-width: 40ch; color: var(--paper); }
+.onb-how { margin: 0 0 var(--s3); font-size: 22px; line-height: 1.35; max-width: 50ch; color: var(--paper); }
 .onb-rule { margin: 0; font-size: var(--fs-body); color: var(--paper-2); max-width: 70ch; font-variation-settings: 'wdth' 92; }
 
 /* ---------------------------------------------------------------- form */

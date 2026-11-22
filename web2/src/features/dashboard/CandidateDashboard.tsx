@@ -27,6 +27,8 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
   const moves = desk.data?.funnel?.find((f) => /job moves/i.test(f.label))?.count ?? null;
   const c = cand.data;
   const ranked = [...list].sort((a, b) => rank(a) - rank(b) || b.confidence - a.confidence);
+  const mine = (inbox.data ?? []).filter((r) => r.direction === 'candidate_to_company');
+  const incoming = (inbox.data ?? []).filter((r) => r.direction !== 'candidate_to_company');
 
   return (
     <div className="page dash">
@@ -49,8 +51,7 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
           {openings.data && (
             <p className="dash-topline" data-num>
               {moves != null ? `From ${fmtInt(moves)} job moves read, ` : ''}
-              {fits.length === 1 ? '1 opening fits you' : `${fmtInt(fits.length)} openings fit you`}
-              {list.length > fits.length ? `, ${plural(list.length - fits.length, 'more')} on hold or watch` : ''}.
+              {topLine(list)}.
               {' '}Predicted by rule O1 over dated Crustdata records{list[0] ? `, checked ${fmtDate(list[0].predictedAt)}` : ''}.
             </p>
           )}
@@ -67,14 +68,33 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
         </div>
       </section>
 
-      <section className="dash-sec" aria-labelledby="dash-inbox-h" data-testid="inbox">
-        <h2 id="dash-inbox-h" className="dash-h2">Companies reaching out</h2>
+      <div className="dash-inbox" data-testid="inbox">
         {/* the fixture label already sits above the openings; here only a failure needs saying */}
         <SourceNote source={inbox.source === openings.source ? null : inbox.source} error={inbox.error} />
-        <Inbox items={inbox.data ?? []} />
-      </section>
+        {mine.length > 0 && (
+          <section className="dash-sec" aria-labelledby="dash-mine-h" id="your-requests">
+            <h2 id="dash-mine-h" className="dash-h2">Your intro requests</h2>
+            <Inbox items={mine} />
+          </section>
+        )}
+        <section className="dash-sec" aria-labelledby="dash-inbox-h">
+          <h2 id="dash-inbox-h" className="dash-h2">Companies reaching out</h2>
+          <Inbox items={incoming} />
+        </section>
+      </div>
     </div>
   );
+}
+
+/** "1 provisional opening fits you, 1 held": say what kind of prediction each count is. */
+function topLine(list: Opening[]): string {
+  const n = (l: string) => list.filter((o) => openingLabel(o) === l).length;
+  const parts: string[] = [];
+  if (n('open')) parts.push(`${plural(n('open'), 'predicted opening')}`);
+  if (n('provisional')) parts.push(`${plural(n('provisional'), 'provisional opening')}`);
+  const fit = parts.length ? `${parts.join(' and ')} ${n('open') + n('provisional') === 1 ? 'fits' : 'fit'} you` : 'No opening fits you yet';
+  const rest = [n('watch') ? `${fmtInt(n('watch'))} on watch` : '', n('held') ? `${fmtInt(n('held'))} held` : ''].filter(Boolean);
+  return [fit, ...rest].join(', ');
 }
 
 const rank = (o: Opening) => ({ open: 0, provisional: 0, watch: 1, held: 2 })[openingLabel(o)];
@@ -94,11 +114,12 @@ function OpeningCard({ o, cand, evidence, intros, candidateId }: {
         </div>
         <div className="op-status">
           {label === 'open' && <span className="tag live">Predicted opening</span>}
-          {label === 'provisional' && <span className="tag live">Predicted opening (provisional)</span>}
+          {label === 'provisional' && <span className="tag warn">Predicted opening (provisional)</span>}
           {label === 'watch' && <span className="tag">Watch{o.watch ? `: ${o.watch.have} of ${o.watch.need} signals` : ''}</span>}
           {held && <span className="tag warn">Held: not an opening</span>}
           <span className="op-conf" data-num title="Rule O1: 2+ dated departures in one role family within 90 days, and no dated replacement hire or job post within 30 days of the last one.">
-            {held ? 'O1, held' : `O1, ${fmtPct(o.confidence)}`}
+            <b>{held ? 'O1, held' : `O1, ${fmtPct(o.confidence)}`}</b>
+            {!held && <small>rule confidence</small>}
           </span>
         </div>
       </div>
@@ -135,6 +156,7 @@ function OpeningCard({ o, cand, evidence, intros, candidateId }: {
 function Proof({ o, evidence, days }: { o: Opening; evidence: Evidence[]; days: number | null }) {
   const steps = o.reasons.filter((r) => r.kind === 'talent_drain' || r.kind === 'no_replacement' || r.kind === 'news');
   const rest = o.reasons.filter((r) => !steps.includes(r));
+  const monthLevel = o.reasons.some((r) => r.kind === "talent_drain" && isMonthLevel(r.date));
   return (
     <div className="proof">
       <ol className="proof-line">
@@ -142,9 +164,9 @@ function Proof({ o, evidence, days }: { o: Opening; evidence: Evidence[]; days: 
         {o.windowClosesBy && o.status === 'open' && (
           <li className="proof-step is-end">
             <div className="proof-chip proof-end">
-              <span className="proof-date" data-num>Window closes {fmtDate(o.windowClosesBy)}{days != null && days >= 0 ? `, ${plural(days, 'day')} left` : ''}</span>
-              <span className="proof-claim">Still no replacement by then confirms the opening</span>
-              <span className="proof-src">Rule O1, 30 days after the last departure</span>
+              <span className="proof-date" data-num>Window closes by {fmtDate(o.windowClosesBy)}{days != null && days >= 0 ? `, ${plural(days, 'day')} left` : ''}</span>
+              <span className="proof-claim">Meets O1 if no replacement is recorded by then</span>
+              <span className="proof-src">{monthLevel ? "The departures have month-level dates, so this is the latest possible cutoff" : "Rule O1: 30 days after the last departure"}</span>
             </div>
           </li>
         )}
@@ -221,7 +243,7 @@ function IntroAction({ o, cand, intros, candidateId }: { o: Opening; cand: Candi
     return (
       <div className="intro">
         <button type="button" className="btn intro-done" data-testid={`request-intro-${o.id}`}
-          onClick={() => setNote(`Already requested on ${fmtDate(existing.receivedAt)}, ${fmtTime(existing.receivedAt)}. It’s in your inbox below.`)}>
+          onClick={() => setNote(`Already requested on ${fmtDate(existing.receivedAt)}, ${fmtTime(existing.receivedAt)}. It’s under Your intro requests below.`)}>
           <span aria-hidden="true">✓</span> Intro requested
         </button>
         {note && <span className="intro-note" role="status">{note}</span>}
