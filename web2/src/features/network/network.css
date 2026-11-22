@@ -6,7 +6,6 @@
 .dg-n text { fill: var(--ink); font-size: 14px; font-weight: 600; }
 .dg-n.focal rect { fill: var(--ink); stroke: var(--ink); }
 .dg-n.focal text { fill: var(--surface); font-size: 15px; }
-.dg-n.struck text { fill: var(--ink-3); text-decoration: line-through; }
 .dg-n.held rect { stroke: var(--ink-2); stroke-dasharray: 3 3; }
 
 .dg-e .hit { fill: none; stroke: transparent; stroke-width: 18; }
@@ -19,8 +18,7 @@
 .dg-e.held .ln { stroke: var(--ink-2); }
 .dg-e.struck .ln { stroke: var(--ink-3); }
 .dg-e .lbl { fill: var(--ink); font-size: 13px; font-weight: 500; }
-.dg-e .note { fill: var(--ink-2); font-size: 12.5px; }
-.dg-e.struck .lbl { fill: var(--ink-3); text-decoration: line-through; }
+.dg-e .note { fill: var(--acc); font-size: 13px; font-weight: 600; }
 .dg-e.link { cursor: pointer; outline: none; }
 .dg-e.link:hover .ln, .dg-e.link:focus-visible .ln { stroke-width: 3; }
 .dg-e.link:focus-visible .lbl { text-decoration: underline; }
@@ -48,3 +46,23 @@
   .dg-e .ln { animation: none; stroke-dashoffset: 0; }
   .dg-e.struck .ln, .dg-e.held .ln { stroke-dasharray: 0.012 0.012; }
 }
+
+/* p6 polish: header with a one-line purpose, state named on every edge, company names never struck */
+.dg > header { align-items: flex-start; }
+.dg-h { display: grid; gap: 2px; min-width: 0; }
+.dg > header h2 { font-size: var(--fs-lead); line-height: var(--lh-body); font-weight: var(--w-semi); letter-spacing: var(--track-snug); }
+.dg-h p { margin: 0; font-size: var(--fs-ui); line-height: var(--lh-ui); color: var(--ink-2); }
+.dg-sum { font-size: var(--fs-ui); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 1px; }
+.dg-svg { max-width: 1240px; margin: 4px auto 0; }
+.dg-e .sep { fill: var(--ink-3); }
+.dg-e.struck .lbl { fill: var(--ink-2); }
+.dg-e.struck .note { fill: var(--ink-2); font-weight: 500; }
+.dg-e.held .note { fill: var(--ink); }
+.dg-e.in .note { fill: var(--ink-2); font-weight: 500; }
+.dg-e .note.src { text-decoration: underline; text-decoration-color: var(--ink-3); cursor: pointer; }
+.dg-n.struck rect { stroke: var(--ink-3); stroke-dasharray: 3 3; }
+.dg-n.struck text { fill: var(--ink-2); }
+.dg-legend { margin: 4px 0 0; padding: 10px 16px 12px; border-top: 1px solid var(--rule-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.dg-hint { margin-left: auto; color: var(--ink-3); }
+.dg .struck, .dg .struck text, .dg .struck tspan { text-decoration: none; }
+.dg-e text { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }

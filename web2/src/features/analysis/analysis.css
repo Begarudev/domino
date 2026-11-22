@@ -170,3 +170,11 @@ ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 40
 .cf-spark-plot { margin-top: 16px; }
 .cf-spark-m { stroke: var(--ink-3); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* p6 polish: talent-flow grid headers and numbers */
+.cf-t th { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--ink-3); padding-top: 8px; padding-bottom: 8px; text-align: left; white-space: nowrap; }
+.cf-t th:last-child { text-align: right; }
+.cf-t td { font-variant-numeric: tabular-nums; }
+.cf-t tbody tr { transition: background 150ms var(--ease); }
+.cf-t tbody tr:hover { background: var(--row-hover); }
+.cf-rule-tally, .cf-hc-date, .cf-date { font-variant-numeric: tabular-nums; }
