@@ -14,8 +14,8 @@ const EXAMPLES = [
 export function RequestBar(props: { initial: string; busy: boolean; onRun: (req: StartRequest) => void }) {
   const [text, setText] = useState(props.initial);
   const [open, setOpen] = useState(false);
-  const [limits, setLimits] = useState<RunLimits>({ maxCredits: 800, maxModelUsd: 1, maxSeconds: 300 });
-  const [chaos, setChaos] = useState({ timeout: true, nonsense: true });
+  const [limits, setLimits] = useState<RunLimits>({ maxCredits: 600, maxModelUsd: 1, maxSeconds: 300 });
+  const [chaos, setChaos] = useState(() => { const on = new URLSearchParams(location.search).has('chaos'); return { timeout: on, nonsense: on }; });
   const pop = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { if (props.initial) setText(props.initial); }, [props.initial]);

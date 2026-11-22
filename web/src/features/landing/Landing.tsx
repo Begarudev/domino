@@ -88,7 +88,9 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
     setStage(0);
     setFallen(0);
     // Same injected faults as the shell's Run button, so the retry shows in the timeline (labelled injected).
-    onStart({ request, chaos: { timeoutOnce: ['job_search'], nonsenseOnce: ['company_growth'] } });
+    // Injected faults only when asked for (?chaos), and they are labelled injected in the timeline and ledger.
+    const chaos = new URLSearchParams(location.search).has('chaos') ? { timeoutOnce: ['job_search'], nonsenseOnce: ['company_growth'] } : undefined;
+    onStart({ request, chaos });
   };
 
   const tiles = steps.length ? steps : STEP_ORDER.map((step) => ({ step, label: '', status: 'pending' as const, attempt: 0 }));
