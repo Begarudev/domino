@@ -166,7 +166,7 @@ function Row({ r }: { r: LedgerEntry }) {
       <td className="lg-step" title={stepName(r)}>{stepName(r)}</td>
       <td className="mono" title={ENDPOINT_NOUN[r.endpoint] ?? r.endpoint}>{r.endpoint}</td>
       <td>{r.injected ? <span className="st held">Injected fault</span> : modeLabel(r)}</td>
-      <td className={bad ? 'lg-bad' : undefined}>{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</td>
+      <td><span className={`lg-pill ${r.status === 'budget_blocked' ? 'idle' : bad ? 'bad' : 'ok'}`}><i aria-hidden="true" />{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</span></td>
       <td className="num">{r.credits ? fmtCredits(r.credits) : <span className="faint">0</span>}</td>
       <td className="num">{isLlm(r) ? fmtInt(r.inputTokens + r.outputTokens) : <span className="faint">–</span>}</td>
       <td className="num">{r.usd ? fmtUsd(r.usd) : <span className="faint">$0</span>}</td>
