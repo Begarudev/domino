@@ -16,18 +16,18 @@ export function cachedPersonNames(sql: DatabaseSync): string[] {
   const rows = sql.prepare(`SELECT response_json FROM tool_cache WHERE endpoint IN (${personEndpoints.map(() => '?').join(',')})`)
     .all(...personEndpoints) as { response_json: string }[];
   const names = new Set<string>();
+  // Only a profile's own name (basic_profile.name): employment entries also carry `name`, and those are companies.
   const visit = (value: unknown, key = ''): void => {
-    if (typeof value === 'string') {
-      if ((key === 'name' || key === 'full_name') && /^\p{Lu}[\p{L}'’.-]+(?:\s+[\p{L}'’.-]+){1,4}$/u.test(value.trim())) names.add(value.trim());
-      return;
-    }
     if (Array.isArray(value)) { for (const item of value) visit(item, key); return; }
-    if (value && typeof value === 'object') for (const [k, v] of Object.entries(value)) visit(v, k);
+    if (!value || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    const own = key === 'basic_profile' ? record.name : undefined;
+    if (typeof own === 'string' && /^\p{Lu}[\p{L}'’.-]+(?:\s+[\p{L}'’.-]+){1,4}$/u.test(own.trim())) names.add(own.trim());
+    for (const [k, v] of Object.entries(record)) visit(v, k);
   };
   for (const row of rows) {
     try { visit(JSON.parse(row.response_json)); } catch { /* unreadable cache row: skip */ }
   }
-  // Only names that look personal: inside basic_profile/person records (the key filter above) and 2+ words.
   return [...names];
 }
 

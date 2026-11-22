@@ -40,3 +40,18 @@ test('no emitted event or response carries a cached person full name or profile 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('employer names inside cached work history are never treated as people', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'domino-redact-co-'));
+  const store = new Store(join(dir, 'r.db'));
+  try {
+    const response = { profiles: [{ basic_profile: { name: 'Priya Ramaswamy' },
+      experience: { employment_details: { past: [{ name: 'Amazon Web Services', title: 'SDE' }], current: [{ name: 'Hugging Face' }] } } }] };
+    store.sql.prepare('INSERT INTO tool_cache (key, provider, endpoint, request_json, response_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('b'.repeat(64), 'crustdata', '/person/search', '{}', JSON.stringify(response), new Date().toISOString());
+    assert.equal(store.redactor.text('Priya Ramaswamy left Amazon Web Services for Hugging Face'), 'P. left Amazon Web Services for Hugging Face');
+  } finally {
+    store.sql.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
