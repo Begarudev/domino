@@ -93,15 +93,16 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
       <section className="panel">
         <header>
           <h2>{fmtDate(score.asOf)} replay · outcomes through {fmtDate(score.horizonEnd, true)}</h2>
-          <span className={`st ${score.factsAfterAsOfUsed === 0 ? 'verified' : 'held'}`}>{fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)}</span>
+          <span className={`st ${score.factsAfterAsOfUsed === 0 ? 'verified' : 'held'}`}>O1 inputs · {fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)}</span>
         </header>
+        {score.snapshotLabel && <p className="rp-src">Snapshot: {score.snapshotLabel}</p>}
         <div className="pad rp-play">
           <button className="btn pri" data-testid="replay-play" onClick={playing ? pause : play}>{playing ? 'Pause' : done ? 'Play again' : pos > 0 ? 'Resume' : 'Play the replay'}</button>
           <div className="rp-track-wrap">
             <div className="rp-track" aria-hidden="true">
-              <i className="rp-fill" style={{ transform: `scaleX(${pos})` }} />
-              {events.map((e, i) => (
-                <span key={`${e.companyId}-${i}`} className={`rp-ev${e.at <= cursor ? ' on' : ''}`} style={{ left: `${((e.at - start) / span) * 100}%` }} title={`${fmtDate(e.outcomeDate)} · ${e.outcome}`} />
+              <i className="rp-fill" style={{ transform: `scaleX(${pos})` }} /><i className="rp-head" style={{ left: `${pos * 100}%` }} />
+              {events.filter((e) => e.at <= cursor).map((e, i) => (
+                <span key={`${e.companyId}-${i}`} className="rp-ev on" style={{ left: `${((e.at - start) / span) * 100}%` }} title={`${fmtDate(e.outcomeDate)} · ${e.outcome}`} />
               ))}
             </div>
             <input className="rp-range" type="range" min={0} max={1000} value={Math.round(pos * 1000)} data-testid="replay-scrubber"
@@ -122,11 +123,11 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
           <div className="pad">
             <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. {d.predicted === 0 ? 'Precision unavailable.' : `${fmtInt(d.hits)} had the tracked outcome.`}</p>
             <table className="t rp-table">
-              <thead><tr><th>Selector</th><th className="num">Selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
+              <thead><tr><th>Selector</th><th className="num">Companies</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
               <tbody>
                 <tr><td><b>O1</b> (locked rule)</td><td className="num">{fmtInt(d.predicted)}</td><td className="num">{d.predicted ? fmtInt(d.hits) : <span className="faint">–</span>}</td><td className="num">{d.medianLeadDays != null ? `${fmtInt(d.medianLeadDays)} d` : <span className="faint">–</span>}</td></tr>
-                <tr><td>Job-post baseline</td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{fmtInt(base.hits)}</td><td className="num">{base.medianLeadDays != null ? `${fmtInt(base.medianLeadDays)} d` : <span className="faint">–</span>}</td></tr>
-                <tr><td>Whole cohort (base rate)</td><td className="num">{fmtInt(N)}</td><td className="num">{fmtInt(cohortHits)}</td><td className="num"><span className="faint">–</span></td></tr>
+                <tr><td>Job-post baseline</td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{fmtInt(base.hits)} of {fmtInt(base.predicted)}</td><td className="num">{base.medianLeadDays != null ? `${fmtInt(base.medianLeadDays)} d` : <span className="faint">–</span>}</td></tr>
+                <tr><td>Whole cohort (base rate)</td><td className="num">{fmtInt(N)}</td><td className="num">{fmtInt(cohortHits)} of {fmtInt(N)}</td><td className="num"><span className="faint">–</span></td></tr>
               </tbody>
             </table>
             <p className="rp-why">{score.note}</p>
@@ -152,7 +153,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
           <header><h2>Scorecard</h2><span className="faint">Counts appear when the replay reaches {fmtDate(score.horizonEnd, true)}</span></header>
           <div className="pad">
             <table className="t rp-table rp-ghost-t" aria-label="Scorecard, withheld until the end">
-              <thead><tr><th>Selector</th><th className="num">Selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
+              <thead><tr><th>Selector</th><th className="num">Companies</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
               <tbody>
                 {['O1 (locked rule)', 'Job-post baseline', 'Whole cohort (base rate)'].map((l) => (
                   <tr key={l}><td>{l}</td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td></tr>

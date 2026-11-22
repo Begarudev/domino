@@ -66,6 +66,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
     <div className="ledger">
       <div className="lg-run">
         <span className="st plain mono" title={snap.id}>{snap.id.slice(0, 12)}</span>
+        <b className="lg-sum" data-testid="ledger-sum">{plural(rows.length, "call")} · {fmtCredits(credits)} new credits</b>
         <span className="lg-req">{requestLabel(snap.request)}</span>
         <span className={`st ${snap.status === 'budget_exhausted' ? 'held' : 'plain'}`}>
           {snap.status === 'budget_exhausted' ? `Stopped at the ${CAP_NAME[b.exhausted ?? 'credits']}` : snap.status.replace(/_/g, ' ')}
@@ -77,9 +78,9 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
         <p className="lg-line" data-testid="cap-line">
           <span>Used <b><Count value={credits} format={fmtCredits} /></b> credits</span>
           <span className="sep">·</span>
-          <span>Reserved <b>{fmtCredits(reserved.credits)}</b>
+          <span>{running ? "Reserved" : "Reserved at stop"} <b>{fmtCredits(reserved.credits)}</b>
             {reserved.modelUsd > 0 && <> + <b>{fmtUsd(reserved.modelUsd)}</b> model</>}
-            {(reserved.credits > 0 || reserved.modelUsd > 0) && last ? <span className="faint"> ({last} in flight)</span> : null}</span>
+            {running && (reserved.credits > 0 || reserved.modelUsd > 0) && last ? <span className="faint"> ({last} in flight)</span> : null}</span>
           <span className="sep">·</span>
           <span>Cap <b>{fmtInt(b.limits.maxCredits)}</b></span>
           <span className="sep">·</span>
@@ -97,7 +98,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
         <div className="blocked" key={`blk-${r.id}`} data-testid="blocked-call">
           <div>
             <b>Blocked before spend</b> · {stepName(r)} · <span className="mono">{r.endpoint}</span>
-            <div className="faint">Cap credits {fmtInt(b.limits.maxCredits)} · would have cost ≈ {fmtCredits(r.credits)} credits · not dispatched</div>
+            <div className="faint">Credit cap {fmtInt(b.limits.maxCredits)} · used {fmtCredits(credits)} + would have cost ≈ {fmtCredits(r.credits)} = {fmtCredits(credits + r.credits)} · not dispatched</div>
           </div>
           <span className="st held">Not dispatched</span>
         </div>
@@ -176,7 +177,7 @@ function Cap({ label, used, reserved, cap, fmt, hit, testid }: {
         <i className="u" style={{ width: pct(used) }} />
         {reserved > 0 && <i className="r" style={{ width: pct(reserved) }} />}
       </div>
-      <div className="lg-cap-n">{hit ? 'Cap reached: the next call was refused' : `${fmt(Math.max(0, cap - used - reserved))} left`}{reserved > 0 ? ` · ${fmt(reserved)} reserved` : ''}</div>
+      <div className="lg-cap-n">{hit ? "Cap reached" : `${fmt(Math.max(0, cap - used - reserved))} left`}{reserved > 0 ? ` · ${fmt(reserved)} reserved` : ''}</div>
     </div>
   );
 }

@@ -42,3 +42,4 @@
 .ledger .panel > header h2 { font-size: 15px; }
 .lg-table td.lg-step { max-width: 380px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lg-table tbody td { padding-top: 7px; padding-bottom: 7px; }
+.lg-sum { font-weight: 600; font-size: 14px; }
