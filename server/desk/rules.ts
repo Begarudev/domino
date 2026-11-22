@@ -1,7 +1,7 @@
 // Rules registry: every rule with its statement, thresholds, guards, lock time and today's live fire counts. OWNER: lead.
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { RuleCard, ServedFrom } from '../../shared/desk.ts';
+import type { Opening, RuleCard, ServedFrom } from '../../shared/desk.ts';
 import type { RunSnapshot } from '../../shared/types.ts';
 import type { Store } from '../db.ts';
 import { root } from '../env.ts';
@@ -58,6 +58,12 @@ export function rulesRegistry(store: Store): RuleCard[] {
   const sellerFile = resolve(root, 'config/seller.json');
   const events = existsSync(sellerFile)
     ? ((JSON.parse(readFileSync(sellerFile, 'utf8')).displacementEvents ?? []) as { fixtureOnly?: boolean }[]).filter(event => !event.fixtureOnly).length : 0;
+  // R1's watchlist is counted where the company file reads it: companies in the openings scan with exactly 2 of the 3
+  // conclusive departures R1 needs (the same "2 of 3" the Watchlist · R1 card shows).
+  const conclusive = (row: Opening) => Math.max(0, ...(row.clauses ?? []).filter(clause => clause.id === 'o1.departures')
+    .map(clause => Number(/^(\d+) conclusive/.exec(clause.text)?.[1] ?? 0)));
+  // A company a shared guard holds (acqui-hire, restructure) is not on the watchlist.
+  const r1Watchlist = new Set(openings.filter(row => row.status !== 'held' && conclusive(row) === 2).map(row => row.companyId)).size;
   return [
     { id: 'O1', name: 'Predicted opening', sourceRunId: scanId,
       statement: 'At a company with 20–5,000 staff: ≥ 2 conclusive dated departures in one role family within 90 days, and no dated replacement job post or hire for that family within 30 days of the last departure.',
@@ -74,7 +80,7 @@ export function rulesRegistry(store: Store): RuleCard[] {
       thresholds: ['≥ 3 departures in 90 days', '3rd within 30 days', 'A ≤ 5,000 staff', 'previous role infra/serving'],
       guards, lockedAt: '22 Nov 2026 13:40 IST, before any replay outcome; threshold kept at 3 after the live yield check',
       counts: [{ label: 'fired', value: by('TALENT_DRAIN').filter(target => !target.hold && !target.watch).length },
-        { label: 'watchlist (2 of 3)', value: by('TALENT_DRAIN').filter(target => target.watch).length },
+        { label: 'watchlist (2 of 3, from the openings scan)', value: r1Watchlist },
         { label: 'held', value: by('TALENT_DRAIN').filter(target => target.hold).length }] },
     { id: 'CONTAGION', name: 'Peer contagion', sourceRunId: analysis?.id ?? null,
       statement: 'A listed peer of B made a dated infrastructure move (≥ 2 dated rows); B has the same profile and no infra hiring yet.',
