@@ -20,6 +20,8 @@ export interface Scan {
 }
 
 const MAX_FILES = 12;
+/** Titles the scan matched on keywords but that aren't engineering roles ("Chief Revenue Officer | AI Infrastructure"). */
+const NON_ENG = /\b(chief|officer|revenue|sales|marketing|founder|advisor|manager, marketplace|recruit)/i;
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { accept: 'application/json' } });
@@ -88,7 +90,7 @@ export function watchlist(files: CompanyFile[]): WatchItem[] {
   const out: WatchItem[] = [];
   for (const f of files) {
     const byFam = new Map<RoleFamily, Departure[]>();
-    for (const d of f.departures) if (d.roleFamily) byFam.set(d.roleFamily, [...(byFam.get(d.roleFamily) ?? []), d]);
+    for (const d of f.departures) if (d.roleFamily && !NON_ENG.test(d.role)) byFam.set(d.roleFamily, [...(byFam.get(d.roleFamily) ?? []), d]);
     for (const [family, deps] of byFam) {
       const op = f.openings.find((o) => o.roleFamily === family);
       if (op?.status === 'open') continue; // a predicted opening, shown as an opening, not a watch

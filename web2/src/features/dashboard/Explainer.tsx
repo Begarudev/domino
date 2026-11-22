@@ -10,7 +10,7 @@ import { openEvidence } from '../../shell/ui.ts';
 import { countWord, departureLine, scannedFamilies, stage, watchlist } from './scan.tsx';
 import type { FunnelRow, Scan, WatchItem } from './scan.tsx';
 
-const STEPS = ['Engineer leaves', 'A 2nd leaves within 90 days', 'No replacement post or hire in 30 days', 'Predicted opening'];
+const STEPS = ['Engineer leaves', 'A 2nd in the same role family leaves within 90 days', 'No replacement post or hire in 30 days', 'Predicted opening'];
 
 export function HowItWorks() {
   return (
@@ -60,7 +60,7 @@ export function CheckedStrip({ scan }: { scan: Scan }) {
         {btn('moves', fmtInt(profiles?.count ?? 0), 'job moves read from Crustdata')}
         {btn('companies', fmtInt(scan.companies.length), 'companies checked')}
         {btn('rule', `O1`, `applied: ${countWord(groups?.count ?? 0, 'group')} at 2+, ${countWord(openings, 'opening')}, ${fmtInt(held?.count ?? 0)} held`)}
-        {btn('time', time?.split(', ')[1] ?? 'Scan', `scanned ${time?.split(', ')[0] ?? 'today'}${f.served?.credits === 0 ? ', 0 credits' : ''}`)}
+        {btn('time', time?.split(', ')[1] ?? 'Scan', `scanned ${time?.split(', ')[0] ?? 'today'}`)}
       </div>
       {open && (
         <div className="chk-records" key={open}>
@@ -133,21 +133,24 @@ export function NeverEmpty({ scan, cand, family, renderCard }: {
   const covered = family ? fams.includes(family) : false;
   const all = watchlist(scan.files);
   const mineW = family ? all.filter((w) => w.family === family) : [];
-  const watch = (mineW.length ? mineW : all).slice(0, 7);
+  const [showAll, setShowAll] = useState(false);
+  const pool = mineW.length ? mineW : all;
+  const watch = showAll ? pool : pool.slice(0, 3);
   const nearby = scan.files.flatMap((f) => f.openings.filter((o) => o.status === 'open' && o.roleFamily !== family).map((o) => ({ o, ev: f.evidence })));
   if (scan.loading && !scan.files.length) return <div className="op-ghost surface"><span className="ghost" style={{ width: '50%', height: 28 }} /><span className="ghost" style={{ width: '85%', height: 28 }} /></div>;
   return (
     <div className="never">
       <p className="scope-note">
         {family && !covered
-          ? <>Today’s scan covered {listJoin(fams.map(famLabel))}. <b>{famLabel(family)} wasn’t in it</b>, so there’s nothing to predict for you yet. Here is what the scan is watching and the closest openings in nearby roles.</>
+          ? <><b>{famLabel(family)} wasn’t in today’s scan.</b> It covered {listJoin(fams.map(famLabel))}, so there’s nothing to predict for you yet. Below: what the scan is watching, and the closest openings in nearby roles.</>
           : <>No company meets rule O1 for {family ? famLabel(family) : 'your role family'} yet. These are the closest.</>}
       </p>
 
       <section aria-labelledby="watch-h" className="sub-sec">
         <h3 id="watch-h" className="dash-h3">Watching for you</h3>
         <p className="sub-lead">Companies part-way to a predicted opening. O1 needs 2 conclusive departures in one family within 90 days.{mineW.length ? '' : family ? ' Shown from the families the scan covered.' : ''}</p>
-        {watch.length ? <ul className="wl">{watch.map((w) => <WatchRow key={w.key} w={w} showFamily={!mineW.length} />)}</ul>
+        {watch.length ? <ul className="wl">{watch.map((w) => <WatchRow key={w.key} w={w} showFamily={!mineW.length} />)}
+          {pool.length > 3 && <li className="wl-row"><button type="button" className="btn sm" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Show fewer' : `Show all ${fmtInt(pool.length)}`}</button></li>}</ul>
           : <p className="dash-quiet">No company in today’s scan has a dated departure in a tracked family yet.</p>}
       </section>
 
@@ -172,7 +175,7 @@ function WatchRow({ w, showFamily }: { w: WatchItem; showFamily: boolean }) {
     <li className={`wl-row st-${w.status}`} ref={ref}>
       <div className="wl-top">
         <b className="wl-co">{w.companyName}</b>
-        {w.headcount > 0 && <span className="wl-meta" data-num>{fmtInt(w.headcount)} staff</span>}
+        {w.headcount > 0 && <span className="wl-meta">{fmtInt(w.headcount)} staff</span>}
         {showFamily && <span className="tag">{famLabel(w.family)}</span>}
         <span className={`wl-state st-${w.status}`}>
           <span className="pips" aria-hidden="true">{[0, 1].map((i) => <i key={i} className={i < Math.min(n, 2) ? 'on' : ''} />)}</span>

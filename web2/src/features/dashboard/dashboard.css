@@ -149,7 +149,7 @@
   transition: background-color 160ms ease-out;
 }
 .chk:last-child { border-right: 0; }
-.chk b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.chk b { font-size: 20px; font-weight: 650; font-variant-numeric: proportional-nums; white-space: nowrap; }
 .chk span { font-size: 13px; color: var(--paper-2); line-height: 1.35; }
 .chk:hover { background: var(--bg); }
 .chk[aria-expanded='true'] { background: var(--live-wash); }
@@ -180,7 +180,7 @@
 .wl-row:first-child { border-top: 0; }
 .wl-top { display: flex; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; }
 .wl-co { font-size: 15px; font-weight: 650; }
-.wl-meta { font-size: 13px; color: var(--paper-2); font-variant-numeric: tabular-nums; }
+.wl-meta { font-size: 13px; color: var(--paper-2); }
 .wl-state { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--paper-2); }
 .wl-state.st-held, .wl-state.st-watch { color: var(--warn); }
 .pips { display: inline-flex; gap: 3px; }
@@ -195,3 +195,4 @@
 .op.compact .op-co { font-size: 18px; font-weight: 650; font-variation-settings: normal; }
 .op.compact .op-rule { font-size: 15px; }
 .op.compact .clause { font-size: 14px; min-height: 36px; padding: 6px 12px 6px 8px; }
+.wl-row > .btn.sm { justify-self: start; }

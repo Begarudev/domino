@@ -70,7 +70,7 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
         <div className="dash-sec-head">
           <h2 id="dash-open-h" className="dash-h2">Openings for you</h2>
           {openings.data && (
-            <p className="dash-topline" data-num>
+            <p className="dash-topline">
               {moves != null ? `From ${fmtInt(moves)} job moves read: ` : ''}{topLine(list)}. Rule O1 over dated Crustdata records
               {list[0] ? `, checked ${fmtDate(list[0].predictedAt)}` : ''}.
             </p>
