@@ -158,3 +158,16 @@
 .rec-fun-l { font-size: 14px; }
 .rec-proof button, .rec-proof span { font-size: 13px; padding: 2px 7px; }
 .rec-proof li + li::before { margin: 0 6px; }
+
+/* council r2: the held proof chips carry no hatch (the hatch marks only the card edge and the header chip) */
+.rec-proof .tone-held > * { background: var(--surface); }
+
+/* wide screens (1920 projector): larger proof, clauses, tables */
+@media (min-width: 1800px) {
+  .rec { font-size: 16px; }
+  .rec table.t td { font-size: 16px; padding-top: 11px; padding-bottom: 11px; }
+  .rec-proof button, .rec-proof span { font-size: 15px; padding: 3px 9px; }
+  .rec-role { font-size: 30px; line-height: 36px; }
+  .rec-count, .rec-foot, .rec-fun-l { font-size: 15px; }
+  .rec-fun b { font-size: 26px; line-height: 32px; }
+}

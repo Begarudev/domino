@@ -137,7 +137,7 @@ export function proofSteps(o: Opening, rows: DepartureRow[]): ProofStep[] {
   const repl = (o.clauses ?? []).filter((c) => c.id.startsWith('o1.no_replacement'));
   if (repl.length && repl.every((c) => c.state === 'met')) {
     const checked = repl.map((c) => c.detail?.match(/checked (\d{1,2} [A-Z][a-z]{2})/)?.[1]).find(Boolean);
-    steps.push({ text: `No replacement${checked ? ` through ${checked}` : ''}`, clauseId: repl[0].id, tone: 'fact' });
+    steps.push({ text: `No post or hire${checked ? ` through ${checked}` : ''}`, clauseId: repl[0].id, tone: 'fact' });
   }
   if (o.windowClosesBy) steps.push({ text: `Window closes ${fmtDate(o.windowClosesBy)}`, clauseId: (o.clauses ?? []).find((c) => c.id.includes('window'))?.id ?? null, tone: 'open' });
   else if (o.status === 'open') steps.push({ text: 'Opening predicted', clauseId: null, tone: 'fact' });

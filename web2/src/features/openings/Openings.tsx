@@ -70,7 +70,7 @@ function Departures({ rows, opening }: { rows: DepartureRow[]; opening: Opening 
       ) : (
         <table className="t">
           <thead><tr><th>Person</th><th>Went to</th><th>Left</th><th>Status</th></tr></thead>
-          <tbody>{rows.map((r) => <DepRow key={r.d.id} r={r} />)}</tbody>
+          <tbody>{rows.map((r) => <DepRow key={r.d.id} r={r} start={win?.split("–")[0].replace(/ \d{4}$/, "") ?? null} />)}</tbody>
         </table>
       )}
       {rows.some((r) => r.month?.length === 7) && (
@@ -82,7 +82,7 @@ function Departures({ rows, opening }: { rows: DepartureRow[]; opening: Opening 
   );
 }
 
-function DepRow({ r }: { r: DepartureRow }) {
+function DepRow({ r, start }: { r: DepartureRow; start: string | null }) {
   const ref = useEnterOnce<HTMLTableRowElement>();
   const s = r.conclusive === false ? 'struck' : undefined;
   return (
@@ -94,7 +94,7 @@ function DepRow({ r }: { r: DepartureRow }) {
       <td className={s} data-num>{r.month ? fmtDate(r.month, true) : 'undated'}</td>
       <td>
         {r.conclusive === true && <><span className="tick">✓</span> conclusive</>}
-        {r.conclusive === false && <span className="muted">{r.reason}</span>}
+        {r.conclusive === false && <span className="muted">{r.reason}{start ? ` (${start})` : ''}</span>}
         {r.conclusive === null && <span className="faint">not assessed</span>}
       </td>
     </tr>
