@@ -331,8 +331,17 @@ test('zero seconds stops the worker before its first step or tool call', httpTim
   assert.equal(limited.ledger.length, 0);
 });
 
+test('a live run starts only with confirmLive: true', httpTimeout, async () => {
+  const before = (await http<{ id: string }[]>('/api/runs')).length;
+  const refused = await fetch(`${base}/api/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request: requestText, dataMode: 'live' }) });
+  assert.equal(refused.status, 409);
+  assert.equal(((await refused.json()) as { code: string }).code, 'confirm_live');
+  assert.equal((await http<{ id: string }[]>('/api/runs')).length, before, 'nothing was launched');
+});
+
 test('live runs with unavailable sources finish without any fixture evidence or approvals', httpTimeout, async () => {
-  const { id } = await create({ dataMode: 'live' });
+  const { id } = await create({ dataMode: 'live', confirmLive: true });
   const snap = await state(id, row => row.status === 'completed');
   assert.equal(snap.dataMode, 'live');
   assert.equal(snap.evidence.length, 0);
