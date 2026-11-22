@@ -51,14 +51,9 @@
 .rd-funnel span { min-height: 32px; overflow-wrap: anywhere; }
 
 /* Proportional funnel: each filter stage is a bar scaled to the first; click filters the table. */
-.rd-chart { display: grid; gap: 4px; margin-bottom: 12px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
-.rd-chart button { position: relative; display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; height: 26px; padding: 0 8px; border: 0; border-radius: 4px; background: none; text-align: left; cursor: pointer; overflow: hidden; }
-.rd-chart button:hover { background: var(--row-hover); }
-.rd-chart button.on { background: var(--hover); }
-.rd-chart i { position: absolute; left: 80px; top: 6px; bottom: 6px; max-width: calc(100% - 88px); background: color-mix(in srgb, var(--acc) 22%, transparent); border-radius: 3px; animation: rd-grow 400ms var(--ease) both; transform-origin: left; }
-.rd-chart button.on i { background: color-mix(in srgb, var(--acc) 45%, transparent); }
-.rd-chart span { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
-.rd-chart em { position: relative; font-style: normal; color: var(--ink-2); font-size: 13px; }
+.rd-chart { display: block; margin-bottom: 12px; padding: 4px 8px 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+/* bars on hover read as clickable */
+.rd-chart .apexcharts-bar-area { cursor: pointer; }
 @keyframes rd-grow { from { transform: scaleX(0); } }
 
 .rd-tools { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--rule-2); font-size: 13px; }

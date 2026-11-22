@@ -2,6 +2,7 @@
 // opens its records), a decision table that gives discards the same weight as kept rows, and the run desk: re-run
 // the scan, or start an outbound "find buyers" run, and watch its reads stream into the same table.
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import Chart from 'react-apexcharts';
 import type { CompanyDesk, CompanySummary } from '../../data/desk.ts';
 import { deskApi, invalidate, useQuery } from '../../data/query.ts';
 import { runStore, useRunSel } from '../../data/store.ts';
@@ -155,18 +156,24 @@ function Filters({ intent, added }: { intent: Intent; added?: string[] }) {
 function FunnelStrip({ funnel, view, onPick }: { funnel: OpeningsFunnel; view: string; onPick: (id: string) => void }) {
   const max = Math.max(1, ...funnel.stages.map((s) => s.count));
   const firstDecision = funnel.stages.findIndex((s) => DECISION_STAGES.has(s.id));
+  const steps = funnel.stages.filter((s) => !DECISION_STAGES.has(s.id));
+  const top = Math.max(1, steps[0]?.count ?? 1);
   return (
     <>
-    <div className="rd-chart" role="group" aria-label="O1 funnel, proportional to the first stage">
-      {funnel.stages.filter((s) => !DECISION_STAGES.has(s.id)).map((s) => {
-        const id = s.rows?.length ? s.id : READS;
-        const w = s.count ? Math.max(0.8, (s.count / max) * 100) : 0;
-        return (
-          <button key={s.id} className={view === id ? 'on' : undefined} onClick={() => onPick(id)} title={`${fmtInt(s.count)} ${shortLabel(s)}: show these rows`}>
-            <i style={{ width: `${w}%` }} /><span data-num>{fmtInt(s.count)}</span><em>{shortLabel(s)}</em>
-          </button>
-        );
-      })}
+    <div className="rd-chart" role="group" aria-label="O1 funnel, proportional to the first stage" data-testid="reading-chart">
+      <Chart type="bar" height={Math.max(150, steps.length * 38)} series={[{ name: 'Rows kept', data: steps.map((s) => s.count) }]}
+        options={{
+          chart: { toolbar: { show: false }, fontFamily: 'inherit', animations: { enabled: true, speed: 450, animateGradually: { enabled: true, delay: 60 }, dynamicAnimation: { enabled: false } },
+            events: { dataPointSelection: (_e, _c, cfg) => { const s = steps[cfg?.dataPointIndex ?? -1]; if (s) onPick(s.rows?.length ? s.id : READS); } } },
+          plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '62%', distributed: true } },
+          colors: steps.map((s) => (view === (s.rows?.length ? s.id : READS) ? '#2e6be6' : '#12a594')),
+          legend: { show: false }, grid: { borderColor: '#ebecef', strokeDashArray: 3, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+          dataLabels: { enabled: true, offsetX: 6, textAnchor: 'start', formatter: (v: number) => fmtInt(v), style: { fontSize: '12px', fontWeight: 600, colors: ['#1f2328'] } },
+          xaxis: { categories: steps.map((s) => shortLabel(s)), labels: { formatter: (v: string) => fmtInt(Number(v)), style: { colors: '#8a8f98', fontSize: '11px' } } },
+          yaxis: { labels: { maxWidth: 240, style: { colors: '#4b5059', fontSize: '12px' } } },
+          tooltip: { y: { formatter: (v: number) => `${fmtInt(v)} · ${Math.round((v / top) * 1000) / 10}% of the first step · click to list these rows` } },
+          states: { active: { filter: { type: 'none' } } },
+        }} />
     </div>
     <div className="funnel rd-funnel" role="tablist" aria-label="O1 funnel">
       {funnel.stages.map((s, i) => {
