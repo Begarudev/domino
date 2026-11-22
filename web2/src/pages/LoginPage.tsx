@@ -101,19 +101,39 @@ const LANES: { id: string; name: string; steps: string[] }[] = [
   { id: 'sell', name: 'Sell', steps: ['Company B, a buyer, raises or ships', 'B may need GPU inference', 'DOMINO drafts outreach to the decider', 'You approve, it’s sent once'] },
 ];
 
+const KIND_LABEL = ['Signal', 'Need', 'Action', 'You'];
+const EXAMPLE: Record<string, string> = {
+  hire: 'Example: two people in one role family leave inside 90 days, nobody replaces them in 30 → rule O1 predicts an opening.',
+  sell: 'Example: a buyer’s dated funding or launch news → a likely inference need → one drafted message, held until you approve.',
+};
+
+function StepIcon({ kind }: { kind: number }) {
+  const p = { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
+  if (kind === 0) return <svg {...p}><path d="M2 8h3l2-5 2 10 2-5h3" /></svg>;
+  if (kind === 1) return <svg {...p}><circle cx="8" cy="8" r="5.5" /><path d="M8 5v3.2l2 1.3" /></svg>;
+  if (kind === 2) return <svg {...p}><path d="M3 8.5l3 3 7-7" /></svg>;
+  return <svg {...p}><path d="M2.5 8l11-5-4 11-2-4.5z" /></svg>;
+}
+
 function Dominoes() {
   return (
     <figure className="dominoes" aria-label="How a move at one company becomes a need">
       <figcaption>How it works</figcaption>
       {LANES.map((l, li) => (
         <div className="dom-lane" key={l.id} data-testid={`domino-${l.id}`}>
-          <span className="dom-name">{l.name}</span>
+          <span className="dom-name"><span className={`dom-chip dom-chip-${l.id}`} />{l.name}</span>
           <ol>
-            {l.steps.map((s, i) => (
-              <li key={s} className={i === 0 ? 'dom-cause' : s.startsWith('DOMINO') || s.startsWith('You') ? 'dom-act' : ''}
-                style={{ animationDelay: `${li * 160 + i * 110}ms` }}>{s}</li>
-            ))}
+            {l.steps.map((s, i) => {
+              const kind = i === 0 ? 0 : s.startsWith('You') ? 3 : s.startsWith('DOMINO') ? 2 : 1;
+              return (
+                <li key={s} className={`dom-k${kind}`} style={{ animationDelay: `${li * 180 + i * 120}ms` }}>
+                  <span className="dom-ic"><StepIcon kind={kind} /></span>
+                  <span className="dom-txt"><small>{KIND_LABEL[kind]}</small>{s}</span>
+                </li>
+              );
+            })}
           </ol>
+          <p className="dom-ex">{EXAMPLE[l.id]}</p>
         </div>
       ))}
     </figure>

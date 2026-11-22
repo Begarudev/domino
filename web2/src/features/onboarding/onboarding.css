@@ -137,3 +137,22 @@
 .onb .chip { height: 24px; padding: 0 10px; font-size: var(--fs-cap, 12px); }
 .onb .h-dates { font-variant-numeric: tabular-nums; }
 .onb .onb-summary { border-radius: var(--r-lg, 10px); padding: 10px 16px; }
+
+/* q2: stepped onboarding on a subtle neutral-to-teal wash, one focused card */
+.onb { min-height: calc(100vh - 56px); background: radial-gradient(1200px 600px at 85% -10%, #e3f4f1 0%, transparent 60%), radial-gradient(900px 500px at -10% 110%, #f7efe4 0%, transparent 55%), #fafaf9; }
+.onb-steps { list-style: none; display: flex; gap: 8px; margin: 0 0 24px; padding: 0; }
+.onb-steps li { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 4px; border-radius: 999px; border: 1px solid var(--rule, #e5e5e5); background: #fff; font-size: 13px; color: var(--ink-2, #666); }
+.onb-steps li.now { border-color: #0f9488; color: var(--ink, #111); box-shadow: 0 0 0 3px rgba(15, 148, 136, .12); }
+.onb-steps li.done { color: var(--ink, #111); }
+.onb-step-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: #f1f1ef; font-variant-numeric: tabular-nums; }
+.onb-steps li.now .onb-step-n, .onb-steps li.done .onb-step-n { background: #0f9488; color: #fff; }
+.onb .onb-form, .onb .onb-check { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 12px 32px -12px rgba(16, 24, 40, .12); border-color: var(--rule, #e7e7e4); }
+.onb-preview { border: 1px solid var(--rule, #e7e7e4); border-radius: 10px; padding: 12px 14px; background: #f8fbfa; }
+.onb-preview-h { display: block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2, #666); margin-bottom: 8px; }
+.onb-preview ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.onb-preview li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink, #111); transition: opacity 200ms; }
+.onb-preview li small { margin-left: auto; font-size: 12px; color: #0f766e; }
+.onb-preview li.off { opacity: .55; }
+.onb-preview li.off small { color: var(--ink-2, #666); }
+.onb-preview-dot { width: 7px; height: 7px; border-radius: 50%; background: #0f9488; }
+.onb-preview li.off .onb-preview-dot { background: #c9c9c4; }
