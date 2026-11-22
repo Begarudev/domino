@@ -1,11 +1,12 @@
 // Search Desk persistence: candidates and intro requests, plus read helpers over the openings / candidate / intro runs.
 // Tables are created lazily (CREATE TABLE IF NOT EXISTS) on the shared store; the engine worker calls the same helpers.
 import type { Company, Evidence } from '../../shared/types.ts';
-import type { Candidate, Consent, Departure, FieldProvenance, IntroRequest, Opening, RoleFamily } from '../../shared/desk.ts';
+import type { Candidate, CompanySummary, Consent, Departure, FieldProvenance, IntroRequest, Opening, RoleFamily } from '../../shared/desk.ts';
 import { decode, now } from '../db.ts';
 import type { Store } from '../db.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import type { OpeningsOutputs } from '../engine/openings-steps.ts';
+import { compareCompanies } from './why.ts';
 
 const ready = new WeakSet<Store>();
 export function deskTables(store: Store) {
@@ -128,6 +129,25 @@ export function openingsSnapshot(store: Store, runId = latestOpeningsRunId(store
     runId, openings: detected.openings, departures: resolved?.departures ?? [], companies: resolved?.companies ?? [],
     evidence: store.getEvidence(runId), replay: store.getOutput<OpeningsOutputs['score_openings']>(runId, 'score_openings') ?? null,
   };
+}
+
+// Every company in a scan (resolved companies first, then any named only by an opening), one row per id.
+export function companiesOf(snapshot: OpeningsSnapshot): Company[] {
+  const rows = new Map<string, Company>();
+  for (const company of [...snapshot.companies,
+    ...snapshot.openings.map(opening => ({ id: opening.companyId, name: opening.companyName, aliases: [], evidenceIds: [] }))]) {
+    if (!rows.has(company.id)) rows.set(company.id, company);
+  }
+  return [...rows.values()];
+}
+
+// GET /api/companies rows, in the stated company order (why.ts COMPANY_ORDER_RULE). "Why this target?" ranks against this.
+export function companySummaries(snapshot: OpeningsSnapshot): CompanySummary[] {
+  return companiesOf(snapshot).map(company => ({
+    id: company.id, name: company.name, domain: company.domain ?? null, headcount: company.headcount ?? null,
+    openings: snapshot.openings.filter(opening => opening.companyId === company.id && opening.status === 'open').length,
+    departures90d: snapshot.departures.filter(departure => departure.companyId === company.id).length,
+  })).filter(row => row.departures90d || snapshot.openings.some(opening => opening.companyId === row.id)).sort(compareCompanies);
 }
 
 // ---------- candidate view ----------

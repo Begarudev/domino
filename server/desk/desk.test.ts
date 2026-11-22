@@ -322,6 +322,7 @@ describe('search desk over HTTP (fixture mode)', () => {
     await call(`/api/candidates/${hidden.id}/confirm`, {});
 
     const summary = await call<CompanySummary[]>('/api/companies');
+    assert.equal(summary.find(row => row.id === 'co_orbit')?.headcount, 120, 'the resolved company wins over the opening stub');
     assert.deepEqual(summary.map(row => [row.id, row.openings, row.departures90d]), [['co_orbit', 1, 2], ['co_ghost', 1, 0], ['co_kestrel', 0, 0]]);
     const view = await call<CompanyView>('/api/companies/co_orbit');
     assert.equal(view.runId, 'run_seed_openings');
