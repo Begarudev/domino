@@ -96,6 +96,19 @@ test('an expensive live call that times out is not retried (a timeout can still 
   assert.ok(!events(ctx.runId).some(event => event.type === 'tool.retry'));
 });
 
+test('a live call in flight shows its estimate as reserved, then settles to the billed amount', async t => {
+  let during: number | undefined;
+  const ctx = create('reserved', 'live', {}, 200);
+  t.mock.method(globalThis, 'fetch', async () => {
+    during = store.budget(ctx.runId).reserved?.credits;
+    return new Response(JSON.stringify({ rows: ['ok'] }), { status: 200, headers: { 'X-Credits-Used': '1.5' } });
+  });
+  await ctx.crust(spec, { a: 5, b: 6 }, time, noFixture, empty);
+  assert.equal(during, 2);                                       // the spec's estimate, held while the request runs
+  assert.equal(store.budget(ctx.runId).reserved?.credits, 0);
+  assert.equal(store.budget(ctx.runId).used.credits, 1.5);       // the billed header, not the estimate
+});
+
 test('a cheap live call that times out is still retried', async t => {
   process.env.DOMINO_CRUST_TIMEOUT_MS = '60';
   t.after(() => { delete process.env.DOMINO_CRUST_TIMEOUT_MS; });

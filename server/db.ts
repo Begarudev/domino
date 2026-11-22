@@ -334,6 +334,9 @@ export class Store {
     const run = this.requireRun(runId);
     const costs = this.sql.prepare('SELECT coalesce(sum(credits), 0) AS credits, coalesce(sum(usd), 0) AS modelUsd FROM ledger WHERE run_id = ?')
       .get(runId) as { credits: number; modelUsd: number };
+    // A call in flight holds its estimate (status 'error', no message yet, until finishLedger settles it).
+    const reserved = this.sql.prepare(`SELECT coalesce(sum(credits), 0) AS credits, coalesce(sum(usd), 0) AS modelUsd FROM ledger
+      WHERE run_id = ? AND status = 'error' AND error IS NULL`).get(runId) as { credits: number; modelUsd: number };
     let exhausted: BudgetState['exhausted'] = null;
     if (run.status === 'budget_exhausted') {
       const event = this.sql.prepare("SELECT payload_json FROM events WHERE run_id = ? AND type = 'budget.update' ORDER BY seq DESC LIMIT 1").get(runId);
@@ -343,6 +346,7 @@ export class Store {
       || (run.status === 'awaiting_approval' && run.engine_pid === null) ? Date.parse(run.updated_at) : Date.now();
     return {
       limits: decode(run.limits_json), used: { ...costs, seconds: Math.max(0, endTime - Date.parse(run.created_at)) / 1000 }, exhausted,
+      reserved,
     };
   }
 }

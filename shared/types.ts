@@ -294,8 +294,9 @@ export interface LedgerEntry {
 
 export interface BudgetState {
   limits: RunLimits;
-  used: { credits: number; modelUsd: number; seconds: number };
+  used: { credits: number; modelUsd: number; seconds: number };   // includes `reserved`
   exhausted: null | 'credits' | 'model_usd' | 'seconds';
+  reserved?: { credits: number; modelUsd: number };              // estimates held by calls still in flight
 }
 
 // ---------- run state ----------
