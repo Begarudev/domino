@@ -88,6 +88,8 @@ export interface IntroRequest {
   message: string;                  // the verified intro draft
   status: 'new' | 'awaiting_approval' | 'accepted' | 'declined' | 'delivered';
   runId: string | null;             // intro pipeline run: draft, approval, outbox (send once)
+  approvalId?: string | null;       // POST /api/approvals/:id with this id to approve or reject the send
+  evidenceIds?: string[];           // rows the message cites
   receivedAt: IsoDateTime;
 }
 
