@@ -331,6 +331,7 @@ function IntroConfirm({ p, busy, onSend, onCancel }: { p: IntroPreview; busy: bo
 const STATUS: Record<IntroX['status'], { text: string; cls: string }> = {
   new: { text: 'New', cls: 'live' },
   awaiting_approval: { text: 'Awaiting approval', cls: 'warn' },
+  not_drafted: { text: 'Not drafted: not enough verified evidence', cls: 'warn' },
   accepted: { text: 'Accepted', cls: 'ok' },
   declined: { text: 'Declined', cls: 'bad' },
   delivered: { text: 'Delivered', cls: 'ok' },
