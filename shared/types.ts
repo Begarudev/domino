@@ -149,6 +149,7 @@ export interface GraphEdge {
   observedAt: IsoDate | null;       // latest dated evidence on this edge
   evidenceIds: string[];
   order: number;                    // animation order in the cascade (0 first)
+  alternative?: string | null;      // the competing explanation we could not rule out ("hiring may be cost-cutting")
 }
 
 export interface CascadeGraph { nodes: GraphNode[]; edges: GraphEdge[] }
