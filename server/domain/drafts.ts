@@ -66,16 +66,17 @@ function meetingCopy(seller: SellerProfile) {
   return `Would you have 20 minutes to discuss your plans${slots.length ? ' on ' + slots.join(' or ') : ''}?`;
 }
 
-function offerQuestion(offering: string, drain: boolean) {
-  const offer = offering.replace(/[.!?]+$/, '');
-  return drain && /inference/i.test(offer)
-    ? `Are you planning to run serving in-house, or would ${offer} help?`
-    : `Would ${offer} be useful for the work ahead?`;
+// No vendor pitch line (hub, 14:35): the message stays on the cited facts and asks one plain question about them.
+function offerQuestion(_offering: string, drain: boolean) {
+  return drain
+    ? 'How is your team planning for that over the next quarter?'
+    : 'Is this on your team\'s plan for the coming quarter?';
 }
 
 function subjectLine(target: Target, company: string | undefined, offering: string) {
   const focus = target.mechanisms.includes('TALENT_DRAIN') ? 'Keeping inference capacity covered'
-    : target.mechanisms.includes('DISPLACEMENT') ? 'Inference integration planning' : offering;
+    : target.mechanisms.includes('DISPLACEMENT') ? 'Inference integration planning' : 'Your recent infrastructure changes';
+  void offering;
   return company ? `${focus} at ${company}` : focus;
 }
 

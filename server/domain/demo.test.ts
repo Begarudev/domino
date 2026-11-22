@@ -24,6 +24,7 @@ function fixturePipeline(intent: Intent) {
   const input = { intent };
   const batches: TriggerBatch[] = [
     fetchFixture(endpoints.job_search, input, intent),
+    fetchFixture(endpoints.job_search_displacement, input, intent),
     fetchFixture(endpoints.person_recent_moves, input, intent),
     fetchFixture(endpoints.company_growth, input, intent),
   ];
@@ -113,7 +114,8 @@ test('fixture demo runs the full data and outreach pipeline', () => {
   assert.ok(verified.unverifiable.some(item => /seed/i.test(item.claim)));
   assert.match(verified.body, /Orbital Voice had 140 employees on 15 Nov/);
   assert.match(verified.body, /in the month to 15 Nov/);
-  assert.match(verified.body, /Are you planning to run serving in-house, or would managed GPU inference help\?/);
+  assert.match(verified.body, /How is your team planning for that over the next quarter\?/);
+  assert.doesNotMatch(verified.body, /managed GPU inference|would .* help\?|useful for the work ahead/i, 'no vendor pitch line');
   assert.doesNotMatch(verified.body, /2026-\d{2}-\d{2}/);
   assert.doesNotMatch(verified.body, /Kestrel|departures?|engineers left|Veena|Rian|Neya|seed/i);
   assert.ok(verified.body.trim().split(/\s+/).length <= 110);
