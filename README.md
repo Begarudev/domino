@@ -64,7 +64,8 @@ Optional `.env` in the repo root (gitignored, never committed):
 
 ```
 CRUSTDATA_API_KEY=...      # live Crustdata data; without it DOMINO runs on labelled synthetic fixtures
-ANTHROPIC_API_KEY=...      # model-written drafts (claude-opus-5-5); without it drafts use the evidence template
+OPENAI_API_KEY=...         # model-written parsing and drafts (OPENAI_MODEL, default gpt-5-mini); without it drafts use the evidence template
+ANTHROPIC_API_KEY=...      # optional alternative provider (claude-opus-5-5)
 DOMINO_DATA=auto           # auto | live | cache | fixture
 ```
 
