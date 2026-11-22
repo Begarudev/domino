@@ -25,19 +25,6 @@
   --h-grey-dot: #9CA3AF;   --h-grey-fg: #4B5563;   --h-grey-bg: #F3F4F6;   --h-grey-bd: #DFE2E6;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme=light]) {
-    --h-blue-dot: #60A5FA;   --h-blue-fg: #93BBFD;   --h-blue-bg: #16233B;   --h-blue-bd: #23406B;
-    --h-green-dot: #4ADE80;  --h-green-fg: #86E0A8;  --h-green-bg: #12291D;  --h-green-bd: #1E4D33;
-    --h-amber-dot: #FBBF24;  --h-amber-fg: #F5C970;  --h-amber-bg: #2B2111;  --h-amber-bd: #574118;
-    --h-orange-dot: #FB923C; --h-orange-fg: #FDB37E; --h-orange-bg: #2D1C12; --h-orange-bd: #5A3419;
-    --h-red-dot: #F87171;    --h-red-fg: #FCA5A5;    --h-red-bg: #2E1618;    --h-red-bd: #5C2A2D;
-    --h-pink-dot: #F472B6;   --h-pink-fg: #F9A8D4;   --h-pink-bg: #2C1724;   --h-pink-bd: #592C47;
-    --h-teal-dot: #3DBFA6;   --h-teal-fg: #7FDCC9;   --h-teal-bg: #0F2925;   --h-teal-bd: #1B4D45;
-    --h-sky-dot: #38BDF8;    --h-sky-fg: #8AD3F5;    --h-sky-bg: #0F2633;    --h-sky-bd: #1B4A62;
-    --h-grey-dot: #7C8491;   --h-grey-fg: #B4BAC4;   --h-grey-bg: #1F2329;   --h-grey-bd: #2E333B;
-  }
-}
 :root[data-theme=dark] {
   --h-blue-dot: #60A5FA;   --h-blue-fg: #93BBFD;   --h-blue-bg: #16233B;   --h-blue-bd: #23406B;
   --h-green-dot: #4ADE80;  --h-green-fg: #86E0A8;  --h-green-bg: #12291D;  --h-green-bd: #1E4D33;
