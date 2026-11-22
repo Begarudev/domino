@@ -51,7 +51,8 @@
 .ver-t tr.vg td > * { margin-right: 10px; vertical-align: middle; }
 .ver-t tr.vg b { font-weight: 600; }
 .ver-t tbody tr.vg:hover { background: none; }
-.ver-reason { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.ver-reason { display: block; font-size: 14px; color: var(--ink); margin-top: 2px; }
+.guard-ex { margin-left: auto; font-size: 12px; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 3px; padding: 0 6px; line-height: 18px; }
 .ver-st { font-size: 13px; color: var(--ink-2); }
 .ver-st.s-verified { color: var(--acc); font-weight: 600; }
 .ver-st.s-guard { color: var(--ink); font-weight: 600; }

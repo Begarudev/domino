@@ -31,8 +31,9 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
   if (rules.error && !rules.data) {
     return (
       <div className="empty-act" role="alert">
-        <p>Couldn’t load the rules registry: {rules.error}. Nothing is shown rather than a guess.</p>
-        <button className="btn sm" onClick={() => invalidate('rules')}>Try again</button>
+        <p><b>Couldn’t load Chains.</b> The rules registry didn’t answer, so nothing is shown rather than a guess.</p>
+        <details className="faint"><summary>Details</summary>{rules.error}</details>
+        <button className="btn sm" onClick={() => invalidate('rules')} disabled={rules.loading}>{rules.loading ? 'Retrying…' : 'Try again'}</button>
       </div>
     );
   }
@@ -44,6 +45,16 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
   return (
     <div className="reg" ref={enter}>
       {dq.error && !dossier && <p className="src-note reg-wide">No company file for {desk.company.name} yet ({dq.error}), so the per-company rows are left out.</p>}
+      {dossier && dossier.rules.length > 0 && (
+        <div className="reg-wide verdict" data-testid="chains-verdict">
+          <b>{desk.company.name}</b>
+          {dossier.rules.map((r) => {
+            const c = ruleStateChip(r.state);
+            const w = r.id === 'R1' ? watchCount(r) : null;
+            return <span key={r.id} className="verdict-i"><span className="rid">{r.id}</span><span className={c.cls}>{w && r.state === 'not_met' ? `${w.have} of ${w.need}` : c.label}</span></span>;
+          })}
+        </div>
+      )}
       {/* explicit columns: the cross-company drain and its watchlist first, then the guards that hold and O1 */}
       <div className="reg-col">
         {r1 && <RuleCardView rule={r1} desk={desk} mine={company('R1')} example={<R1Chain desk={desk} rule={company('R1')} />} />}
@@ -69,7 +80,7 @@ function RuleCardView({ rule, desk, mine, example }: { rule: RuleCard; desk: Com
     <article className="rule-card" data-testid={`rule-${rule.id}`}>
       <div className="id">
         <span className="rid">{rule.id}</span>
-        <span className="rc-lock" title={lock.rest || undefined}>{lock.short}</span>
+        <HeadCount rule={rule} />
       </div>
       <h3>{rule.name}</h3>
       <p className="def">{rule.statement}</p>
@@ -92,9 +103,23 @@ function RuleCardView({ rule, desk, mine, example }: { rule: RuleCard; desk: Com
         </div>
       )}
       <div className="meta">
+        <span className="rc-lock">{lock.short}</span>
         <span>{lock.rest || 'Pre-registered before scoring'}</span>
       </div>
     </article>
+  );
+}
+
+/** Header: today's decisions that fired (non-zero), else the first count ("0 fired today"). Config and watchlist sizes aren't fires. */
+function HeadCount({ rule }: { rule: RuleCard }) {
+  const fires = rule.counts.filter((c) => !/configured|watchlist/i.test(c.label));
+  const hits = fires.filter((c) => c.value > 0);
+  const show = hits.length ? hits : fires.slice(0, 1);
+  if (!show.length) return null;
+  return (
+    <span className="rc-head">
+      {show.map((c, i) => <span key={c.label}>{i > 0 && ' + '}<b data-num>{fmtInt(c.value)}</b> {c.label}</span>)} today
+    </span>
   );
 }
 
@@ -185,7 +210,7 @@ function WatchCard({ desk, dossier, loading }: { desk: CompanyDesk; dossier: Com
         <span className="watch-text">
           {plural(w.have, 'conclusive departure')}
           {conclusive.length > 0 && <> (to {conclusive.map((d) => d.toCompanyName).join(', to ')})</>}
-          {months && <>, {months}</>}. {next === 1 ? `A ${ordinal(w.need)} inside the 90-day window fires R1.` : `${next} more inside 90 days fire R1.`}
+          {months && <>, {months}</>}. {next === 1 ? `A ${ordinal(w.need)} inside the last 30 days fires R1, if no guard matches.` : `${next} more inside 90 days fire R1, if no guard matches.`}
         </span>
       </div>
       {w.clause.detail && <p className="rc-detail">{w.clause.detail}</p>}

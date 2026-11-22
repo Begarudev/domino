@@ -11,6 +11,9 @@
   .reg-rest > * { margin-bottom: 0; }
 }
 .reg-wide { grid-column: 1 / -1; margin: 0; }
+.verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 10px 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; font-size: 14px; }
+.verdict b { font-weight: 600; font-size: 15px; }
+.verdict-i { display: inline-flex; align-items: center; gap: 8px; }
 .rule-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .rule-card.ghost { min-height: 260px; border-color: var(--rule-2); }
 .rule-card.watch { border-color: var(--acc-line); }
@@ -32,6 +35,9 @@
 .rc-today, .rc-mine { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: baseline; padding-top: 10px; border-top: 1px solid var(--rule-2); }
 .rc-counts { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 13px; }
 .rc-counts b { color: var(--ink); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; margin-right: 2px; }
+.rc-head { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.rc-head b { font-size: 16px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rule-card .meta .rc-lock { color: var(--ink-2); }
 .rc-run { color: var(--ink-3); font-size: 12px; }
 .rc-mine-v { font-size: 13px; line-height: 20px; color: var(--ink-2); }
 .rc-mine-v .st { margin-right: 6px; vertical-align: 1px; }

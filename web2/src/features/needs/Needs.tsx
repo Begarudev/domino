@@ -48,7 +48,7 @@ export function Needs({ desk }: { desk: CompanyDesk }) {
 
       <section className="panel ver-claims">
         <header>
-          <h2>Every claim behind {desk.company.name}’s decisions</h2>
+          <h2>{filter ? `${CLAIM_LABEL[filter]} · ${plural(all.filter((r) => r.state === filter).length, 'claim')} behind ${desk.company.name}’s decisions` : `Every claim behind ${desk.company.name}’s decisions`}</h2>
           {filter ? <button className="btn sm ghost" onClick={() => setFilter(null)}>Show all {all.length}</button>
             : <span className="faint">{plural(groups.length, 'decision')} · click a row for its source</span>}
         </header>
@@ -127,6 +127,7 @@ function GuardCard({ held }: { held: ReturnType<typeof useHeldExample> }) {
         <div className="guard-tags">
           <span className="st held">Held: {label}</span>
           <span className="faint">{o.companyName} · O1{n ? ` group of ${n}` : ''} · {o.roleTitle}</span>
+          {held.example && <span className="guard-ex">Guard example from today’s scan</span>}
         </div>
         <h2>{o.companyName}’s departures are not an opening</h2>
       </div>

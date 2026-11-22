@@ -46,6 +46,7 @@ export function useHeldExample(desk: CompanyDesk) {
   const opening = own ?? other.data?.openings.find((o) => o.status === 'held' && guardClause(o)) ?? null;
   return {
     opening,
+    example: !own, // another company's hold, shown as today's guard example
     evidence: source?.evidence ?? [],
     heldRows: rows,
     loading: !own && (funnel.loading || other.loading) && !opening,
