@@ -32,10 +32,16 @@ function Body({ gate, live }: { gate: GateView; live: boolean }) {
   if (!checks.length) return <p className="mc-gate__body"><Cited text={gate.draft.body} gate={gate} /></p>;
   return (
     <p className={`mc-gate__body${live ? ' is-live' : ''}`}>
-      {checks.map((c, i) => (
+      {checks.map((c, i) => c.status === 'removed' ? null : (
         <span key={i} className={`mc-sent mc-sent--${c.status}`} style={{ ['--i' as string]: i } as CSSProperties}>
-          <Cited text={c.sentence} gate={gate} />
-          {c.status === 'removed' && <em className="mc-sent__why">Removed by the verifier: {c.note ?? 'no evidence row supports it'}</em>}{' '}
+          <Cited text={c.sentence} gate={gate} />{' '}
+        </span>
+      ))}
+      {checks.map((c, i) => c.status !== 'removed' ? null : (
+        <span key={`r${i}`} className="mc-removed" style={{ ['--i' as string]: i } as CSSProperties}>
+          <b>Removed by the verifier</b>
+          <s>{c.sentence}</s>
+          <em>{c.note ?? 'No evidence row supports it.'}</em>
         </span>
       ))}
     </p>
@@ -100,12 +106,13 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
         <div className="mc-gate__strip">
           <span className="mc-env" aria-hidden="true"><i /><b>1</b></span>
           <span className="mc-gate__striptext">
-            <strong>One message sent to the team test inbox</strong>
+            <strong>1 message in the team test inbox</strong>
             <span>{gate.decider ? `Draft for ${gate.decider.name} · ${gate.decider.company} · ` : ''}{clockTime(gate.sent.action.executedAt)} · key <code>{shortKey(gate.sent.action.idempotencyKey)}</code></span>
           </span>
           {onApprove && gate.approval && <button type="button" className="mc-again" onClick={() => onApprove(gate.approval!.id)}>Try approving twice</button>}
-          <span className={`mc-gate__dup${dupFlash ? ' is-flash' : ''}`}>
-            {gate.duplicates.length ? `Already sent, skipped${gate.duplicates.length > 1 ? ` ×${gate.duplicates.length}` : ''}` : 'One key, one send'}
+          <span className={`mc-gate__dup${dupFlash ? ' is-flash' : ''}${gate.duplicates.length ? ' is-hit' : ''}`}>
+            <strong>{gate.duplicates.length ? `Second approval skipped${gate.duplicates.length > 1 ? ` ×${gate.duplicates.length}` : ''}` : 'One key, one send'}</strong>
+            <span>{gate.duplicates.length ? 'Same key, already sent' : 'A repeat approval is refused'}</span>
           </span>
         </div>
       ) : (<>
@@ -140,8 +147,8 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
                 onKeyUp={cancel}
               >
                 <i className="mc-hold__fill" />
-                <span className="mc-hold__label">{!ready ? 'Assembling draft…' : holding ? 'Keep holding' : 'Hold to approve'}</span>
-                <span className="mc-hold__sub">{ready ? 'Sends once to the team test inbox' : 'Checking every sentence against its source'}</span>
+                <span className="mc-hold__label">{!ready ? 'Assembling draft…' : holding ? 'Keep holding' : 'Hold to approve and send'}</span>
+                <span className="mc-hold__sub">{ready ? 'One send, to the team test inbox' : 'Checking every sentence against its source'}</span>
               </button>
             ) : (
               <div className="mc-gate__await"><strong>Waiting for a person</strong><span>Approve it in the Drafts panel</span></div>

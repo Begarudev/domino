@@ -5,6 +5,9 @@ import type { Selection } from '../contract.ts';
 import type { ChainRow, ChainTile } from './model.ts';
 import { MECHANISM_LABEL } from './model.ts';
 
+// Read left to right: "Kestrel Labs hired from Orbital Voice, so it may need ...".
+const LINK_VERB: Partial<Record<string, string>> = { TALENT_DRAIN: 'hired from', DISPLACEMENT: 'was used by', CONTAGION: 'is a peer of' };
+
 // Domino pip layouts on a 3x3 grid (cells 0..8), 0 to 6 pips.
 const PIPS: number[][] = [[], [4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]];
 
@@ -154,9 +157,9 @@ export function ChainStage({ rows, settledSeq, selection, onSelect, hiringFilter
         return (
           <div key={row.edge.id} className={`mc-row${animate ? ' is-live' : ' is-settled'}${i === 0 ? ' is-lead' : ''}${row.unverifiable ? ' is-broken' : ''}`}>
             <Tile tile={row.from} role="from" delay={base} selected={isSel('node', row.from.nodeId)} dimmed={hiringFilterView && !row.from.netNew} onSelect={onSelect} />
-            <Link row={row} delay={base + step} selected={isSel('edge', row.edge.id)} onSelect={onSelect} label={MECHANISM_LABEL[row.edge.mechanism]} />
+            <Link row={row} delay={base + step} selected={isSel('edge', row.edge.id)} onSelect={onSelect} label={LINK_VERB[row.edge.mechanism] ?? MECHANISM_LABEL[row.edge.mechanism]} />
             <Tile tile={row.to} role="to" delay={base + step * 2} selected={isSel('node', row.to.nodeId)} dimmed={hiringFilterView && !row.to.netNew} onSelect={onSelect} />
-            <Link row={row} delay={base + step * 3} selected={false} onSelect={onSelect} label="so it needs" />
+            <Link row={row} delay={base + step * 3} selected={false} onSelect={onSelect} label="so it may need" />
             <Need row={row} delay={base + step * 4} selected={isSel('target', row.edge.to)} onSelect={onSelect} />
           </div>
         );

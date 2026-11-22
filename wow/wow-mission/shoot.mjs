@@ -103,7 +103,7 @@ if (!only || only.has('cap')) {
   const tube = await p.locator('.mc-gauge__tube').boundingBox();
   await p.mouse.move(cap.x + 8, cap.y + 1);
   await p.mouse.down();
-  await p.mouse.move(cap.x + 8, tube.y + tube.height * 0.62, { steps: 12 });
+  await p.mouse.move(cap.x + 8, tube.y + tube.height * 0.86, { steps: 12 });
   await p.mouse.up();
   await wait(300);
   await shot(p, '16-cap-dragged');

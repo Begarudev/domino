@@ -54,13 +54,16 @@ export function Desk({ desk, settledSeq, onSelect }: { desk: DeskView; settledSe
       <section className="mc-desk__read" aria-label="Sources read">
         <header className="mc-desk__head">
           <span>Reading</span>
-          <span className="mc-desk__fig"><b>{desk.cards.length}</b> sources · <b>{desk.dated}</b> dated</span>
+          <span className="mc-desk__fig">
+            {desk.pending && cards.length > 0 && <span className="mc-desk__calling">Calling {desk.pending.endpoint}…</span>}
+            <b>{desk.cards.length}</b> sources · <b>{desk.dated}</b> dated
+          </span>
         </header>
         <div className="mc-desk__cards">
-          {desk.pending && (
+          {desk.pending && cards.length === 0 && (
             <div key={`p${desk.pending.seq}`} className="mc-src mc-src--pending">
               <span className="mc-src__top"><span className="mc-src__kind">Calling</span><span className="mc-src__ep">{desk.pending.endpoint}</span>{desk.pending.attempt > 1 && <span className="mc-src__mode">try {desk.pending.attempt}</span>}</span>
-              <span className="mc-src__claim">Waiting for the response…</span>
+              <span className="mc-src__claim">Waiting for the first response…</span>
             </div>
           )}
           {cards.map((c, i) => <Card key={c.id} card={c} live={c.seq > settledSeq && i === 0} onSelect={onSelect} />)}

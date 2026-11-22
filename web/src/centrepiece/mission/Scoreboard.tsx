@@ -79,7 +79,7 @@ export function Scoreboard({ view, animate, nameOf, onSelect, fixture, reducedMo
         const onlyOurs = view.outcomes.filter((o) => inLane(o, 'domino') && o.hit && !filterIds.has(o.companyId)).length;
         return (
           <div className="mc-score__verdict">
-            <strong>{onlyOurs} account{onlyOurs === 1 ? '' : 's'} the hiring filter missed came true</strong>
+            <strong>{onlyOurs} confirmed account{onlyOurs === 1 ? '' : 's'} the hiring filter missed</strong>
             <span>{final.domino.hits} of {final.domino.predicted} DOMINO predictions confirmed{final.domino.medianLeadDays != null ? ` · median ${final.domino.medianLeadDays} days ahead of the post` : ''} · hiring filter {final.baselineFirstOrder.hits} of {final.baselineFirstOrder.predicted}</span>
           </div>
         );
@@ -129,7 +129,7 @@ export function Scoreboard({ view, animate, nameOf, onSelect, fixture, reducedMo
                       onClick={() => onSelect(o.evidenceIds[0] ? { kind: 'evidence', id: o.evidenceIds[0] } : { kind: 'node', id: o.companyId })}
                     >
                       <span className="mc-ptile__face">{nameOf(o.companyId)}</span>
-                      <span className="mc-ptile__what">{fell ? o.outcome : miss ? `No dated sign by ${day(view.horizonEnd)}` : 'Predicted'}</span>
+                      <span className="mc-ptile__what">{fell ? <><b>{day(o.outcomeDate)}</b> {o.outcome.replace(/\s*\d{1,2} [A-Z][a-z]{2}$/, '')}</> : miss ? `No dated sign by ${day(view.horizonEnd)}` : 'Predicted'}</span>
                     </button>
                   );
                 })}
