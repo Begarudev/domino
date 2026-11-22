@@ -22,7 +22,10 @@ const KIND_LABEL: Record<Kind, string> = { counted: 'Counted by O1', held: 'Held
 function judge(desk: CompanyDesk, dossier: CompanyDossier | null): { moves: Move[]; band: string | null } {
   const headcount = (desk.company as { headcount?: number | null }).headcount ?? null;
   const outOfBand = headcount != null && (headcount < MIN_STAFF || headcount > MAX_STAFF);
-  const band = outOfBand ? `${headcount!.toLocaleString('en-US')} staff is outside O1's 20–5,000 band` : null;
+  // GET /dossier rules[O1]: state 'not_evaluated' means O1 never ran for this company; its summary says why, verbatim.
+  const o1 = dossier?.rules?.find((r) => r.id === 'O1');
+  const serverBand = o1?.state === 'not_evaluated' && o1.summary.startsWith('Not counted') ? o1.summary.replace(/^Not counted by O1:\s*/, '').replace(/\s*\(.*\)$/, '') : null;
+  const band = serverBand ?? (outOfBand ? `${headcount!.toLocaleString('en-US')} staff is outside O1's 20–5,000 band` : null);
   const evAll = [...desk.evidence, ...(dossier?.evidence ?? [])];
   const byFamily = new Map<string, Opening>();
   for (const o of desk.openings) if (o.rule === 'O1' && o.roleFamily) byFamily.set(o.roleFamily, o);
