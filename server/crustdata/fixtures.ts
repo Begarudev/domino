@@ -1,6 +1,7 @@
 import { containsPhrase, isoDay, normalizeDomain, normalizeName, shiftDays } from '../domain/facts.ts';
 import type { Filter } from './common.ts';
 import { companyRow, firms, jobs, profiles, TODAY } from './fixtures/world.ts';
+import { acquihireSearchFixture, newsFetchFixture, newsSearchFixture } from './fixtures/news.ts';
 
 type Request = { filters?: Filter; limit?: number; cursor?: string; crustdata_company_ids?: number[]; domains?: string[]; names?: string[] };
 
@@ -62,6 +63,22 @@ export function fixtureFor(name: string, body: unknown): unknown {
   const leaves = filterLeaves(request.filters);
   const outcomePeople = leaves.some(leaf => leaf.field.startsWith('experience.employment_details.'));
   switch (name) {
+    case 'news_acquihire_search':
+    case 'news_acquihire_resolve':
+      return acquihireSearchFixture(body as Parameters<typeof acquihireSearchFixture>[0]);
+    case 'news_search':
+    case '/web/search/live': {
+      // Fixture transport dispatches by path; distinguish specs sharing Web Search by their request.
+      const search = body as { query?: string; sources?: string[] };
+      if (search.sources?.includes('web') || search.query?.includes('(acquire OR acquires OR acquisition')) {
+        return acquihireSearchFixture(search);
+      }
+      return newsSearchFixture(body as Parameters<typeof newsSearchFixture>[0]);
+    }
+    case 'news_acquihire_fetch':
+    case 'news_fetch':
+    case '/web/enrich/live':
+      return newsFetchFixture(body as Parameters<typeof newsFetchFixture>[0]);
     case 'company_posts':
     case '/social_post/search':
       return { posts: [], total_count: 0, next_cursor: null };

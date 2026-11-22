@@ -10,6 +10,8 @@ export {
 } from '../domain/index.ts';
 export {
   jobSearch, personSearchRecentMoves, readMovesPages, companySearchGrowth, companyEnrich, personSearchDeciders, fixtureFor,
+  activeNewsEvents, newsSearch, newsFetch, newsFetchUrls,
+  acquihireCheck, newsAcquihireSearch, newsAcquihireResolve, newsAcquihireFetch,
 } from '../crustdata/index.ts';
 
 // The engine's replay step reads outcome legs as trigger batches keyed by canonical company id;

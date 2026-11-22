@@ -33,6 +33,16 @@ export interface AcquisitionEvent {
   fixtureOnly?: boolean;
 }
 
+// A search headline is a lead until a publisher page supplies its publication date.
+export interface AcquisitionLead {
+  acquisitionLead: true;
+  loser: string;
+  hirer: string;
+  title: string;
+  url: string;
+  evidenceIds: string[];
+}
+
 export interface ResolvedCompany extends Company {
   categories?: string[];
   acquisitions?: AcquisitionEvent[];
@@ -71,6 +81,9 @@ export interface PersonMention {
 // Before resolve_entities, Trigger.companyId / relatedCompanyId / personId hold mention KEYS;
 // the engine remaps them with the idMap returned by resolveEntities.
 export interface TriggerBatch {
+  readSummary?: string;
+  acquisitionLeads?: AcquisitionLead[];
+  acquisitions?: AcquisitionEvent[];
   mentions: CompanyMention[];
   people: PersonMention[];
   triggers: Trigger[];
@@ -99,7 +112,7 @@ export interface SellerProfile {
   meeting: { title: string; durationMin: number; slots: IsoDateTime[] };
   acquisitionEvents?: AcquisitionEvent[];
   companyFamilies?: { parent: string; members: string[] }[];
-  displacementEvents: { provider: string; product: string; kind: 'acquired' | 'shutdown' | 'repriced'; date: IsoDate; sourceUrl: string; note: string; fixtureOnly?: boolean }[];
+  displacementEvents: { provider: string; product: string; kind: 'acquired' | 'shutdown' | 'shut_down' | 'repriced'; date: IsoDate; sourceUrl: string; note: string; fixtureOnly?: boolean }[];
 }
 
 // Replay outcome fact: a dated sign, AFTER asOf, that a company showed the need.

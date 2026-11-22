@@ -49,6 +49,11 @@ function querySummary(endpoint: string, path: string, request: unknown, input: u
   const market = query.intent?.geography ? ` in ${query.intent.geography}` : '';
   const range = () => requestRange(request, time);
   switch (endpoint) {
+    case 'news_search': return 'Reading news — Crustdata Web Search (news)';
+    case 'news_fetch': return 'Reading articles — Crustdata Web Fetch (publication dates)';
+    case 'news_acquihire_search': return 'Checking acqui-hire guard — Crustdata News Search';
+    case 'news_acquihire_resolve': return 'Finding publisher URL — Crustdata Web Search';
+    case 'news_acquihire_fetch': return 'Verifying acqui-hire report — Crustdata Web Fetch';
     case 'job_search': return `${terms} job posts${market}, ${range()}`;
     case 'person_recent_moves': return `${terms} hiring and employer moves${market}, ${range()}`;
     case 'company_growth': return `Company growth and funding${market}, ${range()}`;
@@ -90,7 +95,14 @@ export function describeRead(
   const matched = (ids: string[]) => ids.some(id => matchedIds.has(id));
   const items: SourceItem[] = [];
 
-  if (endpoint === 'person_deciders') {
+  if (endpoint.startsWith('news_')) {
+    for (const row of batch.evidence) {
+      const company = batch.mentions.find(mention => mention.evidenceIds.includes(row.id));
+      items.push({ kind: 'news', title: typeof row.value === 'string' ? row.value : row.claim,
+        company: company?.name ?? null, url: publicUrl(row.source.url), ...timing(row),
+        signal: row.observedAt ? 'Publication date verified' : 'Undated search lead', matched: matched([row.id]) });
+    }
+  } else if (endpoint === 'person_deciders') {
     const company = (input as { company?: { name: string } }).company?.name ?? null;
     for (const person of batch.people) {
       const row = rowsFor(person.evidenceIds).find(row => /\.title$|decider/.test(row.source.field ?? ''));
@@ -162,7 +174,8 @@ export function describeRead(
 
   return {
     type: 'source.read', callId: observation.callId, step: eventStep(step, endpoint), endpoint, mode: observation.mode,
-    query: querySummary(endpoint, path, observation.request, input, time), totalAvailable: observation.totalAvailable,
+    query: querySummary(endpoint, path, observation.request, input, time) + (batch.readSummary ? ` — ${batch.readSummary}` : ''),
+    totalAvailable: observation.totalAvailable,
     items: items.slice(0, 12),
   };
 }
