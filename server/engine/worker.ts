@@ -1,6 +1,7 @@
 import { STEP_ORDER } from '../../shared/types.ts';
 import type { StepName } from '../../shared/types.ts';
 import { now, stepLabels, Store } from '../db.ts';
+import { redactSecrets } from '../env.ts';
 import { BudgetError, exhaust, ToolContext } from '../runtime/tool.ts';
 import { steps } from './steps.ts';
 import type { Checkpoints, Outputs } from './steps.ts';
@@ -64,9 +65,12 @@ async function runWorker(runId: string) {
       store.recordEvent(runId, { type: 'run.status', status: pending ? 'awaiting_approval' : 'completed' });
     });
   } catch (error) {
+    const budgetError = error instanceof BudgetError;
+    if (!budgetError) {
+      console.error(redactSecrets(`run ${runId} failed in ${current ?? 'the engine outside a step'}: ${(error as Error)?.stack ?? String(error)}`));
+    }
     store.transaction(() => {
       if (store.requireRun(runId).engine_pid !== process.pid) return;
-      const budgetError = error instanceof BudgetError;
       const message = budgetError ? error.message : 'The step could not finish';
       if (current) store.recordEvent(runId, { type: 'step.failed', step: current, error: message });
       if (budgetError) {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { MAX_REQUEST_CHARS } from '../../../shared/types.ts';
 import type { ChaosConfig, RunLimits, RunSnapshot, RunStatus } from '../../../shared/types.ts';
 import type { StartRequest } from '../api.ts';
 import { fmtClock, fmtDate } from '../dates.ts';
@@ -40,7 +41,7 @@ export function RequestBar(props: { initial: string; busy: boolean; onRun: (req:
       <div className="request-field">
         <label htmlFor="req" className="sr-only">Request</label>
         <textarea
-          id="req" rows={2} value={text} spellCheck={false}
+          id="req" rows={2} value={text} spellCheck={false} maxLength={MAX_REQUEST_CHARS}
           placeholder="What do you sell, and who should DOMINO find meetings with?"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run(); }}

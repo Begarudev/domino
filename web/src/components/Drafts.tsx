@@ -72,8 +72,8 @@ function Decider({ t }: { t: Target }) {
       {t.testedClaim && <p className="tested">Replay tests for <b>{t.testedClaim}</b></p>}
       {t.path && (
         <p className={`path path-${t.path.strength}`}>
-          <span className="path-strength">{t.path.strength === 'warm' ? 'Warm path' : t.path.strength === 'lukewarm' ? 'Lukewarm path' : 'Cold'}</span>
-          {t.path.hops.map((h) => h.label).join(' to ')}
+          <span className="path-strength">{{ warm: 'Warm path', lukewarm: 'Lukewarm path', cold: 'Cold' }[t.path.strength]}</span>
+          {t.path.hops.map((h) => h.label).join(' → ')}
         </p>
       )}
     </div>

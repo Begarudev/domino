@@ -1,5 +1,4 @@
 // The engine's single doorway to the data layer: real Crustdata endpoint modules + domain logic.
-// (server/engine/standin.ts is the old development stand-in and is no longer imported.)
 import type { Company, Intent, Trigger } from '../../shared/types.ts';
 import { outcomeCheck, outcomeHireCheck } from '../crustdata/index.ts';
 import type { EndpointSpec } from '../crustdata/spec.ts';

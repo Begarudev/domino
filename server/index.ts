@@ -8,6 +8,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { MAX_REQUEST_CHARS } from '../shared/types.ts';
 import type { RunEvent, RunLimits, RunStatus } from '../shared/types.ts';
 import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts';
 import { decode, Store } from './db.ts';
@@ -31,7 +32,7 @@ const chaosSchema = z.object({
   crashAfterDeliver: z.boolean().optional(),
 });
 const runSchema = z.object({
-  request: z.string().trim().min(1).max(12_000),
+  request: z.string().trim().min(1).max(MAX_REQUEST_CHARS),
   limits: limitsSchema.optional(), chaos: chaosSchema.optional(),
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
 });
@@ -106,8 +107,9 @@ export function createApp(store: Store) {
         if (resume ? !['crashed', 'budget_exhausted'].includes(run.status) : run.status !== 'queued') return;
         child = fork(worker, [], {
           cwd: root, env: { ...process.env, RUN_ID: id },
-          stdio: ['ignore', 'ignore', 'ignore', 'ipc'], execArgv: [],
+          stdio: ['ignore', 'ignore', 'pipe', 'ipc'], execArgv: [],
         });
+        child.stderr?.on('data', chunk => process.stderr.write(redactSecrets(String(chunk))));
         child.on('error', () => {
           if (children.get(id) === child) children.delete(id);
           recordCrash(id, pid ?? null, null);
@@ -134,6 +136,7 @@ export function createApp(store: Store) {
     if (error instanceof ApprovalError) return c.json({ error: error.message }, 409);
     if (error instanceof BudgetError) return c.json({ error: error.message }, 409);
     if (error instanceof ToolError) return c.json({ error: error.message }, 502);
+    console.error(redactSecrets(error.stack ?? String(error)));
     return c.json({ error: 'The request could not be completed' }, 500);
   });
   app.use('/api/*', async (c, next) => {
