@@ -132,31 +132,17 @@ tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
 .rd-showing, .rd-seg button span { font-variant-numeric: tabular-nums; }
 .rd-seg { border-radius: var(--r); }
 .rd-seg button { padding: 3px 10px; }
-.rd-pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r);
-  font-size: var(--fs-cap); font-weight: var(--w-med); color: var(--ink); background: var(--surface); white-space: nowrap;
-}
-.rd-pill i { width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--ink-3); flex: none; }
-.rd-pill-kept i, .rd-pill-provisional i { background: var(--acc); }
-.rd-pill-provisional { border-style: dashed; border-color: var(--acc); }
-.rd-pill-discarded { color: var(--ink-2); }
-.rd-pill-discarded i { background: transparent; border: 1.5px solid var(--ink-3); width: 7px; height: 7px; box-sizing: border-box; }
-.rd-pill-held, .rd-pill-inconclusive { color: var(--ink-2); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
 .rd-sub td { padding-top: 6px; padding-bottom: 6px; }
-.rd-sub .rd-pill { height: 20px; }
 @media (min-width: 1800px) {
   .rd-table, .rd-date { font-size: var(--fs-body); }
 }
 
-/* Attio SPEC + council r1: hairline column dividers, filled tinted chips with no stroke (source type neutral, kept a
-   teal tint for meaning), 38-40px rows (a 20px pill inside 9px cell padding), and the domain in sans like every cell. */
+/* Attio SPEC + council r1: hairline column dividers, 38-40px rows (a 20px shared .ctag inside 9px cell padding), the
+   domain in sans like every cell. Chip colours come from styles/colors.css (decision tone, source type). */
 .rd-table th + th, .rd-table td + td { border-left: 1px solid var(--rule-2); }
 .rd-table td { padding-top: 9px; padding-bottom: 9px; }
+.rd-table .rd-sub td { padding-top: 6px; padding-bottom: 6px; }
+.rd-table .ctag { height: 20px; }
+.rd-table .c-src { width: 140px; }
 .rd-dom { font-family: var(--sans); font-size: var(--fs-ui); letter-spacing: 0; }
-.rd-chip, .rd-pill { height: 20px; padding: 0 7px; border: 0; border-radius: var(--r-sm); font-size: var(--fs-cap); font-weight: var(--w-med); }
-.rd-chip { display: inline-flex; align-items: center; background: var(--hover); color: var(--ink-2); white-space: nowrap; }
-.rd-pill { background: var(--hover); }
-.rd-pill-kept { background: color-mix(in srgb, var(--acc) 14%, transparent); }
-.rd-pill-provisional { background: transparent; border: 1px dashed var(--acc); }
-.rd-pill-held, .rd-pill-inconclusive { border: 1px solid var(--rule); }
 

@@ -187,20 +187,14 @@
 .rec-hire td:nth-child(3) { font-variant-numeric: tabular-nums; }
 .rec-fit li + li { margin-top: 4px; }
 .rec-foot { padding: 10px var(--cell-x-edge) 12px; }
-.rec-pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r);
-  font-size: var(--fs-cap); font-weight: var(--w-med); color: var(--ink); background: var(--surface); white-space: nowrap;
-}
-.rec-pill i { width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--acc); }
 @media (min-width: 1800px) {
   .rec table.t td { font-size: var(--fs-lead); padding-top: 10px; padding-bottom: 10px; }
   .rec-role { font-size: var(--fs-page); line-height: var(--lh-page); }
-  .rec-pill { font-size: var(--fs-ui); height: 24px; }
   .rec .panel > header > span:not(.st) { font-size: var(--fs-body); }
 }
 
 /* Attio SPEC + council r1: hairline column dividers, a filled teal-tint pill with no stroke, 38-40px rows. */
 .rec-dep table.t th + th, .rec-dep table.t td + td, .rec-hire th + th, .rec-hire td + td { border-left: 1px solid var(--rule-2); }
 .rec-dep table.t td { padding-top: 9px; padding-bottom: 9px; }
-.rec-pill { height: 20px; padding: 0 7px; border: 0; border-radius: var(--r-sm); background: color-mix(in srgb, var(--acc) 14%, transparent); }
+.rec-dep .ctag { height: 20px; }
 
