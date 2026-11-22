@@ -82,3 +82,6 @@
 .by-st .st { white-space: nowrap; }
 .by-co .mono { overflow: hidden; text-overflow: ellipsis; }
 .by-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+/* final: long status chips and the LLM label wrap instead of clipping */
+[data-testid^="buyer-row-"] .st { white-space: normal; line-height: 18px; }
+[data-testid="buyer-draft"] .llm { white-space: normal; border-radius: 6px; }
