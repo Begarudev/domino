@@ -2,7 +2,7 @@
 // the plan is snapshot.steps (server labels), the cap is snapshot.budget.limits, the window is snapshot.intent.
 import { useEffect, useRef, useState } from 'react';
 import type { RunSnapshot, StepState } from '../../../../shared/types.ts';
-import { STEP_ORDER } from '../../../../shared/types.ts';
+import { MAX_REQUEST_CHARS, STEP_ORDER } from '../../../../shared/types.ts';
 import type { StartRequest } from '../../api.ts';
 import { addDays, fmtDate } from '../../dates.ts';
 import './landing.css';
@@ -118,7 +118,7 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
         <form className="ld-card" onSubmit={(e) => { e.preventDefault(); start(); }}>
           <label htmlFor="ld-req" className="sr-only">What do you sell, and who should DOMINO find?</label>
           <textarea
-            id="ld-req" ref={box} rows={3} value={text} spellCheck={false} readOnly={submitted}
+            id="ld-req" ref={box} rows={3} value={text} spellCheck={false} maxLength={MAX_REQUEST_CHARS} readOnly={submitted}
             placeholder="What do you sell, and who should DOMINO find meetings with?"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); start(); } }}
