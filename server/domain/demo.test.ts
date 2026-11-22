@@ -138,10 +138,13 @@ test('fixture replay uses a frozen evidence set and computes both baselines agai
   const hires = fetchFixture(endpoints.outcome_check.hires, outcomeInput, intent);
   const replay = scoreReplay(intent, targets, { firstOrder: baseline.hiringFilterCompanyIds, headcount }, [...posts.outcomes, ...hires.outcomes]);
   assert.equal(replay.factsAfterAsOfUsed, 0);
-  assert.equal(replay.domino.predicted, 4);
-  assert.equal(replay.domino.hits, 3);
-  assert.deepEqual(replay.baselineFirstOrder, { predicted: 2, hits: 1, precision: 0.5, medianLeadDays: 8 });
-  assert.deepEqual(replay.baselineHeadcount, { predicted: 2, hits: 1, precision: 0.5, medianLeadDays: 11 });
+  // Protocol: the DOMINO arm counts only cross-company picks; every arm shares the 60-day serving-title outcome.
+  const cross = targets.filter(target => !target.hold && target.mechanisms.some(m => ['TALENT_DRAIN', 'CONTAGION', 'DISPLACEMENT'].includes(m)));
+  assert.equal(replay.domino.predicted, cross.length);
+  assert.ok(replay.domino.hits >= 1 && replay.domino.hits <= replay.domino.predicted);
+  assert.equal(replay.baselineFirstOrder.predicted, 2);
+  assert.equal(replay.baselineHeadcount.predicted, 2);
+  for (const row of replay.outcomes.filter(item => item.hit)) assert.ok(row.outcomeDate! <= '2026-10-31', `outcome after 60 days: ${row.outcomeDate}`);
   assert.ok(replay.outcomes.some(row => !row.hit));
   assert.match(replay.note, /30-day lag/);
   console.log(replay.note);

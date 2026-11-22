@@ -29,12 +29,15 @@ export function scoreReplay(intent: Intent, targets: Target[], baseline: { first
 
   const late = targets.filter(target => target.whyNowDate && target.whyNowDate > intent.asOf);
   const actionable = targets.filter(target => !target.hold && !late.includes(target));
-  const dominoIds = new Set(actionable.map(target => target.companyId));
-  const drainIds = new Set(actionable.filter(target => target.mechanisms.includes('TALENT_DRAIN')).map(target => target.companyId));
+  // Pre-registered protocol (README "Replay protocol"): the DOMINO arm is the accounts flagged by a CROSS-COMPANY rule;
+  // first-order DIRECT picks belong to the hiring-filter baseline. Every arm uses the same outcome: a dated
+  // serving/infra/ML-platform job post or hire within 60 days of the as-of date (capped at today).
+  const crossCompany = (target: Target) => target.mechanisms.some(m => m === 'TALENT_DRAIN' || m === 'CONTAGION' || m === 'DISPLACEMENT');
+  const dominoIds = new Set(actionable.filter(crossCompany).map(target => target.companyId));
   const firstIds = new Set(baseline.firstOrder);
   const headcountIds = new Set(baseline.headcount);
-  const dominoOutcome = (id: string) => (drainIds.has(id) ? drainOutcomes : earliest).get(id);
-  const standardOutcome = (id: string) => earliest.get(id);
+  const dominoOutcome = (id: string) => drainOutcomes.get(id);
+  const standardOutcome = (id: string) => drainOutcomes.get(id);
   const score = (companies: Set<string>, findOutcome: (id: string) => OutcomeFact | undefined) => {
     const leads = [...companies].flatMap(id => {
       const hit = findOutcome(id);
@@ -73,7 +76,7 @@ export function scoreReplay(intent: Intent, targets: Target[], baseline: { first
     ...(late.length ? [`Excluded ${late.length} supplied predictions with dates after the cutoff.`] : []),
   ].join(' ');
   const snapshotLabel = `Not point-in-time: today's Crustdata index, filtered to facts dated on or before ${formatDay(intent.asOf)}`;
-  const outcomeDefinition = `Talent drain: a dated hire or job post for a serving or infrastructure title at the losing company within ${DRAIN_OUTCOME_DAYS} days of the cutoff, capped at today. Other picks use the requested replay horizon.`;
+  const outcomeDefinition = `Every arm: a dated serving, infrastructure or ML-platform job post or hire at the account within ${DRAIN_OUTCOME_DAYS} days after ${formatDay(intent.asOf)} (by ${formatDay(drainEnd)}). DOMINO = accounts flagged by a cross-company rule; first-order DIRECT picks count in the hiring-filter baseline.`;
   return { asOf: intent.asOf, horizonEnd, factsAfterAsOfUsed: 0, domino, baselineFirstOrder, baselineHeadcount, outcomes: rows,
     note, snapshotLabel, outcomeDefinition };
 }
