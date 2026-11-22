@@ -74,11 +74,11 @@ export type Chip = { cls: string; label: string };
 
 export function ruleStateChip(state: DossierRule['state']): Chip {
   switch (state) {
-    case 'met': return { cls: 'st verified', label: 'Met' };
-    case 'open': return { cls: 'st prov', label: 'Provisional' };
-    case 'held': return { cls: 'st held', label: 'Held' };
-    case 'not_met': return { cls: 'st plain', label: 'Not met' };
-    default: return { cls: 'st plain faint', label: 'Not evaluated' };
+    case 'met': return { cls: 'ctag tone-met', label: 'Met' };
+    case 'open': return { cls: 'ctag tone-provisional', label: 'Provisional' };
+    case 'held': return { cls: 'ctag tone-held', label: 'Held' };
+    case 'not_met': return { cls: 'ctag tone-not-met', label: 'Not met' };
+    default: return { cls: 'ctag tone-not-evaluated', label: 'Not evaluated' };
   }
 }
 

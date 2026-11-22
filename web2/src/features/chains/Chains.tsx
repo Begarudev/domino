@@ -54,9 +54,9 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
         <div className="reg-wide verdict" data-testid="chains-verdict">
           <b>{desk.company.name}</b>
           {dossier.rules.map((r) => {
-            const c = r.id === 'R1' && r1Held ? { cls: 'st held', label: r1Held } : ruleStateChip(r.state);
+            const c = r.id === 'R1' && r1Held ? { cls: 'ctag tone-held', label: r1Held } : ruleStateChip(r.state);
             const w = r.id === 'R1' && !r1Held ? watchCount(r) : null;
-            return <span key={r.id} className="verdict-i"><span className="rid">{r.id}</span><span className={c.cls}>{w && r.state === 'not_met' ? `${w.have} of ${w.need}` : c.label}</span></span>;
+            return <span key={r.id} className="verdict-i"><span className={`ctag bare rule-${r.id.toLowerCase()}`}>{r.id}</span><span className={c.cls}>{w && r.state === 'not_met' ? `${w.have} of ${w.need}` : c.label}</span></span>;
           })}
         </div>
       )}
@@ -82,7 +82,7 @@ function RuleCardView({ rule, desk, mine, example, heldNote, scanRunId }: {
   rule: RuleCard; desk: CompanyDesk; mine?: DossierRule; example: ReactNode; heldNote?: string | null; scanRunId?: string | null;
 }) {
   const lock = lockParts(rule.lockedAt);
-  const chip = heldNote ? { cls: 'st held', label: heldNote } : mine ? ruleStateChip(mine.state) : null;
+  const chip = heldNote ? { cls: 'ctag tone-held', label: heldNote } : mine ? ruleStateChip(mine.state) : null;
   const short = (id: string) => id.replace(/^run_/, '').slice(0, 8);
   // each count names the run it came from (count.sourceRunId, else the card's); one footnote per run
   const byRun = new Map<string, string[]>();
