@@ -297,3 +297,15 @@ test('hire summaries use the right indefinite article', () => {
   assert.equal(withArticle('ML Engineer'), 'an ML Engineer');
   assert.equal(withArticle('Series B round'), 'a Series B round');
 });
+
+test('serving signals need a serving-system phrase; founder and school roles never count', async () => {
+  const { servingTitleStatus, matchesSignal, servingSignalKeywords } = await import('./facts.ts');
+  const { isNonBuyer } = await import('./company-fit.ts');
+  assert.equal(matchesSignal('Districtwide Special Education Paraeducator role serving Lafayette High School', servingSignalKeywords), false);
+  assert.equal(matchesSignal('Senior Model Serving Engineer', servingSignalKeywords), true);
+  assert.equal(matchesSignal('Inference Serving Platform Lead', servingSignalKeywords), true);
+  assert.equal(servingTitleStatus('AI Infrastructure Co-Founder / COO'), 'excluded');
+  assert.equal(servingTitleStatus('ML Platform Engineer'), 'serving');
+  assert.equal(isNonBuyer({ name: 'Fayette County Public Schools (KY)', categories: ['Primary and Secondary Education'] }), true);
+  assert.equal(isNonBuyer({ name: 'Abacus.AI', categories: ['Software Development'] }), false);
+});

@@ -1,13 +1,14 @@
 # DOMINO architecture
 
-A search desk that predicts job openings before they are posted and makes the match with dated proof. GitHub renders the diagram below from [`architecture.mmd`](architecture.mmd); the full explanation is in the [README](../README.md#architecture-data-state-and-hosting).
+One product in two parts on one signal, dated moves between companies: (1) hiring, a search desk that predicts job openings before they are posted and makes the match with dated proof; (2) company analysis, with news, talent flows, cross-company chains, predicted needs and verified outreach. GitHub renders the diagram below from [`architecture.mmd`](architecture.mmd); the full explanation is in the [README](../README.md#architecture-data-state-and-hosting).
 
 ```mermaid
 flowchart LR
   subgraph Browser["Browser · React UI · persona switcher"]
     CAND["Candidate<br/>onboard + consent · likely hiring for you<br/>request intro · companies reaching out"]
-    COMP["Company<br/>drain monitor · predicted openings<br/>matched candidates · outreach · ledger · replay"]
-    FEED["Live activity feed"]
+    HIRE["Company · hiring<br/>drain monitor · predicted openings<br/>matched candidates · intro outreach"]
+    INTEL["Company · analysis<br/>news + talent flows · cross-company chains<br/>predicted needs · verified outreach"]
+    SHARED["Ledger · replay · live activity feed"]
   end
 
   subgraph Server["server/index.ts · Hono"]
@@ -20,16 +21,22 @@ flowchart LR
 
   subgraph Engine["engine · child process per run · checkpoint per step"]
     direction TB
-    P["Candidate profile<br/>live person enrich → model parse → confirm"]
-    D["Departures in the cohort<br/>role family, from → to, dated"]
-    R["Entity resolution<br/>merge on id/domain, keep namesakes apart"]
-    O["Rule O1 + guards<br/>open · provisional · watch · held"]
-    M["Match<br/>role family + skills, every reason cited"]
-    W["Intro draft<br/>model writes from numbered claims<br/>verifier deletes uncited sentences"]
-    S["Replay scorer<br/>as of 1 Sep, 0 later facts"]
-    P --> M
-    D --> R --> O --> M --> W
-    O --> S
+    SIG["Dated signals<br/>departures from → to · job posts<br/>growth · funding · posts/news"]
+    RES["Entity resolution<br/>merge on id/domain, keep namesakes apart"]
+    GUARD["False-drain guards<br/>acqui-hire · shared parent · team lift<br/>ambiguous id · month-level intervals"]
+    O1["Part 1 · rule O1<br/>open · provisional · watch · held"]
+    PROF["Candidate profile<br/>live enrich → model parse → confirm"]
+    MATCH["Match<br/>role family + skills, every reason cited"]
+    CHAIN["Part 2 · R1 TALENT_DRAIN · CONTAGION<br/>DISPLACEMENT · DIRECT baseline"]
+    DEC["Rank needs · find the decider"]
+    DRAFT["Draft from numbered claims<br/>verifier deletes uncited sentences"]
+    REPLAY["Replay scorer<br/>as of 1 Sep, 0 later facts"]
+    SIG --> RES --> GUARD
+    GUARD --> O1 --> MATCH --> DRAFT
+    PROF --> MATCH
+    GUARD --> CHAIN --> DEC --> DRAFT
+    O1 --> REPLAY
+    CHAIN --> REPLAY
   end
 
   subgraph Tool["runtime/tool.ts · every external call"]
@@ -42,7 +49,8 @@ flowchart LR
   FX["Fixture world<br/>only when no key or DOMINO_DATA=fixture"]
 
   CAND --> API
-  COMP --> API
+  HIRE --> API
+  INTEL --> API
   API -->|fork · kill · resume| Engine
   Engine --> Tool
   Tool --> CD
@@ -50,11 +58,12 @@ flowchart LR
   Tool -.-> FX
   Engine -->|output + done in one transaction| DB
   Tool -->|ledger · cache| DB
-  DB --> SSE --> FEED
-  COMP -->|approve intro| GATE
+  DB --> SSE --> SHARED
+  HIRE -->|approve intro| GATE
+  INTEL -->|approve message| GATE
   GATE -->|outbox row: pending| DB
   GATE --> DISPATCH --> INBOX
   INBOX -->|insert once per key| DB
 ```
 
-**Flow.** A candidate onboards with their LinkedIn URL and consent (live Crustdata person enrich, model parse, confirmation). The engine reads dated departures across a cohort of AI companies, resolves entities, applies rule O1 with its false-drain guards (open, watch, held), and matches opted-in candidates to open predictions with cited fit reasons. An intro draft is written only from numbered, dated claims and checked by a verifier. A person approves it, and it is delivered once to a test inbox under an idempotency key. Every external call goes through one wrapper that enforces budgets, timeouts, retries and schema checks and writes a ledger row per attempt. State lives in SQLite, with a checkpoint per step, so a killed engine resumes without repeating calls.
+**Flow.** A candidate onboards with their LinkedIn URL and consent (live Crustdata person enrich, model parse, confirmation). The engine reads dated departures across a cohort of AI companies, resolves entities, applies shared false-drain guards, then rule O1 (open, provisional, watch, held) to match opted-in candidates to predicted openings with cited fit reasons, and the cross-company rules (R1 talent drain, contagion, displacement, with a first-order hiring baseline) to rank company needs and find the decider. Every intro or outreach draft is written only from numbered, dated claims and checked by a verifier. A person approves it, and it is delivered once to a test inbox under an idempotency key. Every external call goes through one wrapper that enforces budgets, timeouts, retries and schema checks and writes a ledger row per attempt. State lives in SQLite, with a checkpoint per step, so a killed engine resumes without repeating calls.

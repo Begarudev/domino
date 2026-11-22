@@ -191,6 +191,7 @@ export interface Target {
   // month-only dates that cannot settle the window, unrecognised titles.
   hold?: { reasons: string[] } | null;
   watch?: { reason: string } | null; // Two qualifying serving departures. No outreach or approval.
+  notDrafted?: { reason: string; have: number; need: number } | null; // outreach gate failed: no draft, no approval
   // What the replay tests for this account: e.g. "serving staffing activity at Orbital Voice within 60 days".
   testedClaim?: string | null;
 }
@@ -214,6 +215,10 @@ export interface Draft {
   generator: string;                // 'llm:claude-haiku-5-5' | 'template'
   verified: boolean;                // every factual sentence cites evidence
   meeting: { title: string; durationMin: number; proposedSlots: IsoDateTime[] };
+  // 'not_drafted': fewer than 2 verified, dated, cited facts survived, or no named decider role. Never sent or approved;
+  // shown as "Not drafted: …" with the stripped claims under "I can't verify".
+  status?: 'ready' | 'not_drafted';
+  blockedReason?: string | null;
 }
 
 // ---------- approvals & actions ----------

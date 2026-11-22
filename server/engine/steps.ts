@@ -173,6 +173,7 @@ async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): P
   const intent = parse_request!;
   const input = { intent };
   const output = emptyBatch();
+  const summaries: string[] = [];
   const append = (batch: Awaited<ReturnType<typeof readSource>>) => {
     const kept = guardBatch(batch, intent);
     ctx.store.transaction(() => {
@@ -183,15 +184,33 @@ async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): P
     output.people.push(...kept.people);
     output.triggers.push(...kept.triggers);
     output.evidence.push(...kept.evidence);
+    if (batch.readSummary) summaries.push(batch.readSummary);
+    return kept;
   };
   append(await readSource(ctx, deps.jobSearch, input, intent));
+  append(await readSource(ctx, deps.jobSearchDisplacement, input, intent));
   for await (const page of deps.readMovesPages(intent, request => readSource(ctx, deps.personSearchRecentMoves, request, intent))) {
     append(page);
+  }
+  if (intent.runKind === 'replay') {
+    summaries.push('Skipped news search and article fetch in replay: web search has no as-of-safe dating');
+  } else {
+    const events = deps.activeNewsEvents(seller.displacementEvents, intent, ctx.mode);
+    if (events.length) {
+      // Keep the news calls spaced even when the preceding source used another endpoint's rate-limit slot.
+      if (ctx.mode === 'live') await ctx.wait(3000);
+      const search = append(await readSource(ctx, deps.newsSearch, { intent, events }, intent));
+      const urls = deps.newsFetchUrls(events, search);
+      if (urls.length) {
+        if (ctx.mode === 'live') await ctx.wait(3000);
+        append(await readSource(ctx, deps.newsFetch, { intent, urls, events }, intent));
+      } else summaries.push('No direct publisher URLs available for article fetch');
+    }
   }
   append(await readSource(ctx, deps.companySearchGrowth, input, intent));
   output.evidence = byId(output.evidence);
   output.triggers = byId(output.triggers);
-  return { output, summary: `${output.triggers.length} triggers from ${output.evidence.length} evidence rows` };
+  return { output, summary: [`${output.triggers.length} triggers from ${output.evidence.length} evidence rows`, ...summaries].join('; ') };
 }
 
 function resolveBatch(batch: TriggerBatch): Resolved {
@@ -374,7 +393,10 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
       }
     }
     draft.unverifiable = [...unverifiable.values()];
-    return { target: { ...target, draftId: draft.id }, draft };
+    // Hub rule (14:35): outreach needs >= 2 verified, dated, cited facts AND a named decider role, else "Not drafted".
+    const gate = draftGate(draft, target, evidence);
+    if (gate) return { target: { ...target, draftId: null, notDrafted: gate }, draft: { ...draft, status: 'not_drafted' as const, blockedReason: gate.reason } };
+    return { target: { ...target, draftId: draft.id }, draft: { ...draft, status: 'ready' as const } };
   });
   const drafts: Draft[] = [];
   const targets: Target[] = [];
@@ -383,17 +405,40 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
     targets.push(target);
     if (!draft) continue;
     drafts.push(draft);
+    if (draft.status === 'not_drafted') {
+      events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: target.companyId, ...item })));
+      continue;
+    }
     events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: target.companyId, ...item })),
       { type: 'draft.ready', draft });
   }
-  return { output: { targets, drafts }, summary: `${drafts.length} drafts checked against evidence`, events };
+  const ready = drafts.filter(draft => draft.status !== 'not_drafted').length;
+  const blocked = drafts.length - ready;
+  return { output: { targets, drafts }, events,
+    summary: `${ready} drafts checked against evidence${blocked ? `; ${blocked} not drafted (fewer than 2 verified facts or no named decider)` : ''}` };
+}
+
+export const MIN_VERIFIED_FACTS = 2;
+// Facts that survived verification: cited in the body, dated, verifiable. The decider must be a named role.
+export function draftGate(draft: Draft, target: Target, evidence: Evidence[]): { reason: string; have: number; need: number } | null {
+  const byEvidence = new Map(evidence.map(row => [row.id, row]));
+  const cited = new Set(draft.citations.map(cite => cite.evidenceId).filter(id => {
+    const row = byEvidence.get(id);
+    return row?.verifiable && row.observedAt && draft.body.includes(`[${draft.citations.find(cite => cite.evidenceId === id)!.marker}]`);
+  }));
+  const have = cited.size;
+  if (have < MIN_VERIFIED_FACTS) {
+    return { reason: `Not drafted: not enough verified evidence (${have} of ${MIN_VERIFIED_FACTS})`, have, need: MIN_VERIFIED_FACTS };
+  }
+  if (!target.decider?.title?.trim()) return { reason: 'Not drafted: no named decider role found', have, need: MIN_VERIFIED_FACTS };
+  return null;
 }
 
 function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_gate'> {
   const { targets, drafts } = c.draft_messages!;
   const output = targets.flatMap(target => {
     if (target.hold || target.watch) return [];
-    const draft = drafts.find(row => row.id === target.draftId);
+    const draft = drafts.find(row => row.id === target.draftId && row.status !== 'not_drafted');
     return !draft ? [] : (['send_message', 'book_meeting'] as const).map((kind): Approval => {
       const idempotencyKey = hash([ctx.runId, target.companyId, draft.personId ?? '', draft.body, kind].join('|')).slice(0, 16);
       return {
@@ -402,9 +447,9 @@ function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_ga
       };
     });
   });
+  // Approvals open only when the run has finished (the worker sets awaiting_approval after the last step, incl. replay scoring).
   return { output, summary: `${output.length} test-mode actions ready for review`,
-    events: [...output.map(approval => ({ type: 'approval.requested' as const, approval })),
-      ...(output.length ? [{ type: 'run.status' as const, status: 'awaiting_approval' as const }] : [])] };
+    events: output.map(approval => ({ type: 'approval.requested' as const, approval })) };
 }
 
 async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'score_replay'>> {
