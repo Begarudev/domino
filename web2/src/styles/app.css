@@ -167,6 +167,20 @@ a:hover { text-decoration: underline; }
 .tabs a[aria-current='page'] { color: var(--paper); border-bottom-color: var(--live); }
 .tabs .count { margin-left: 6px; color: var(--paper-3); font-weight: 500; }
 
+/* evidence drawer: openEvidence(id) */
+.ev-scrim { position: fixed; inset: var(--bar-h) 0 0 0; background: rgba(5, 7, 11, 0.45); z-index: 30; }
+.ev-drawer {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(520px, 92vw); background: var(--panel); border-left: 1px solid var(--line);
+  padding: var(--s6) var(--s5); box-shadow: var(--shadow-lift); overflow-y: auto; animation: slide-in-right 240ms var(--ease-establish) both;
+}
+.ev-close { position: absolute; top: var(--s4); right: var(--s4); }
+.ev-date { display: flex; align-items: center; gap: 10px; font-size: var(--fs-lead); font-weight: 700; color: var(--paper); flex-wrap: wrap; }
+.ev-claim { font-size: 22px; line-height: 1.35; margin: var(--s3) 0; font-weight: 600; }
+.ev-source { font-size: var(--fs-body); color: var(--live-text); margin: 0 0 var(--s5); }
+.ev-meta { display: grid; grid-template-columns: 96px 1fr; gap: 8px 12px; font-size: var(--fs-ui); color: var(--paper-2); margin: 0; }
+.ev-meta dt { color: var(--paper-3); }
+.ev-meta dd { margin: 0; overflow-wrap: anywhere; }
+
 @media (max-width: 1100px) {
   :root { --rail-w: 320px; }
   .meter { width: 120px; }

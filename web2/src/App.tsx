@@ -6,6 +6,7 @@ import { CompaniesPage, CompanyPage } from './pages/CompanyPage.tsx';
 import { ActivityRail } from './shell/ActivityRail.tsx';
 import { TopBar } from './shell/TopBar.tsx';
 import { LedgerDrawer } from './features/ledger/Ledger.tsx';
+import { EvidenceDrawer } from './shell/EvidenceDrawer.tsx';
 
 let booted = false;
 
@@ -46,6 +47,7 @@ export function App() {
         <ActivityRail />
       </div>
       <LedgerDrawer />
+      <EvidenceDrawer />
     </div>
   );
 }
