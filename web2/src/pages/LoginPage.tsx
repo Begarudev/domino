@@ -62,6 +62,14 @@ export function LoginPage() {
             onClick={() => { signInCandidate(); navigate({ page: 'candidate', sub: 'onboard' }); }}>Continue</button>
         )}
         <p className="login-legal">Demo sign-in, no password. To switch sides, sign out from the account menu.</p>
+        <div className="signin-reads" data-testid="signin-reads">
+          <h3>What DOMINO reads</h3>
+          <ul>
+            <li><b>Crustdata</b> person, company, job and news data, each with a dated source.</li>
+            <li><b>Rules decide</b> every prediction, opening and hold. No scores.</li>
+            <li><b>GPT-6 Luna</b> only parses profiles and drafts messages. It never decides.</li>
+          </ul>
+        </div>
       </section>
     </div>
   );
