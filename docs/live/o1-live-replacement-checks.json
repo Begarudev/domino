@@ -1,0 +1,438 @@
+{
+ "label": "live-cached",
+ "checks": {
+  "abacus-anyjobs.json": {
+   "retrievedAt": "2026-11-22T08:41:14.300Z",
+   "path": "/job/search",
+   "request": {
+    "filters": {
+     "op": "and",
+     "conditions": [
+      {
+       "field": "company.basic_info.company_id",
+       "type": "=",
+       "value": 632052
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "=>",
+       "value": "2026-10-01"
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "<",
+       "value": "2026-11-23"
+      }
+     ]
+    },
+    "sorts": [
+     {
+      "field": "metadata.date_added",
+      "order": "desc"
+     }
+    ],
+    "limit": 50,
+    "fields": [
+     "job_details.title",
+     "metadata.date_added"
+    ]
+   },
+   "status": 200,
+   "creditsHeader": "0.18",
+   "response": {
+    "job_listings": [
+     {
+      "job_details": {
+       "title": "Forward Deployed Engineer - AI Agentic Platform"
+      },
+      "metadata": {
+       "date_added": "2026-11-17T07:40:35"
+      }
+     },
+     {
+      "job_details": {
+       "title": "Forward Deployed Engineer - AI Agentic Platform"
+      },
+      "metadata": {
+       "date_added": "2026-11-17T07:37:42"
+      }
+     },
+     {
+      "job_details": {
+       "title": "Forward Deployed Engineer - AI Agentic Platform"
+      },
+      "metadata": {
+       "date_added": "2026-11-06T05:58:45"
+      }
+     },
+     {
+      "job_details": {
+       "title": "Forward Deployed Engineer - AI Agentic Platform"
+      },
+      "metadata": {
+       "date_added": "2026-11-06T05:57:22"
+      }
+     },
+     {
+      "job_details": {
+       "title": "Forward Deployed Engineer - AI Agentic Platform"
+      },
+      "metadata": {
+       "date_added": "2026-11-06T05:42:04"
+      }
+     },
+     {
+      "job_details": {
+       "title": "Forward Deployed Engineer - AI Agentic Platform"
+      },
+      "metadata": {
+       "date_added": "2026-11-05T04:49:00"
+      }
+     }
+    ],
+    "next_cursor": null,
+    "total_count": 6
+   }
+  },
+  "abacus-hires.json": {
+   "retrievedAt": "2026-11-22T08:41:18.703Z",
+   "path": "/person/search",
+   "request": {
+    "filters": {
+     "op": "and",
+     "conditions": [
+      {
+       "field": "experience.employment_details.current.company_id",
+       "type": "=",
+       "value": 632052
+      },
+      {
+       "field": "experience.employment_details.current.start_date",
+       "type": "=>",
+       "value": "2026-10-01"
+      },
+      {
+       "op": "or",
+       "conditions": [
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "ML platform"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "machine learning platform"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "ML infrastructure"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "machine learning infrastructure"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "AI infrastructure"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "AI platform"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "MLOps"
+        }
+       ]
+      }
+     ]
+    },
+    "limit": 50,
+    "fields": [
+     "crustdata_person_id",
+     "basic_profile.name",
+     "experience.employment_details.current.title",
+     "experience.employment_details.current.start_date",
+     "experience.employment_details.current.name",
+     "experience.employment_details.current.crustdata_company_id"
+    ]
+   },
+   "status": 200,
+   "creditsHeader": "0",
+   "response": {
+    "total_count": 0,
+    "profiles": "redacted (0 rows)"
+   }
+  },
+  "abacus-jobs.json": {
+   "retrievedAt": "2026-11-22T08:41:13.948Z",
+   "path": "/job/search",
+   "request": {
+    "filters": {
+     "op": "and",
+     "conditions": [
+      {
+       "field": "company.basic_info.company_id",
+       "type": "=",
+       "value": 632052
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "=>",
+       "value": "2026-10-01"
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "<",
+       "value": "2026-11-23"
+      },
+      {
+       "op": "or",
+       "conditions": [
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "ML platform"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "machine learning platform"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "ML infrastructure"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "machine learning infrastructure"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "AI infrastructure"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "AI platform"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "MLOps"
+        }
+       ]
+      }
+     ]
+    },
+    "sorts": [
+     {
+      "field": "metadata.date_added",
+      "order": "desc"
+     }
+    ],
+    "limit": 50,
+    "fields": [
+     "crustdata_job_id",
+     "job_details.title",
+     "job_details.url",
+     "metadata.date_added",
+     "company.basic_info.name"
+    ]
+   },
+   "status": 200,
+   "creditsHeader": "0",
+   "response": {
+    "job_listings": [],
+    "next_cursor": null,
+    "total_count": 0
+   }
+  },
+  "poolside-anyjobs.json": {
+   "retrievedAt": "2026-11-22T08:41:08.562Z",
+   "path": "/job/search",
+   "request": {
+    "filters": {
+     "op": "and",
+     "conditions": [
+      {
+       "field": "company.basic_info.company_id",
+       "type": "=",
+       "value": 1060388
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "=>",
+       "value": "2026-09-01"
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "<",
+       "value": "2026-11-23"
+      }
+     ]
+    },
+    "sorts": [
+     {
+      "field": "metadata.date_added",
+      "order": "desc"
+     }
+    ],
+    "limit": 50,
+    "fields": [
+     "job_details.title",
+     "metadata.date_added"
+    ]
+   },
+   "status": 200,
+   "creditsHeader": "0",
+   "response": {
+    "job_listings": [],
+    "next_cursor": null,
+    "total_count": 0
+   }
+  },
+  "poolside-hires.json": {
+   "retrievedAt": "2026-11-22T08:41:12.951Z",
+   "path": "/person/search",
+   "request": {
+    "filters": {
+     "op": "and",
+     "conditions": [
+      {
+       "field": "experience.employment_details.current.company_id",
+       "type": "=",
+       "value": 1060388
+      },
+      {
+       "field": "experience.employment_details.current.start_date",
+       "type": "=>",
+       "value": "2026-09-01"
+      },
+      {
+       "op": "or",
+       "conditions": [
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "inference"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "serving"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "model serving"
+        },
+        {
+         "field": "experience.employment_details.current.title",
+         "type": "[.]",
+         "value": "LLM serving"
+        }
+       ]
+      }
+     ]
+    },
+    "limit": 50,
+    "fields": [
+     "crustdata_person_id",
+     "basic_profile.name",
+     "experience.employment_details.current.title",
+     "experience.employment_details.current.start_date",
+     "experience.employment_details.current.name",
+     "experience.employment_details.current.crustdata_company_id"
+    ]
+   },
+   "status": 200,
+   "creditsHeader": "0",
+   "response": {
+    "total_count": 0,
+    "profiles": "redacted (0 rows)"
+   }
+  },
+  "poolside-jobs.json": {
+   "retrievedAt": "2026-11-22T08:41:08.253Z",
+   "path": "/job/search",
+   "request": {
+    "filters": {
+     "op": "and",
+     "conditions": [
+      {
+       "field": "company.basic_info.company_id",
+       "type": "=",
+       "value": 1060388
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "=>",
+       "value": "2026-09-01"
+      },
+      {
+       "field": "metadata.date_added",
+       "type": "<",
+       "value": "2026-11-23"
+      },
+      {
+       "op": "or",
+       "conditions": [
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "inference"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "serving"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "model serving"
+        },
+        {
+         "field": "job_details.title",
+         "type": "[.]",
+         "value": "LLM serving"
+        }
+       ]
+      }
+     ]
+    },
+    "sorts": [
+     {
+      "field": "metadata.date_added",
+      "order": "desc"
+     }
+    ],
+    "limit": 50,
+    "fields": [
+     "crustdata_job_id",
+     "job_details.title",
+     "job_details.url",
+     "metadata.date_added",
+     "company.basic_info.name"
+    ]
+   },
+   "status": 200,
+   "creditsHeader": "0",
+   "response": {
+    "job_listings": [],
+    "next_cursor": null,
+    "total_count": 0
+   }
+  }
+ }
+}

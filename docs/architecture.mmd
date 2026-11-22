@@ -1,8 +1,8 @@
 flowchart LR
-  subgraph Browser["Browser · React UI"]
-    REQ["Request box<br/>plan, caps, window"]
-    VIEW["Cascade table · evidence drawer<br/>timeline · drafts · replay · ledger"]
-    APPROVE["Approve / reject"]
+  subgraph Browser["Browser · React UI · persona switcher"]
+    CAND["Candidate<br/>onboard + consent · likely hiring for you<br/>request intro · companies reaching out"]
+    COMP["Company<br/>drain monitor · predicted openings<br/>matched candidates · outreach · ledger · replay"]
+    FEED["Live activity feed"]
   end
 
   subgraph Server["server/index.ts · Hono"]
@@ -10,44 +10,43 @@ flowchart LR
     SSE["SSE stream<br/>tails the events table"]
     GATE["Approval gate<br/>reserve in one transaction"]
     DISPATCH["Dispatcher<br/>child process per delivery"]
-    INBOX["Test inbox receiver<br/>unique idempotency key<br/>.eml / .ics files only"]
+    INBOX["Test inbox receiver<br/>unique idempotency key"]
   end
 
-  subgraph Engine["engine/worker.ts · child process per run"]
+  subgraph Engine["engine · child process per run · checkpoint per step"]
     direction TB
-    S1["parse_request<br/>ask only if the offer is missing"]
-    S2["pull_triggers<br/>jobs, moves, growth, funding, posts"]
-    S3["resolve_entities<br/>merge on id/domain, keep namesakes apart"]
-    S4["enrich_companies"]
-    S5["cascade<br/>R1 TALENT_DRAIN + guards<br/>DISPLACEMENT · CONTAGION · DIRECT"]
-    S6["rank_targets<br/>net-new vs hiring filter<br/>watchlist / hold"]
-    S7["find_deciders<br/>one person per account"]
-    S8["warm_paths"]
-    S9["draft_messages<br/>model writes from numbered claims<br/>verifier deletes uncited sentences"]
-    S10["approval_gate"]
-    S11["score_replay<br/>replay runs only"]
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11
+    P["Candidate profile<br/>live person enrich → model parse → confirm"]
+    D["Departures in the cohort<br/>role family, from → to, dated"]
+    R["Entity resolution<br/>merge on id/domain, keep namesakes apart"]
+    O["Rule O1 + guards<br/>open · provisional · watch · held"]
+    M["Match<br/>role family + skills, every reason cited"]
+    W["Intro draft<br/>model writes from numbered claims<br/>verifier deletes uncited sentences"]
+    S["Replay scorer<br/>as of 1 Sep, 0 later facts"]
+    P --> M
+    D --> R --> O --> M --> W
+    O --> S
   end
 
   subgraph Tool["runtime/tool.ts · every external call"]
     T["budget check before the call<br/>timeout · retry with backoff<br/>schema check · ledger row per attempt<br/>live → cache (never live → fixture)"]
   end
 
-  DB[("SQLite data/domino.db<br/>runs · step checkpoints · events<br/>ledger · tool_cache · evidence<br/>approvals · outbox · inbox_received")]
-  CD["Crustdata API<br/>job · person · company · enrich · posts"]
-  LLM["OpenAI gpt-5-mini<br/>(Anthropic optional)"]
+  DB[("SQLite data/domino.db<br/>runs · checkpoints · events · ledger<br/>tool_cache · evidence · approvals<br/>outbox · inbox_received")]
+  CD["Crustdata API<br/>person enrich/search · job search<br/>company search/enrich · posts"]
+  LLM["OpenAI gpt-6-luna<br/>(Anthropic optional)"]
   FX["Fixture world<br/>only when no key or DOMINO_DATA=fixture"]
 
-  REQ -->|POST /api/runs| API
+  CAND --> API
+  COMP --> API
   API -->|fork · kill · resume| Engine
   Engine --> Tool
   Tool --> CD
   Tool --> LLM
   Tool -.-> FX
-  Engine -->|output + done in one transaction per step| DB
+  Engine -->|output + done in one transaction| DB
   Tool -->|ledger · cache| DB
-  DB --> SSE --> VIEW
-  APPROVE -->|POST /api/approvals/:id| GATE
+  DB --> SSE --> FEED
+  COMP -->|approve intro| GATE
   GATE -->|outbox row: pending| DB
   GATE --> DISPATCH --> INBOX
   INBOX -->|insert once per key| DB

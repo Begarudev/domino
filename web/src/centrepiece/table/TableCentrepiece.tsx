@@ -7,7 +7,7 @@ import type { Evidence, GraphEdge, GraphNode, Mechanism, RunSnapshot } from '../
 import type { CentrepieceModule, CentrepieceProps } from '../contract.ts';
 import { fmtRange } from '../../dates.ts';
 import { CHIP_H, placeChips } from './edgeChips.ts';
-import type { Box } from './edgeChips.ts';
+import type { Box, ChipOut } from './edgeChips.ts';
 import './table.css';
 
 const W = 156;            // tile width (viewBox units)
@@ -17,10 +17,8 @@ const COL_GAP = 210;      // room for the edge label between columns
 const ROW_GAP = 40;
 const LABEL = 30;         // mechanism label under each tile
 const PAD = 18;
-const MECH_H = 40;        // two caption lines under a tile
-const TIP_REACH_X = 72;   // a tipped tile's top corner swings this far right (H sin 14deg)
-const TIP_REACH_Y = 29;   // and this far above its standing top
 const TIP_DEG = 14;
+const TIP_RAD = (TIP_DEG * Math.PI) / 180;
 const STAGGER = 720;      // ms between edges
 
 export const MECH_LABEL: Record<Mechanism, string> = {
@@ -42,7 +40,12 @@ function mechanismText(n: GraphNode) {
 
 interface Placed { node: GraphNode; x: number; y: number; col: number; row: number }
 
-const SUB_GAP = 44;       // gap between tiles of the same tier when a tier wraps into several columns
+// A tile tips about its bottom-right corner, so its top leans this far right.
+const TIP_REACH = Math.ceil(H * Math.sin(TIP_RAD));
+// Gap between tiles of the same tier when a tier wraps into several columns: wide enough for a tipped neighbour.
+const SUB_GAP = TIP_REACH + 8;
+// Caption box under a tile (single line, ellipsis): the room before a wrapped neighbour.
+const CAPTION_W = W + SUB_GAP - 12;
 
 /** Columns by tier; rows ordered by parents. Tries every row count and keeps the one with the biggest tiles. */
 function layout(nodes: GraphNode[], edges: GraphEdge[], slotW: number, slotH: number) {
@@ -126,9 +129,9 @@ function nodeChange(n: GraphNode, snap: RunSnapshot, evById: Map<string, Evidenc
 
 function Tile(props: {
   p: Placed; snap: RunSnapshot; evById: Map<string, Evidence>; fireAt: number | null; selected: boolean;
-  dimmed: boolean; stamp: boolean; onSelect: () => void; reducedMotion: boolean; mechW: number; linked: boolean;
+  dimmed: boolean; stamp: boolean; onSelect: () => void; reducedMotion: boolean; linked: boolean;
 }) {
-  const { p, snap, evById, fireAt, selected, dimmed, stamp, onSelect, reducedMotion, mechW, linked } = props;
+  const { p, snap, evById, fireAt, selected, dimmed, stamp, onSelect, reducedMotion, linked } = props;
   const n = p.node;
   const unverifiable = n.status === 'unverifiable';
   const change = nodeChange(n, snap, evById);
@@ -144,9 +147,8 @@ function Tile(props: {
   const label = `${n.name}. ${change.text}, ${change.date}. ${n.need ?? 'Trigger company'}${conf != null ? `, confidence ${Math.round(conf * 100)}%` : ''}${unverifiable ? ", can't verify" : ''}`;
   return (
     <g className={cls}>
-      {/* Clamped to the room before the next tile in its row, so two captions never run together. */}
-      <foreignObject className="tile-mech-fo" x={p.x + 2} y={p.y + H + 6} width={mechW} height={MECH_H}>
-        <div className="tile-mech">{mechanismText(n)}</div>
+      <foreignObject x={p.x + 2} y={p.y + H + 4} width={CAPTION_W} height={LABEL}>
+        <div className="tile-mech" title={mechanismText(n)}>{mechanismText(n)}</div>
       </foreignObject>
       <g
         className="tile-body" style={style} tabIndex={0} role="button" aria-pressed={selected} aria-label={label}
@@ -196,8 +198,10 @@ function Tile(props: {
   );
 }
 
+const isTipped = (p: Placed, animate: boolean) => animate && p.node.status !== 'unverifiable';
+
 function edgeGeometry(a: Placed, b: Placed, tipped: boolean) {
-  const th = (TIP_DEG * Math.PI) / 180;
+  const th = TIP_RAD;
   // Mid-point of the from-tile's right edge, after it tips about its bottom-right corner.
   const x1 = a.x + W + (tipped ? (HALF) * Math.sin(th) : 0) + 6;
   const y1 = a.y + H - HALF * (tipped ? Math.cos(th) : 1);
@@ -222,24 +226,22 @@ function TableCentrepiece(props: CentrepieceProps) {
     return { nodes: keep, edges: lines, offTable: all.nodes.length - keep.length };
   }, [snap.graph, snap.targets]);
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
+  const animate = cascadeDone && nodes.length > 0;
   const { placed, vw, vh } = useMemo(() => layout(nodes, edges, width || 800, height || 500), [nodes, edges, width, height]);
-  const times = useMemo(() => schedule(nodes, edges), [nodes, edges]);
-  const evById = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
-  const baseline = new Set(snap.baseline.hiringFilterCompanyIds);
-  const animate = cascadeDone && (edges.length > 0 || nodes.length > 0);
+  const lines = useMemo(() => {
+    const lines = new Map<string, { g: ReturnType<typeof edgeGeometry> }>();
+    for (const e of edges) {
+      const a = placed.get(e.from), b = placed.get(e.to);
+      if (a && b) lines.set(e.id, { g: edgeGeometry(a, b, isTipped(a, animate)) });
+    }
+    return lines;
+  }, [edges, placed, animate]);
   const [hot, setHot] = useState<string | null>(null);
   const selectedEdge = selection?.kind === 'edge' ? selection.id : null;
 
-  // Each caption gets the room up to the next tile in its row, less some air.
-  const mechW = useMemo(() => {
-    const all = [...placed.values()];
-    return new Map(all.map((p) => {
-      const next = all.filter((q) => q.y === p.y && q.x > p.x).reduce((m, q) => Math.min(m, q.x), Infinity);
-      return [p.node.id, Math.min(W + COL_GAP - 24, next - p.x - 14)] as const;
-    }));
-  }, [placed]);
-
-  // Chips are laid out in screen px over the svg (viewBox -> px is the 'meet' fit, centred).
+  // One short chip per line ("Talent drain 77%"), laid out in screen px over the svg so it stays at 15px,
+  // and placed so it keeps 12px from every tile, caption and other chip. Lines from one source that share a
+  // stroke and a chip text read as one line on the board, so they share one chip ("Contagion 68% x2").
   const chips = useMemo(() => {
     const w = width || 800, h = height || 500;
     const s = Math.min(w / vw, h / vh);
@@ -249,31 +251,62 @@ function TableCentrepiece(props: CentrepieceProps) {
       const a = toPx(x0, y0), b = toPx(x1, y1);
       return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
     };
-    // Two obstacles per tile: the body (with the room its tipped corner swings through) and its caption.
     const tiles: Box[] = [...placed.values()].flatMap((p) => {
-      const tipped = animate && p.node.status !== 'unverifiable';
-      const capW = Math.min(mechW.get(p.node.id) ?? W, mechanismText(p.node).length * 8.4 + 8);
-      return [
-        box(p.x - 2, p.y - 2 - (tipped ? TIP_REACH_Y : 0), p.x + W + 2 + (tipped ? TIP_REACH_X : 0), p.y + H + 4),
-        box(p.x, p.y + H + 6, p.x + Math.max(capW, 1), p.y + H + 6 + MECH_H),
-      ];
+      const tipped = isTipped(p, animate);
+      const capW = Math.min(CAPTION_W, mechanismText(p.node).length * 8.4 + 8);
+      const caption = box(p.x, p.y + H + 4, p.x + Math.max(capW, 1), p.y + H + 4 + LABEL);
+      if (!tipped) return [box(p.x - 2, p.y - 2, p.x + W + 2, p.y + H + 4), caption];
+      // A tipped tile leans right as it rises, so block it in slices that follow its slanted sides
+      // instead of one bounding box that would swallow the gap before it.
+      const c = Math.cos(TIP_RAD), sn = Math.sin(TIP_RAD), ox0 = p.x + W, oy0 = p.y + H;
+      const L = (f: number) => [ox0 - W * c + f * H * sn, oy0 - W * sn - f * H * c] as const;
+      const R = (f: number) => [ox0 + f * H * sn, oy0 - f * H * c] as const;
+      const N = 6;
+      return [...Array.from({ length: N }, (_, k) => {
+        const pts = [L(k / N), L((k + 1) / N), R(k / N), R((k + 1) / N)];
+        const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+        return box(Math.min(...xs) - 3, Math.min(...ys) - 3, Math.max(...xs) + 3, Math.max(...ys) + 3);
+      }), caption];
     });
     const ordered = [...edges].sort((a, b) =>
       Number(b.id === selectedEdge) - Number(a.id === selectedEdge) || b.confidence - a.confidence || a.order - b.order);
-    const input = ordered.flatMap((e) => {
-      const a = placed.get(e.from), b = placed.get(e.to);
-      if (!a || !b) return [];
-      const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
-      return [{ id: e.id, text: `${MECH_LABEL[e.mechanism]} ${Math.round(e.confidence * 100)}%`, curve: g }];
-    });
-    return { ...placeChips(input, tiles, toPx, { w, h }), toPx, w, h };
-  }, [edges, placed, vw, vh, width, height, animate, selectedEdge, mechW]);
-  const chipById = new Map(chips.placed.map((c) => [c.id, c]));
-  const hotEdge = hot ? edges.find((e) => e.id === hot) ?? null : null;
-  const hoverOn = (id: string) => ({
-    onMouseEnter: () => setHot(id), onMouseLeave: () => setHot((h) => (h === id ? null : h)),
-    onFocus: () => setHot(id), onBlur: () => setHot((h) => (h === id ? null : h)),
-  });
+    const groups: { id: string; ids: string[]; text: string; g: ReturnType<typeof edgeGeometry> }[] = [];
+    for (const e of ordered) {
+      const line = lines.get(e.id);
+      if (!line) continue;
+      const text = `${MECH_LABEL[e.mechanism]} ${Math.round(e.confidence * 100)}%`;
+      const twin = groups.find((gr) => {
+        const first = edges.find((x) => x.id === gr.ids[0])!;
+        return first.from === e.from && gr.text === text
+          && Math.abs(gr.g.y1 - line.g.y1) < 2 && Math.abs(gr.g.y2 - line.g.y2) < 2;
+      });
+      if (twin) {
+        twin.ids.push(e.id);
+        if (line.g.x2 < twin.g.x2) twin.g = line.g;   // seat the shared chip before the nearer target
+      } else groups.push({ id: e.id, ids: [e.id], text, g: line.g });
+    }
+    const input = groups.map((gr) => ({ id: gr.id, text: gr.ids.length > 1 ? `${gr.text} \u00d7${gr.ids.length}` : gr.text, curve: gr.g }));
+    const placedChips = placeChips(input, tiles, toPx, { w, h });
+    const members = new Map(groups.map((gr) => [gr.id, gr.ids]));
+    const groupOf = new Map(groups.flatMap((gr) => gr.ids.map((id) => [id, gr.id] as const)));
+    const droppedLines = placedChips.dropped.reduce((n, id) => n + (members.get(id)?.length ?? 1), 0);
+    return { ...placedChips, members, groupOf, droppedLines, toPx, w, h };
+  }, [edges, lines, placed, vw, vh, width, height, animate, selectedEdge]);
+  // `hot` holds a chip-group id; hovering a line lights its whole group.
+  const hotIds = hot ? chips.members.get(hot) ?? [hot] : [];
+  const hotEdges = edges.filter((e) => hotIds.includes(e.id));
+  const hotChip = hot ? chips.placed.find((c) => c.id === hot) : undefined;
+  const linkedNodes = new Set(hotEdges.flatMap((e) => [e.from, e.to]));
+  const hoverOn = (edgeId: string) => {
+    const gid = chips.groupOf.get(edgeId) ?? edgeId;
+    return {
+      onMouseEnter: () => setHot(gid), onMouseLeave: () => setHot((h) => (h === gid ? null : h)),
+      onFocus: () => setHot(gid), onBlur: () => setHot((h) => (h === gid ? null : h)),
+    };
+  };
+  const times = useMemo(() => schedule(nodes, edges), [nodes, edges]);
+  const evById = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
+  const baseline = new Set(snap.baseline.hiringFilterCompanyIds);
 
   if (!nodes.length) {
     return (
@@ -301,14 +334,15 @@ function TableCentrepiece(props: CentrepieceProps) {
           </filter>
         </defs>
         {edges.map((e) => {
-          const a = placed.get(e.from), b = placed.get(e.to);
-          if (!a || !b) return null;
-          const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
+          const line = lines.get(e.id);
+          if (!line) return null;
+          const { g } = line;
+          const b = placed.get(e.to)!;
           const sel = selection?.kind === 'edge' && selection.id === e.id;
           const weak = b.node.status === 'unverifiable';
           const style = { '--draw-delay': `${times.edge.get(e.id) ?? 0}ms` } as CSSProperties;
           return (
-            <g key={e.id} className={`edge${weak ? ' is-weak' : ''}${sel ? ' is-selected' : ''}${hot === e.id ? ' is-hot' : ''}${reducedMotion ? ' no-motion' : ''}`} style={style}>
+            <g key={e.id} className={`edge${weak ? ' is-weak' : ''}${sel ? ' is-selected' : ''}${hotIds.includes(e.id) ? ' is-hot' : ''}${reducedMotion ? ' no-motion' : ''}`} style={style}>
               <path className="edge-track" d={g.d} />
               <path className="edge-line" d={g.d} pathLength={1} />
               <circle className="edge-head" cx={g.x2} cy={g.y2} r={4.5} />
@@ -334,65 +368,69 @@ function TableCentrepiece(props: CentrepieceProps) {
               dimmed={hiringFilterView && !inBaseline}
               stamp={hiringFilterView && !inBaseline && isTargetish}
               onSelect={() => onSelect({ kind: 'node', id: n.id })}
-              mechW={mechW.get(n.id) ?? W}
-              linked={!!hotEdge && (hotEdge.from === n.id || hotEdge.to === n.id)}
+              linked={linkedNodes.has(n.id)}
             />
           );
         })}
       </svg>
       <div key={`chips-${replayToken}-${animate ? 1 : 0}`} className={`edge-chips${animate ? ' is-playing' : ''}${hiringFilterView ? ' hf-view' : ''}`}>
         <svg className="edge-leaders" width={chips.w} height={chips.h} aria-hidden="true">
-          {chips.placed.filter((c) => c.offset).map((c) => {
-            const top = c.box.y > c.ay;
-            return <line key={c.id} className={`edge-leader${hot === c.id ? ' is-hot' : ''}`} x1={c.ax} y1={c.ay}
-              x2={Math.max(c.box.x + 10, Math.min(c.box.x + c.box.w - 10, c.ax))} y2={top ? c.box.y : c.box.y + c.box.h}
-              style={{ '--draw-delay': `${times.edge.get(c.id) ?? 0}ms` } as CSSProperties} />;
-          })}
+          {chips.placed.filter((c) => c.offset).map((c) => (
+            <line key={c.id} className={`edge-leader${hot === c.id ? ' is-hot' : ''}`} x1={c.ax} y1={c.ay}
+              x2={Math.max(c.box.x + 10, Math.min(c.box.x + c.box.w - 10, c.ax))} y2={c.box.y > c.ay ? c.box.y : c.box.y + c.box.h}
+              style={{ '--draw-delay': `${times.edge.get(c.id) ?? 0}ms` } as CSSProperties} />
+          ))}
         </svg>
         {chips.placed.map((c) => {
-          const e = edges.find((x) => x.id === c.id)!;
-          const weak = placed.get(e.to)?.node.status === 'unverifiable';
+          const ids = chips.members.get(c.id) ?? [c.id];
+          const weak = ids.every((id) => placed.get(edges.find((x) => x.id === id)?.to ?? '')?.node.status === 'unverifiable');
+          const sel = !!selectedEdge && ids.includes(selectedEdge);
+          // A shared chip steps through its lines on repeated clicks, so each one can reach the drawer.
+          const next = sel ? ids[(ids.indexOf(selectedEdge!) + 1) % ids.length] : ids[0];
           return (
             <button
-              key={c.id} type="button" tabIndex={-1} aria-hidden="true"
-              className={`edge-chip${weak ? ' is-weak' : ''}${selectedEdge === c.id ? ' is-selected' : ''}${hot === c.id ? ' is-hot' : ''}${reducedMotion ? ' no-motion' : ''}`}
-              data-testid="edge-chip"
+              key={c.id} type="button" tabIndex={-1} aria-hidden="true" data-testid="edge-chip"
+              className={`edge-chip${weak ? ' is-weak' : ''}${sel ? ' is-selected' : ''}${hot === c.id ? ' is-hot' : ''}${reducedMotion ? ' no-motion' : ''}`}
               style={{ left: c.box.x, top: c.box.y, width: c.box.w, height: CHIP_H, '--draw-delay': `${times.edge.get(c.id) ?? 0}ms` } as CSSProperties}
-              onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: c.id }); }}
+              onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: next }); }}
               onMouseEnter={() => setHot(c.id)} onMouseLeave={() => setHot((h) => (h === c.id ? null : h))}
             >{c.text}</button>
           );
         })}
-        {hotEdge && <EdgeReason edge={hotEdge} chip={chipById.get(hotEdge.id)} bounds={chips} fallback={(() => {
-          const a = placed.get(hotEdge.from), b = placed.get(hotEdge.to);
-          if (!a || !b) return { x: chips.w / 2, y: chips.h / 2 };
-          const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
-          return chips.toPx((g.x1 + g.x2) / 2, (g.y1 + g.y2) / 2);
+        {hotEdges.length > 0 && <EdgeReason edges={hotEdges} names={new Map(nodes.map((n) => [n.id, n.name]))} chip={hotChip} bounds={chips} fallback={(() => {
+          const g = lines.get(hotEdges[0].id)?.g;
+          return g ? chips.toPx((g.x1 + g.x2) / 2, (g.y1 + g.y2) / 2) : { x: chips.w / 2, y: chips.h / 2 };
         })()} />}
       </div>
-      {chips.dropped.length > 0 && <p className="table-foot table-foot-right">{chips.dropped.length} more {chips.dropped.length === 1 ? 'line' : 'lines'} without a chip: select a line to read its dated evidence</p>}
+      {chips.droppedLines > 0 && <p className="table-foot table-foot-right">{chips.droppedLines} more {chips.droppedLines === 1 ? 'line' : 'lines'} without a chip: select a line to read its dated evidence</p>}
       {offTable > 0 && <p className="table-foot">{offTable} more scanned {offTable === 1 ? 'company has' : 'companies have'} no dated link in the cascade and stay off the table.</p>}
     </div>
   );
 }
 
-/** The full reason for a line, on hover or focus. Transient, so it may sit over the board. */
-function EdgeReason({ edge, chip, bounds, fallback }: {
-  edge: GraphEdge; chip?: { box: { x: number; y: number; w: number; h: number } };
+/** The full reason for a line (or for each line sharing a chip), on hover or focus. Transient, so it may sit over the board. */
+function EdgeReason({ edges, names, chip, bounds, fallback }: {
+  edges: GraphEdge[]; names: Map<string, string>; chip?: ChipOut;
   bounds: { w: number; h: number }; fallback: { x: number; y: number };
 }) {
   const CARD_W = 340;
   const cx = chip ? chip.box.x + chip.box.w / 2 : fallback.x;
   const below = chip ? chip.box.y + chip.box.h + 10 : fallback.y + 14;
   const left = Math.max(8, Math.min(bounds.w - CARD_W - 8, cx - CARD_W / 2));
-  const flip = below > bounds.h - 150;
+  const flip = below > bounds.h - 150 * edges.length;
   const style: CSSProperties = flip
     ? { left, width: CARD_W, bottom: bounds.h - (chip ? chip.box.y - 10 : fallback.y - 14) }
     : { left, width: CARD_W, top: below };
   return (
     <div className="edge-reason" role="tooltip" style={style} data-testid="edge-reason">
-      <p className="edge-reason-text">{edge.label}</p>
-      <p className="edge-reason-meta">{MECH_LABEL[edge.mechanism]}, {Math.round(edge.confidence * 100)}% confidence. Select the line for its dated sources.</p>
+      {edges.map((e) => (
+        <div key={e.id} className="edge-reason-item">
+          {edges.length > 1 && <p className="edge-reason-to">To {names.get(e.to) ?? 'target'}</p>}
+          <p className="edge-reason-text">{e.label}</p>
+          <p className="edge-reason-meta">{MECH_LABEL[e.mechanism]}, {Math.round(e.confidence * 100)}% confidence.</p>
+        </div>
+      ))}
+      <p className="edge-reason-meta">Select the line for its dated sources.</p>
     </div>
   );
 }

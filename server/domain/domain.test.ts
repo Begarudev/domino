@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Company, Evidence } from '../../shared/types.ts';
 import { buildCascade, filterAsOf, parseIntentRules, rankTargets, resolveEntities, scoreReplay, verifyDraft } from './index.ts';
+import { withArticle } from './facts.ts';
 import type { Claim, MoveTrigger, ResolvedCompany } from './types.ts';
 
 const today = '2026-11-22';
@@ -251,6 +252,19 @@ test('draft verifier keeps a cited sentence whole when a company name contains a
   assert.equal(rendered.checks.filter(check => check.status === 'removed').length, 0);
 });
 
+test('draft verifier reads a citation glued to the full stop (live regression: "...initiatives.[1] You ...")', () => {
+  const text = 'Alpha Query posted an inference role on 2026-11-05.';
+  const claims: Claim[] = [{ n: 1, text, evidenceIds: [first.id], numbers: ['2026-11-05'], verifiable: true, recipientCompany: 'Alpha Query' }];
+  const rendered = verifyDraft({ subject: 'Hello', body: 'Hi Dana,\n\n' + text + '[1] They raised $40M on 2026-11-11.[2] Would you have 20 minutes to talk?' },
+    claims, [first]);
+  assert.match(rendered.body, /inference role on 2026-11-05\. \[1\]/);
+  assert.doesNotMatch(rendered.body, /\$40M|(?:^|\s)\d\]/);
+  const quoted = verifyDraft({ subject: 'Hello', body: 'Alpha Query posted “an inference role” on 2026-11-05.”[1]' },
+    [{ ...claims[0], text: 'Alpha Query posted “an inference role” on 2026-11-05.' }], [first]);
+  assert.doesNotMatch(quoted.body, /(?:^|\s)\d\]/);
+  assert.equal(rendered.checks.filter(check => check.status === 'removed').length, 1);
+});
+
 test('placeholder identifiers never merge unrelated companies (live regression: id 0, self-employed, shared hosts)', () => {
   const m = (key: string, name: string, extra: Record<string, unknown> = {}) => ({ key, name, evidenceIds: [], ...extra });
   const result = resolveEntities([
@@ -275,4 +289,11 @@ test('verifier keeps cited sentences that name a "Pvt. Ltd." company and seller-
   assert.match(result.body, /Kestrel Labs Pvt\. Ltd\. posted Senior Inference Engineer on 3 Nov\./);
   assert.match(result.body, /20 minutes/);
   assert.equal(result.checks.filter(check => check.status === 'removed').length, 0);
+});
+
+test('hire summaries use the right indefinite article', () => {
+  assert.equal(withArticle('Inference Reliability Engineer'), 'an Inference Reliability Engineer');
+  assert.equal(withArticle('GPU Engineer'), 'a GPU Engineer');
+  assert.equal(withArticle('ML Engineer'), 'an ML Engineer');
+  assert.equal(withArticle('Series B round'), 'a Series B round');
 });

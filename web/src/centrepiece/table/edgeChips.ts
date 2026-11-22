@@ -9,8 +9,8 @@ export interface ChipOut { id: string; text: string; box: Box; ax: number; ay: n
 
 export const CHIP_H = 28;          // px
 export const CLEAR = 12;           // px clearance between a chip and any chip or tile
-const CHAR_W = 7.7;                // px per character at 15px Archivo, wdth 82 (measured ~7.2, kept generous)
-const CHIP_PADX = 20;
+const CHAR_W = 7.3;                // px per character at 15px Archivo 720, wdth 82 (measured ~7.0)
+const CHIP_PADX = 18;
 
 export const chipWidth = (text: string) => Math.ceil(text.length * CHAR_W + CHIP_PADX);
 
@@ -26,8 +26,9 @@ export function pointOn(c: Curve, t: number) {
 const hits = (a: Box, b: Box, pad: number) =>
   a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 
-// Fine steps along the line, nearest the middle first, so a chip finds a narrow clear gap between tiles.
-const T_STEPS = Array.from({ length: 37 }, (_, i) => 0.05 + i * 0.025).sort((a, b) => Math.abs(a - 0.5) - Math.abs(b - 0.5));
+// Fine steps along the line, nearest the target end first (where the line lands), so a chip sits by the
+// company it points at and still finds a narrow clear gap between tiles.
+const T_STEPS = Array.from({ length: 181 }, (_, i) => 0.05 + i * 0.005).sort((a, b) => Math.abs(a - 0.8) - Math.abs(b - 0.8));
 const Y_STEPS = [0, -1, 1, -2, 2, -3, 3];
 
 /**

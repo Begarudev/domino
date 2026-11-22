@@ -77,6 +77,7 @@ describe('openai adapter', () => {
 
   adapterTest('picks an effort each model family accepts', () => {
     expect(openaiReasoning('gpt-5-mini')).toEqual({ reasoning_effort: 'minimal' });
+    expect(openaiReasoning('gpt-6-luna')).toEqual({ reasoning_effort: 'none' });
     expect(openaiReasoning('gpt-5-nano-2025-08-07')).toEqual({ reasoning_effort: 'minimal' });
     expect(openaiReasoning('gpt-5.4-mini')).toEqual({ reasoning_effort: 'low' });
     expect(openaiReasoning('gpt-4.1-mini')).toEqual({});

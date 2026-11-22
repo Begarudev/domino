@@ -7,6 +7,9 @@ const SHORT: Record<StepName, string> = {
   parse_request: 'Read request', pull_triggers: 'Pull triggers', resolve_entities: 'Resolve names',
   enrich_companies: 'Enrich', cascade: 'Cascade', rank_targets: 'Rank', find_deciders: 'Deciders',
   warm_paths: 'Warm paths', draft_messages: 'Draft + verify', approval_gate: 'Approval', score_replay: 'Score replay',
+  scope_search: 'Scope', pull_departures: 'Departures', resolve_departures: 'Resolve', check_replacements: 'Replacements',
+  detect_openings: 'Openings', score_openings: 'Replay score', fetch_profile: 'Profile', parse_profile: 'Read profile',
+  match_openings: 'Match', draft_intro: 'Draft intro', intro_gate: 'Approval',
 };
 
 export function Reel(props: { state: UIState; onKill: () => void; onResume: () => void; busy: string | null; onOpenLog: () => void }) {

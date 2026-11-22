@@ -12,6 +12,10 @@ import { mapLimit } from '../runtime/pool.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 import { dateShift, predictionEvidence, publishSource, readSource } from './sources.ts';
+import { candidateSteps } from './candidate-steps.ts';
+import type { CandidateOutputs } from './candidate-steps.ts';
+import { openingsSteps } from './openings-steps.ts';
+import type { OpeningsOutputs } from './openings-steps.ts';
 
 const sellerFile = resolve(root, 'config/seller.json');
 const seller: SellerProfile = existsSync(sellerFile) ? JSON.parse(readFileSync(sellerFile, 'utf8')) : {
@@ -24,7 +28,7 @@ type Resolved = ReturnType<typeof deps.resolveEntities> & { triggers: Trigger[];
 type Ranked = ReturnType<typeof deps.rankTargets>;
 type Deciders = { targets: Target[]; people: Person[]; evidence: Evidence[] };
 type Drafted = { targets: Target[]; drafts: Draft[] };
-export interface Outputs {
+export interface Outputs extends OpeningsOutputs, CandidateOutputs {
   parse_request: Intent;
   pull_triggers: TriggerBatch;
   resolve_entities: Resolved;
@@ -39,8 +43,8 @@ export interface Outputs {
 }
 
 export type Checkpoints = Partial<Outputs>;
-type StepResult<K extends StepName> = { output: Outputs[K]; summary: string; events?: RunEvent[] };
-type Runner<K extends StepName> = (ctx: ToolContext, checkpoints: Checkpoints) => Promise<StepResult<K>> | StepResult<K>;
+export type StepResult<K extends StepName> = { output: Outputs[K]; summary: string; events?: RunEvent[] };
+export type Runner<K extends StepName> = (ctx: ToolContext, checkpoints: Checkpoints) => Promise<StepResult<K>> | StepResult<K>;
 const unique = <T>(items: T[]) => [...new Set(items)];
 const byId = <T extends { id: string }>(rows: T[]) => [...new Map(rows.map(row => [row.id, row])).values()];
 function publishTriggers(ctx: ToolContext, triggers: Trigger[]) {
@@ -459,6 +463,7 @@ export const steps: { [K in StepName]: Runner<K> } = {
   parse_request: parseRequest, pull_triggers: pullTriggers, resolve_entities: resolveEntities, enrich_companies: enrichCompanies,
   cascade, rank_targets: rankTargets, find_deciders: findDeciders, warm_paths: warmPaths, draft_messages: draftMessages,
   approval_gate: approvalGate, score_replay: scoreReplay,
+  ...openingsSteps, ...candidateSteps,
 };
 
 function safeJson<T>(text: string, shape: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): T | null {
