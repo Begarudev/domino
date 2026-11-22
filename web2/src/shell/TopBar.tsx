@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { href, navigate, useRoute } from '../data/router.ts';
 import type { Route } from '../data/router.ts';
+import { useQuery } from '../data/query.ts';
 import { runStore, useRunSel } from '../data/store.ts';
 import { fmtDate, fmtTime } from '../lib/format.ts';
 import { getShell, signOut, useShell } from './ui.ts';
@@ -62,18 +63,26 @@ function RunChip() {
   const page = useShell((s) => s.pageSource);
   const companyId = useShell((s) => s.companyId);
   const running = status === 'running' || status === 'queued';
+  // The engine's own sentence for how the scan was read ("Live Crustdata read 22 Nov, 14:30–14:34 IST · replayed from
+  // the recorded cache (0 credits)") beats our guess from dataMode.
+  const funnel = useQuery<{ runId?: string; served?: { label?: string } } | null>('funnel', async () => {
+    const r = await fetch('/api/openings/funnel').catch(() => null);
+    const ok = r && r.ok && (r.headers.get('content-type') ?? '').includes('json');
+    return { data: ok ? await r.json() : null, source: 'live', evidence: [] };
+  });
+  const served = funnel.data?.runId === runId ? funnel.data?.served?.label : undefined;
   let how = dataMode === 'cache' ? 'cached live' : dataMode === 'fixture' ? 'fixture' : 'live';
   if (mode === 'sample') how = 'recorded';
   if (mode === 'mock') how = 'mock';
   if (!runId) {
-    return <span className="runchip" title="No run behind this page" data-testid="run-chip"><span className="dot idle" />{page === 'fixture' ? 'snapshot of today’s scan' : 'no run'}</span>;
+    return <span className="runchip" title="No run behind this page" data-testid="run-chip"><span className="dot idle" />{page === 'fixture' ? 'snapshot of today’s scan' : 'Loading the latest scan…'}</span>;
   }
   return (
     <a className="runchip" data-testid="run-chip" title={`Run ${runId}. Open its reading log.`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
       onClick={(e) => { e.preventDefault(); if (companyId) navigate({ page: 'company', id: companyId, tab: 'reading' }); }}>
       <span className={`dot${running ? ' run' : ''}`} />
-      {running ? 'Scan running' : how === 'recorded' ? 'Recorded run' : how === 'mock' ? 'Mock run' : how === 'fixture' ? 'Fixture scan' : how === 'cached live' ? 'Cached live scan' : 'Live scan'}
-      {created ? ` · ${fmtDate(created)}, ${fmtTime(created)} IST` : ''}
+      {served && !running ? served : running ? 'Scan running' : how === 'recorded' ? 'Recorded run' : how === 'mock' ? 'Mock run' : how === 'fixture' ? 'Fixture scan' : how === 'cached live' ? 'Cached live scan' : 'Live scan'}
+      {!served && created ? ` · ${fmtDate(created)}, ${fmtTime(created)} IST` : ''}
     </a>
   );
 }
