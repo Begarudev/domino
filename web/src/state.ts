@@ -47,6 +47,8 @@ export interface UIState {
   cascadeEpoch: number;
   /** replay outcomes as they stream in, before replay.scored lands */
   outcomes: ReplayOutcome[];
+  /** every event so far in seq order (the centrepiece contract hands these to the slot) */
+  events: StoredEvent[];
 }
 
 export function emptyBudget(): BudgetState {
@@ -72,7 +74,7 @@ export function initialState(snap: RunSnapshot): UIState {
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
   return {
     snap: normalizeSnapshot(snap), lastSeq: 0, seen: {}, timeline: [], durations: {}, currentStep: null,
-    actionNotes: {}, outcomes: snap.replay?.outcomes ?? [], cascadeEpoch: cascadeDone && snap.graph.edges.length ? 1 : 0,
+    actionNotes: {}, events: [], outcomes: snap.replay?.outcomes ?? [], cascadeEpoch: cascadeDone && snap.graph.edges.length ? 1 : 0,
   };
 }
 
@@ -108,7 +110,7 @@ function setStep(steps: StepState[], step: StepName, patch: Partial<StepState>):
 }
 
 const companyName = (snap: RunSnapshot, id: string) =>
-  snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name ?? id;
+  snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name ?? null;
 
 const secs = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
@@ -202,7 +204,7 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
       snap.targets = snap.targets.map((t) => (t.companyId === ev.draft.companyId ? { ...t, draftId: ev.draft.id } : t));
       break;
     case 'claim.unverifiable':
-      note('warn', `Can't verify: ${ev.claim}`, { detail: `${companyName(snap, ev.companyId)}: ${ev.reason}` });
+      note('warn', `Can't verify: ${ev.claim}`, { detail: companyName(snap, ev.companyId) ? `${companyName(snap, ev.companyId)}: ${ev.reason}` : ev.reason });
       break;
     case 'ask.requested':
       snap.asks = upsert(snap.asks, ev.ask, (a) => a.id);
@@ -270,7 +272,7 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
 
   return {
     ...state, snap, currentStep, durations, actionNotes, timeline, cascadeEpoch, outcomes,
-    lastSeq: Math.max(state.lastSeq, stored.seq), seen: { ...state.seen, [stored.seq]: true },
+    events: [...state.events, stored], lastSeq: Math.max(state.lastSeq, stored.seq), seen: { ...state.seen, [stored.seq]: true },
   };
 }
 

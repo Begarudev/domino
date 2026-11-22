@@ -27,6 +27,7 @@ export interface Scenario {
   llm: string;
   script: ScriptItem[];
   limits: BudgetState['limits'];
+  intent: Intent;
 }
 
 export const MAIN_REQUEST =
@@ -416,7 +417,14 @@ export function buildScenario(kind: ScenarioKind, request: string, runId: string
     push(150, { type: 'run.status', status: 'completed', note: 'Replay scored' });
   }
 
-  return { kind, runId, request, dataMode: 'live', llm: 'anthropic:claude-sonnet-5-5', script, limits };
+  const intent: Intent = {
+    offering: kind === 'ask' ? null : 'managed GPU inference', buyerProfile: 'AI companies', geography: kind === 'ask' ? 'India' : null,
+    windowDays: 30, asOf, deciderTitles: ['CTO', 'VP Engineering', 'Head of ML Platform', 'VP Infrastructure'],
+    signalKeywords: ['inference', 'model serving', 'GPU', 'ML platform'], maxTargets: 5, parsedBy: 'llm',
+    runKind: replay ? 'replay' : 'live', horizonEnd: replay ? '2026-11-22' : null,
+    assumptions: ['Window: last 30 days', 'Up to 5 targets', 'Decider titles: CTO, VP Engineering, Head of ML Platform'],
+  };
+  return { kind, runId, request, dataMode: 'live', llm: 'anthropic:claude-sonnet-5-5', script, limits, intent };
 }
 
 const NAMES: Record<string, string> = {
