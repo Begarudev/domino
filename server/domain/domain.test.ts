@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Company, Evidence, Trigger } from '../../shared/types.ts';
-import { buildCascade, filterAsOf, parseIntentRules, rankTargets, resolveEntities, verifyDraft } from './index.ts';
-import type { Claim } from './types.ts';
+import type { Company, Evidence } from '../../shared/types.ts';
+import { buildCascade, filterAsOf, parseIntentRules, rankTargets, resolveEntities, scoreReplay, verifyDraft } from './index.ts';
+import type { Claim, MoveTrigger, ResolvedCompany } from './types.ts';
 
 const today = '2026-11-22';
 const intent = parseIntentRules('find ai companies, we sell managed inference anywhere', today);
@@ -19,10 +19,25 @@ function fact(id: string, observedAt: string | null, endpoint = '/job/search', f
 }
 const first = fact('ev_1', '2026-11-05');
 const second = fact('ev_2', '2026-11-11');
-const departure = (id: string, row: Evidence, loser: Company, hirer: Company): Trigger => ({
-  id: 'tr_' + id, companyId: loser.id, relatedCompanyId: hirer.id, kind: 'departure', personId: 'pe_' + id,
-  date: row.observedAt!, summary: 'An infrastructure employee moved', evidenceIds: [row.id],
-});
+function move(id: string, date: string, former: string, loser = a, hirer = b, precision: 'day' | 'month' = 'day') {
+  const hire = { ...fact('ev_start_' + id, precision === 'day' ? date : null, '/person/search', '$.experience.employment_details.current[0].start_date'),
+    value: 'Inference Engineer' };
+  const previous = { ...fact('ev_end_' + id, date, '/person/search', '$.experience.employment_details.past[0].end_date'),
+    value: former };
+  const trigger: MoveTrigger = {
+    id: 'tr_' + id, companyId: hirer.id, relatedCompanyId: loser.id, kind: 'hire', personId: 'pe_' + id,
+    date, summary: 'An infrastructure employee moved', evidenceIds: [hire.id, previous.id],
+    move: { currentTitle: 'Inference Engineer', previousTitle: former, datePrecision: precision },
+  };
+  return { trigger, evidence: [hire, previous] };
+}
+
+function cascadeMoves(rows: ReturnType<typeof move>[], companies: Company[]) {
+  const triggers = rows.map(row => row.trigger);
+  const evidence = rows.flatMap(row => row.evidence);
+  const graph = buildCascade(intent, triggers, companies, evidence);
+  return { graph, targets: rankTargets(intent, graph, companies, triggers).targets };
+}
 
 test('messy intent extracts offering and India and records unset defaults', () => {
   const parsed = parseIntentRules('pls find ai cos needing gpu infra, we sell managed inference, india, meetings w deciders', today);
@@ -68,28 +83,97 @@ test('entity resolution respects strong identity and conflicting namesakes', () 
   assert.notEqual(result.idMap.job, result.idMap.wrong);
   assert.notEqual(result.idMap.growth, result.idMap.wrong);
   assert.equal(result.idMap.p1, result.idMap.p2);
-  assert.match(result.merges[0].reason, /job.*domain|growth.*domain/);
+  assert.match(result.merges[0].reason, /2 source records.*(?:job|growth).*domain/);
+  assert.notEqual(result.idMap.orphan, result.idMap.job);
+  assert.notEqual(result.idMap.orphan, result.idMap.wrong);
   assert.ok(result.keptApart.some(row => row.reason.includes('different domains')));
 });
 
-test('talent drain needs distinct people and two dated verifiable rows', () => {
-  const moves = [departure('one', first, a, b), departure('two', second, a, b)];
-  const withoutSecond = buildCascade(intent, moves, [a, b], [first]);
-  assert.equal(withoutSecond.edges.length, 0);
-  assert.equal(buildCascade(intent, moves, [a, b], [first, { ...second, observedAt: null }]).edges.length, 0);
-  assert.equal(buildCascade(intent, [moves[0], { ...moves[1], personId: moves[0].personId }], [a, b], [first, second]).edges.length, 0);
-  const graph = buildCascade(intent, moves, [a, b], [first, second]);
+test('talent drain needs three distinct conclusive hires at the same company and a recent third hire', () => {
+  const moves = [
+    move('one', '2026-09-20', 'Inference Engineer'),
+    move('two', '2026-10-10', 'ML Infrastructure Engineer'),
+    move('three', '2026-11-12', 'GPU Engineer'),
+  ];
+  const triggers = moves.map(row => row.trigger);
+  const evidence = moves.flatMap(row => row.evidence);
+  assert.equal(buildCascade(intent, triggers, [a, b], evidence.slice(0, 1)).edges.length, 0);
+  assert.equal(cascadeMoves(moves.slice(0, 2), [a, b]).graph.edges.length, 0);
+  assert.equal(cascadeMoves([moves[0], moves[1], { ...moves[2], trigger: { ...moves[2].trigger,
+    personId: moves[0].trigger.personId } }], [a, b]).graph.edges.length, 0);
+  assert.equal(cascadeMoves([moves[0], moves[1], move('old', '2026-10-15', 'Inference Engineer')], [a, b]).graph.edges.length, 0);
+  const { graph, targets } = cascadeMoves(moves, [a, b]);
   assert.equal(graph.edges[0].mechanism, 'TALENT_DRAIN');
+  assert.equal(graph.edges[0].to, a.id);
   assert.match(graph.edges[0].rationale, /Confidence/);
   assert.ok(graph.edges[0].alternative);
-  assert.equal(rankTargets(intent, graph, [a, b], moves).targets[0].netNew, true);
+  assert.equal(targets[0].netNew, true);
+  assert.equal(targets[0].testedClaim, 'serving staffing activity at Alpha Query within 60 days (a dated hire or job post)');
 });
 
-test('same-company and same-root subsidiary moves never fire a talent-drain edge', () => {
+test('same-company and same-root subsidiary moves are held without a talent-drain edge', () => {
   for (const loser of [b, subsidiary]) {
-    const internal = [departure('one', first, loser, b), departure('two', second, loser, b)];
-    assert.equal(buildCascade(intent, internal, [b, subsidiary], [first, second]).edges.length, 0);
+    const rows = ['2026-11-04', '2026-11-11', '2026-11-13'].map((date, index) =>
+      move(String(index), date, 'Inference Engineer', loser, b));
+    const { graph, targets } = cascadeMoves(rows, [b, subsidiary]);
+    assert.equal(graph.edges.length, 0);
+    assert.match(targets[0].hold!.reasons.join(' '), /Shared parent or related domains/);
   }
+});
+
+test('guarded targets list headcount, identity, title and date uncertainty reasons', () => {
+  const dates = ['2026-11-04', '2026-11-11', '2026-11-13'];
+  const cases = [
+    { company: { ...a, headcount: 6 }, title: 'Inference Engineer', precision: 'day', expected: /more than 40%/ },
+    { company: { ...a, ambiguousIdentity: true } satisfies ResolvedCompany, title: 'Inference Engineer', precision: 'day', expected: /Ambiguous company identity/ },
+    { company: a, title: 'Software Engineer', precision: 'day', expected: /unrecognised titles/ },
+    { company: a, title: 'Inference Engineer', precision: 'month', expected: /month-only dates/ },
+    { company: { ...a, acquisitions: [{ acquirer: b.name, acquired: a.name, date: '2026-11-01' }] } satisfies ResolvedCompany,
+      title: 'Inference Engineer', precision: 'day', expected: /Acquisition or acqui-hire/ },
+  ] as const;
+  for (const scenario of cases) {
+    const rows = dates.map((date, index) => move(String(index), date, index === 2 ? scenario.title : 'Inference Engineer',
+      scenario.company, b, index === 2 ? scenario.precision : 'day'));
+    const { graph, targets } = cascadeMoves(rows, [scenario.company, b]);
+    assert.equal(graph.edges.length, 0);
+    assert.match(targets[0].hold!.reasons.join(' '), scenario.expected);
+  }
+});
+
+test('whole-month November starts count and hardware or non-engineering roles do not', () => {
+  const first = move('month-1', '2026-11-07', 'GPU Software Engineer');
+  const second = move('month-2', '2026-11-10', 'Distributed Training Engineer');
+  const third = move('month-3', '2026-11-22', 'LLM Infrastructure Engineer');
+  third.trigger.move = { ...third.trigger.move!, datePrecision: 'month', startInterval: ['2026-11-01', '2026-11-22'] };
+  assert.match(cascadeMoves([first, second, third], [a, b]).graph.edges[0].label, /Nov 2026/);
+  for (const title of ['GPU Design Engineer', 'ASIC Engineer', 'RTL Design Engineer', 'Physical Design Engineer',
+    'Technical Program Manager', 'Finance Director', 'GPU Account Manager']) {
+    const denied = move('no', '2026-11-12', title);
+    const { graph, targets } = cascadeMoves([first, second, denied], [a, b]);
+    assert.ok(!graph.edges.some(edge => edge.mechanism === 'TALENT_DRAIN'), title);
+    assert.ok(!targets.some(target => target.hold), title);
+  }
+});
+
+test('talent-drain replay scores only serving titles at the loser within 60 days and omits holds', () => {
+  const { targets } = cascadeMoves(['2026-11-05', '2026-11-09', '2026-11-13'].map((date, i) =>
+    move(String(i), date, 'Inference Engineer')), [a, b]);
+  const replay = parseIntentRules('We sell managed inference. Replay as of 2026-09-01', today);
+  const target = { ...targets[0], whyNowDate: '2026-08-01' };
+  const outcomes = [
+    { companyKey: a.id, date: '2026-09-21', kind: 'job_post', summary: 'posted “Growth Strategist”', evidenceIds: [first.id] },
+    { companyKey: a.id, date: '2026-10-31', kind: 'hire', summary: 'filled an Inference Engineer role', evidenceIds: [second.id] },
+    { companyKey: b.id, date: '2026-09-05', kind: 'hire', summary: 'filled a GPU Engineer role', evidenceIds: [second.id] },
+  ] as const;
+  const scored = scoreReplay(replay, [target, { ...target, companyId: b.id, hold: { reasons: ['internal'] } }],
+    { firstOrder: [], headcount: [] }, outcomes.map(row => ({ ...row, evidenceIds: [...row.evidenceIds] })));
+  assert.equal(scored.domino.predicted, 1);
+  assert.equal(scored.domino.hits, 1);
+  assert.equal(scored.domino.medianLeadDays, 60);
+  assert.match(scored.snapshotLabel!, /Not point-in-time: today's Crustdata index.*1 Sep/);
+  assert.match(scored.outcomeDefinition!, /within 60 days/);
+  assert.equal(scoreReplay(replay, [target], { firstOrder: [], headcount: [] },
+    [{ ...outcomes[1], date: '2026-11-01', evidenceIds: [second.id] }]).domino.hits, 0);
 });
 
 test('replay removes future and late-profile facts while retaining dated observations at the cutoff', () => {

@@ -54,6 +54,17 @@ test('person_recent_moves pairs current starts with the nearest prior end and ke
   assert.doesNotMatch(JSON.stringify(body), /email|phone|contact/i);
 });
 
+test('person search records month precision and looks back 120–30 days in replay', () => {
+  const live = evaluate(endpoints.person_recent_moves, { intent });
+  assert.ok(live.parsed.evidence.some(row => /at Morrow Stack in Nov 2026 \(month precision\)/.test(row.claim) &&
+    row.observedAt === today));
+  const historical = evaluate(endpoints.person_recent_moves, { intent: replay }, replay);
+  assert.match(JSON.stringify(historical.body), /"field":"experience.employment_details.current.start_date","type":"=>","value":"2026-05-05"/);
+  assert.match(JSON.stringify(historical.body), /"field":"experience.employment_details.current.start_date","type":"<","value":"2026-08-03"/);
+  assert.deepEqual(historical.parsed.triggers.filter(row => row.kind === 'hire').map(row => row.date).sort(),
+    ['2026-07-29', '2026-07-31', '2026-08-02']);
+});
+
 test('company_growth uses the provider snapshot date and preserves the legal alias', () => {
   const { parsed } = evaluate(endpoints.company_growth, { intent });
   assert.equal(parsed.mentions.find(company => company.crustdataId === kestrel.crustdataId)?.name, 'Kestrel Labs Pvt. Ltd.');
