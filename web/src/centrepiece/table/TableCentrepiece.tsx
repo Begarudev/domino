@@ -37,34 +37,49 @@ function mechanismText(n: GraphNode) {
 
 interface Placed { node: GraphNode; x: number; y: number; col: number; row: number }
 
-function layout(nodes: GraphNode[], edges: GraphEdge[]) {
+const SUB_GAP = 44;       // gap between tiles of the same tier when a tier wraps into several columns
+
+/** Columns by tier; rows ordered by parents. Tries every row count and keeps the one with the biggest tiles. */
+function layout(nodes: GraphNode[], edges: GraphEdge[], slotW: number, slotH: number) {
   const tiers = [...new Set(nodes.map((n) => n.tier))].sort((a, b) => a - b);
-  const rowOf = new Map<string, number>();
   const cols: GraphNode[][] = tiers.map((t) => nodes.filter((n) => n.tier === t));
-  cols.forEach((col, ci) => {
-    const taken = new Set<number>();
-    const want = (n: GraphNode) => {
-      const parents = edges.filter((e) => e.to === n.id).map((e) => rowOf.get(e.from)).filter((r): r is number => r !== undefined);
-      return parents.length ? parents.reduce((a, b) => a + b, 0) / parents.length : ci === 0 ? col.indexOf(n) : 99;
-    };
-    [...col].sort((a, b) => want(a) - want(b)).forEach((n) => {
-      let r = Math.max(0, Math.round(want(n) === 99 ? 0 : want(n)));
-      while (taken.has(r)) r++;
-      taken.add(r);
-      rowOf.set(n.id, r);
+  const maxN = Math.max(1, ...cols.map((c) => c.length));
+  let best: { placed: Map<string, Placed>; vw: number; vh: number; scale: number } | null = null;
+  for (let rows = 1; rows <= maxN; rows++) {
+    const rowOf = new Map<string, number>();
+    const placed = new Map<string, Placed>();
+    let x = PAD;
+    cols.forEach((col, ci) => {
+      const want = (n: GraphNode) => {
+        const parents = edges.filter((e) => e.to === n.id).map((e) => rowOf.get(e.from)).filter((r): r is number => r !== undefined);
+        return parents.length ? parents.reduce((a, b) => a + b, 0) / parents.length : col.indexOf(n);
+      };
+      const ordered = [...col].sort((a, b) => want(a) - want(b));
+      const sub = Math.ceil(ordered.length / rows);
+      // Single-column tiers keep their parents' rows; wrapped tiers fill column by column.
+      const taken = new Set<number>();
+      ordered.forEach((n, i) => {
+        let r: number, j: number;
+        if (sub === 1) {
+          r = Math.min(rows - 1, Math.max(0, Math.round(want(n))));
+          while (taken.has(r)) r = (r + 1) % rows;
+          taken.add(r);
+          j = 0;
+        } else {
+          j = Math.floor(i / rows);
+          r = i % rows;
+        }
+        rowOf.set(n.id, r);
+        placed.set(n.id, { node: n, col: ci, row: r, x: x + j * (W + SUB_GAP), y: PAD + r * (H + LABEL + ROW_GAP) });
+      });
+      x += sub * W + (sub - 1) * SUB_GAP + (ci < cols.length - 1 ? COL_GAP : 0);
     });
-  });
-  const rows = Math.max(1, ...[...rowOf.values()].map((r) => r + 1));
-  const placed = new Map<string, Placed>();
-  cols.forEach((col, ci) =>
-    col.forEach((n) => {
-      const row = rowOf.get(n.id)!;
-      placed.set(n.id, { node: n, col: ci, row, x: PAD + ci * (W + COL_GAP), y: PAD + row * (H + LABEL + ROW_GAP) });
-    }),
-  );
-  const vw = PAD * 2 + Math.max(1, cols.length) * W + Math.max(0, cols.length - 1) * COL_GAP + 70;
-  const vh = PAD * 2 + rows * (H + LABEL) + (rows - 1) * ROW_GAP;
-  return { placed, vw, vh };
+    const vw = x + PAD + 70;
+    const vh = PAD * 2 + rows * (H + LABEL) + (rows - 1) * ROW_GAP;
+    const scale = Math.min(slotW / vw, slotH / vh);
+    if (!best || scale > best.scale + 0.001) best = { placed, vw, vh, scale };
+  }
+  return best!;
 }
 
 /** Fire time (ms) per node and per edge, from the edges' animation order. */
@@ -197,7 +212,8 @@ function TableCentrepiece(props: CentrepieceProps) {
     return { nodes: keep, edges: lines, offTable: all.nodes.length - keep.length };
   }, [snap.graph, snap.targets]);
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
-  const { placed, vw, vh } = useMemo(() => layout(nodes, edges), [nodes, edges]);
+  const { placed, vw, vh } = useMemo(() => layout(nodes, edges, width || 800, height || 500), [nodes, edges, width, height]);
+  const showLabels = edges.length <= 6;
   const times = useMemo(() => schedule(nodes, edges), [nodes, edges]);
   const evById = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
   const baseline = new Set(snap.baseline.hiringFilterCompanyIds);
@@ -248,12 +264,12 @@ function TableCentrepiece(props: CentrepieceProps) {
                 onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: e.id }); }}
                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onSelect({ kind: 'edge', id: e.id }); } }}
               />
-              <foreignObject x={midX - labelW / 2} y={Math.min(g.y1, g.y2) - 92} width={labelW} height={86} className="edge-fo">
+              {(showLabels || sel) && <foreignObject x={midX - labelW / 2} y={Math.min(g.y1, g.y2) - 92} width={labelW} height={86} className="edge-fo">
                 <div className="edge-label" onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: e.id }); }}>
                   <span>{e.label}</span>
                   <span className="edge-meta">{MECH_LABEL[e.mechanism]} {Math.round(e.confidence * 100)}%</span>
                 </div>
-              </foreignObject>
+              </foreignObject>}
             </g>
           );
         })}
@@ -273,6 +289,7 @@ function TableCentrepiece(props: CentrepieceProps) {
           );
         })}
       </svg>
+      {!showLabels && <p className="table-foot table-foot-right">{edges.length} lines: select one to read its dated evidence</p>}
       {offTable > 0 && <p className="table-foot">{offTable} more scanned {offTable === 1 ? 'company has' : 'companies have'} no dated link in the cascade and stay off the table.</p>}
     </div>
   );

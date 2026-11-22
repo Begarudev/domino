@@ -173,6 +173,7 @@ a { color: var(--cobalt-text); }
 .tl-items { margin: 4px 0 0 22px; display: grid; gap: 3px; }
 .tl-item { font-size: 12.5px; line-height: 1.35; padding-left: 8px; border-left: 2px solid var(--hair); color: var(--text-2); display: grid; }
 .tl-detail { color: var(--text-3); font-size: 12px; }
+.tl-count { color: var(--bone); font-weight: 700; }
 .tl-retry { border-left-color: var(--amber); color: var(--bone); }
 .tl-warn { border-left-color: var(--amber); }
 .tl-fail { border-left-color: var(--miss); color: var(--miss-text); }
