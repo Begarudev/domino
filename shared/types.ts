@@ -150,7 +150,6 @@ export interface GraphEdge {
   observedAt: IsoDate | null;       // latest dated evidence on this edge
   evidenceIds: string[];
   order: number;                    // animation order in the cascade (0 first)
-  alternative?: string | null;      // the competing explanation we could not rule out ("hiring may be cost-cutting")
 }
 
 export interface CascadeGraph { nodes: GraphNode[]; edges: GraphEdge[] }
@@ -409,8 +408,8 @@ export interface ReplayScore {
   baselineHeadcount: { predicted: number; hits: number; precision: number; medianLeadDays: number | null };
   outcomes: ReplayOutcome[];
   note: string;                     // honest one-liner, including when DOMINO loses to a baseline
-  snapshotLabel: string;            // "Not point-in-time: today's Crustdata index, filtered to facts dated on or before 1 Sep"
-  outcomeDefinition: string;        // frozen before outcomes were looked at (see README "Replay protocol")
+  snapshotLabel?: string;           // "Not point-in-time: today's Crustdata index, filtered to facts dated on or before 1 Sep"
+  outcomeDefinition?: string;       // frozen before outcomes were looked at (see README "Replay protocol")
 }
 
 export interface StoredEvent { seq: number; runId: string; ts: IsoDateTime; event: RunEvent }
