@@ -21,10 +21,10 @@
 }
 
 /* top strip */
-.ld-top { display: flex; align-items: center; justify-content: space-between; height: 64px; border-bottom: 1px solid var(--line); }
+.ld-top { display: flex; align-items: center; justify-content: flex-start; gap: var(--s5); height: 64px; border-bottom: 1px solid var(--line); }
 .ld-mark { font-weight: 800; font-size: 20px; letter-spacing: .12em; font-variation-settings: 'wdth' var(--w-title); color: var(--tile); }
-.ld-mode { font-size: 13px; color: var(--paper-2); }
-.ld-mode--fixture { color: var(--warn); }
+.ld-mode { font-size: var(--fs-ui); font-weight: 600; color: var(--paper-2); }
+.ld-mode--fixture { color: var(--warn); background: var(--warn-wash); border: 1px solid var(--warn); border-radius: 999px; padding: 6px 14px; }
 
 /* ask */
 .ld-ask { max-width: 980px; padding-top: clamp(8px, 4vh, 48px); }
@@ -61,7 +61,7 @@
   display: inline-flex; align-items: center; gap: 12px; border: 0; border-radius: 7px; cursor: pointer;
   background: var(--ink); color: var(--tile); padding: 13px 18px 13px 20px; font: 600 16px/1 var(--font);
 }
-.ld-go:disabled { cursor: default; opacity: .45; }
+.ld-go:disabled { cursor: default; background: color-mix(in srgb, var(--ink) 40%, var(--tile)); color: var(--tile); }
 .ld--run .ld-go:disabled { opacity: 1; background: var(--panel-2); }
 .ld-kbd { font: 400 12px/1 var(--font); color: var(--paper-2); }
 .ld-stamp {
@@ -74,9 +74,9 @@
 
 /* plan: one standing tile per real step */
 .ld-plan { align-self: end; }
-.ld-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.ld-h { margin: 0; font-size: 14px; font-weight: 600; color: var(--paper-2); }
-.ld-now { font-size: 13px; font-weight: 600; color: var(--live-text); }
+.ld-plan-head { display: flex; align-items: baseline; justify-content: flex-start; gap: 16px; margin-bottom: 14px; }
+.ld-h { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--paper-2); }
+.ld-now { font-size: 26px; font-weight: 700; font-variation-settings: 'wdth' var(--w-title); color: var(--live-text); }
 .ld-row { list-style: none; margin: 0; padding: 0 0 6px; display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: clamp(6px, .9vw, 14px); perspective: 900px; }
 .ld-tile {
   position: relative; aspect-ratio: 1 / 1.32; min-height: 0; border-radius: 9px; padding: 12px 10px;
@@ -97,11 +97,11 @@
 .ld-plan.is-lit .ld-tile-rule { background: var(--tile-edge); }
 .ld-plan.is-lit .ld-tile.is-up { box-shadow: 0 0 0 2px var(--live), 0 0 36px var(--live-glow); }
 .ld-plan.is-lit .ld-tile.is-fail { box-shadow: 0 0 0 2px var(--bad); }
-.ld-plan.is-lit .ld-tile.is-down { transform: rotateX(64deg); filter: brightness(.55) sepia(.2); }
+.ld-plan.is-lit .ld-tile.is-down { transform: rotateX(52deg); filter: brightness(.55) sepia(.2); }
 .ld-plan.is-lit .ld-tile.is-skip.is-down { opacity: .45; }
 
 /* terms: cap, window, clock */
-.ld-terms { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: clamp(16px, 3vw, 48px); align-items: start; border-top: 1px solid var(--line); padding-top: 18px; min-height: 118px; }
+.ld-terms { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(16px, 3vw, 48px); align-items: start; border-top: 1px solid var(--line); padding-top: 18px; min-height: 118px; }
 .ld-terms { display: none; }
 .ld--run .ld-terms { display: grid; }
 .ld-term { opacity: .3; transition: opacity .5s var(--ease); }
@@ -109,7 +109,8 @@
 .ld-term .ld-fig { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline; animation: ld-count .7s var(--ease) backwards; }
 .ld-big { font-weight: 800; font-variation-settings: 'wdth' var(--w-title); font-size: 54px; line-height: .9; }
 .ld-unit { font-weight: 600; font-size: 15px; color: var(--paper); }
-.ld-small { grid-column: 1 / -1; margin-top: 8px; font-size: 13px; color: var(--paper-3); max-width: 38ch; }
+.ld-small { grid-column: 1 / -1; margin-top: 10px; font-size: 16px; color: var(--paper-2); max-width: 36ch; }
+.ld-small b { font-weight: 600; color: var(--paper); }
 .ld-term--cap .ld-big { color: var(--tile); }
 .ld-term--win .ld-big { color: var(--live-text); }
 .ld-term--clock .ld-big { color: var(--paper); }

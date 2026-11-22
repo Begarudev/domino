@@ -12,7 +12,7 @@ const OUTBOUND =
 const REPLAY =
   'Replay as of 1 Sep 2026: we sell managed GPU inference. Which AI companies would have needed it, and were we right by 22 Nov?';
 const EXAMPLES = [
-  { label: 'This week’s meetings', text: OUTBOUND },
+  { label: 'Try a GPU inference request', text: OUTBOUND },
   { label: 'Replay from 1 Sep', text: REPLAY },
 ];
 
@@ -71,7 +71,7 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
   useEffect(() => {
     if (hold || stage === 4) return;
     if (stage === 3 || (needsUser && stage >= 1)) {
-      const h = setTimeout(() => setStage(4), t(needsUser ? 900 : 2600));
+      const h = setTimeout(() => setStage(4), t(needsUser ? 900 : 5000));
       return () => clearTimeout(h);
     }
   }, [stage, needsUser, hold]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -104,14 +104,14 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
         <span className="ld-mark">DOMINO</span>
         {(live ? snap.dataMode : dataMode) && (
           <span className={`ld-mode${fixture ? ' ld-mode--fixture' : ''}`}>
-            {fixture ? 'Fixture data: synthetic companies' : `Data: ${live ? snap.dataMode : dataMode}`}
+            {fixture ? 'Fixture, synthetic companies' : `Data: ${live ? snap.dataMode : dataMode}`}
           </span>
         )}
       </header>
 
       <section className="ld-ask">
         <h1 className="ld-title">Who should you meet this week?</h1>
-        <p className="ld-sub">DOMINO reads the last month of hires, job posts and funding across companies, works out who now needs what you sell, and drafts a sourced note to the person who decides.</p>
+        <p className="ld-sub">DOMINO reads the last month of hires, job posts and funding across companies, finds who now needs what you sell, and drafts sourced messages to the people who decide, for you to approve.</p>
 
         <form className="ld-card" onSubmit={(e) => { e.preventDefault(); start(); }}>
           <label htmlFor="ld-req" className="sr-only">What do you sell, and who should DOMINO find?</label>
@@ -134,10 +134,14 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
                 ))}
               </div>
             )}
-            <button type="submit" className="ld-go" disabled={!text.trim() || submitted}>
-              {submitted ? 'Running' : 'Start the run'}
-              {!submitted && <kbd className="ld-kbd" aria-hidden="true">⌘↵</kbd>}
-            </button>
+            {submitted && stage >= 1 ? (
+              <button type="button" className="ld-go" onClick={() => setStage(4)} disabled={stage === 4}>Open the run</button>
+            ) : (
+              <button type="submit" className="ld-go" disabled={!text.trim() || submitted}>
+                {submitted ? 'Starting' : 'Start the run'}
+                {!submitted && <kbd className="ld-kbd" aria-hidden="true">⌘↵</kbd>}
+              </button>
+            )}
           </div>
         </form>
         {error && !runId && <p className="ld-error" role="alert">{error}</p>}
@@ -146,7 +150,7 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
       <section className={`ld-plan${stage >= 1 ? ' is-lit' : ''}`} aria-label="Plan">
         <div className="ld-plan-head">
           <h2 className="ld-h">{stage >= 1 ? 'The plan' : `${STEP_ORDER.length} steps from your request to an approved meeting`}</h2>
-          {stage >= 1 && <span className="ld-now" aria-live="polite">{running ? running.label : target === steps.length ? 'Every step done' : 'Queued'}</span>}
+          {stage >= 1 && <span className="ld-now" aria-live="polite">{running ? `Step ${steps.indexOf(running) + 1}: ${running.label}` : target === steps.length ? 'Every step done' : 'Queued'}</span>}
         </div>
         <ol className="ld-row">
           {tiles.map((s, i) => (
@@ -177,12 +181,12 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
               {replay ? (
                 <>
                   <span className="ld-big">{fmtDate(intent.asOf)}</span><span className="ld-unit">{intent.asOf.slice(0, 4)}</span>
-                  <span className="ld-small">Only facts dated on or before this day. Scored against what happened up to {fmtDate(intent.horizonEnd, { year: true })}.</span>
+                  <span className="ld-small">Only facts dated on or before this day. Scored against what happened up to <b>{fmtDate(intent.horizonEnd, { year: true })}</b>.</span>
                 </>
               ) : (
                 <>
                   <span className="ld-big">{intent.windowDays}</span><span className="ld-unit">days</span>
-                  <span className="ld-small">Changes dated {fmtDate(windowStart)} to {fmtDate(intent.asOf, { year: true })}.</span>
+                  <span className="ld-small">Changes dated <b>{fmtDate(windowStart)} to {fmtDate(intent.asOf, { year: true })}</b>.</span>
                 </>
               )}
             </p>
@@ -198,9 +202,6 @@ export function Landing({ snap, runId, error, dataMode, reducedMotion, onStart, 
             </p>
           )}
         </div>
-        {stage >= 1 && stage < 4 && (
-          <button type="button" className="ld-skip" onClick={() => setStage(4)}>Open the run</button>
-        )}
       </section>
     </div>
   );
