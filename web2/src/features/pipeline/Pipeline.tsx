@@ -139,7 +139,7 @@ export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyI
           const t = timing(n.steps);
           return (
             <li key={n.key} className={`pipe-n pipe-${n.key} is-${n.state}`} style={{ animationDelay: `${i * 50}ms` }} aria-current={tab === n.tab ? 'step' : undefined}>
-              <a className="pipe-main" href={href(to)} onClick={(e) => { e.preventDefault(); navigate(to); }} data-testid={`pipe-${n.key}`}
+              <a className="pipe-main" href={href(to)} onClick={(e) => { e.preventDefault(); if (tab !== n.tab) navigate(to); }} data-testid={`pipe-${n.key}`}
                 title={`${n.label} (${n.scope}). Opens ${n.tabName}.`}>
                 <span className="pipe-top">
                   <span className="pipe-dot" aria-hidden>{n.state === 'done' ? <svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" /></svg> : null}</span>
