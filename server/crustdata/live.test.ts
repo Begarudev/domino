@@ -3,28 +3,36 @@ import test from 'node:test';
 import { LiveProbe, liveIntent, probeIntent, replayIntent } from '../../scripts/probe-live.ts';
 
 const skip = process.env.CRUSTDATA_API_KEY?.trim() ? false : 'CRUSTDATA_API_KEY is unset';
+const endpoints = [
+  'job_search', 'person_recent_moves', 'company_growth', 'company_enrich', 'person_deciders', 'outcome_check jobs', 'outcome_check hires',
+];
+let sample: Promise<LiveProbe> | undefined;
 
-test('Crustdata adapters parse live responses at limit 3', { skip }, async t => {
+async function fetchSample() {
   const probe = new LiveProbe({ searchLimit: 3, maxCredits: 60 });
   // Check outcome adapters over an elapsed window so dated outcomes can exist.
   await probeIntent(probe, liveIntent, 3, replayIntent);
+  console.info(`Crustdata live adapter sample used ${probe.creditsUsed.toFixed(2)} credits.`);
+  return probe;
+}
 
-  assert.equal(probe.calls.length, 7);
-  for (const row of probe.calls) {
-    await t.test([row.endpoint, row.leg].filter(Boolean).join(' '), subtest => {
-      assert.equal(row.error, undefined);
-      assert.ok(row.status !== null && row.status >= 200 && row.status < 300);
-      assert.ok(row.parsed, 'Adapter did not parse the response');
-      assert.ok(row.returned !== null && row.returned <= 3, 'Expected at most three API rows');
-      if (row.totalCount !== null && row.totalCount >= 3) assert.equal(row.returned, 3);
-      if (row.returned < 3) subtest.diagnostic(`Crustdata returned ${row.returned} rows for the three-result sample`);
-      if (row.returned > 0) assert.ok(row.parsed.evidence > 0, 'Adapter found no evidence in the returned rows');
+for (const [index, endpoint] of endpoints.entries()) {
+  test(`${endpoint} parses a live response at limit 3`, { skip, timeout: 120_000 }, async () => {
+    const { calls } = await (sample ??= fetchSample());
+    assert.equal(calls.length, endpoints.length);
+    const row = calls[index];
+    assert.equal([row.endpoint, row.leg].filter(Boolean).join(' '), endpoint);
+    assert.equal(row.error, undefined);
+    assert.ok(row.status !== null && row.status >= 200 && row.status < 300);
+    assert.ok(row.parsed, 'Adapter did not parse the response');
+    assert.ok(row.returned !== null && row.returned <= 3, 'Expected at most three API rows');
+    if (row.totalCount !== null && row.totalCount >= 3) assert.equal(row.returned, 3);
+    if (row.returned > 0) assert.ok(row.parsed.evidence > 0, 'Adapter found no evidence in the returned rows');
 
-      assert.equal(row.examples.length, Math.min(2, row.parsed.evidence));
-      for (const { claim, observedAt } of row.examples) {
-        assert.ok(claim.trim());
-        if (observedAt !== null) assert.match(observedAt, /^\d{4}-\d{2}-\d{2}$/);
-      }
-    });
-  }
-});
+    assert.equal(row.examples.length, Math.min(2, row.parsed.evidence));
+    for (const { claim, observedAt } of row.examples) {
+      assert.ok(claim.trim());
+      if (observedAt !== null) assert.match(observedAt, /^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+}
