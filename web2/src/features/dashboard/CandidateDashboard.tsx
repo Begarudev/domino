@@ -1,34 +1,38 @@
-// Candidate dashboard: companies likely hiring for this candidate (rule O1 over dated records, each claim a dated
-// chip that opens its source), why they fit, "Request intro" with a consent confirm, and the inbox.
+// Candidate dashboard: openings for this candidate as rule O1 decisions (clause chips that open their date math and
+// source rows; no scores), why they fit field by field, Request intro with a field-level preview and a consent tick,
+// the candidate's own requests, and delivered intros with their receipts.
 import { useEffect, useState } from 'react';
 import type { Evidence } from '../../../../shared/types.ts';
 import { isMonthLevel, openingLabel, ROLE_FAMILY_LABELS } from '../../data/desk.ts';
-import type { Candidate, IntroRequest, Opening, OpeningReason } from '../../data/desk.ts';
+import type { Opening } from '../../data/desk.ts';
 import { deskApi, invalidate, useQuery } from '../../data/query.ts';
 import { href, navigate } from '../../data/router.ts';
-import { daysBetween, fmtDate, fmtInt, fmtPct, fmtTime, plural } from '../../lib/format.ts';
+import { daysBetween, fmtDate, fmtInt, fmtTime, plural } from '../../lib/format.ts';
 import { reducedMotion, useEnterOnce } from '../../lib/motion.ts';
 import { SourceNote } from '../../shell/SourceNote.tsx';
 import { openEvidence } from '../../shell/ui.ts';
-import { findEvidence, joinList, sharedFields, sourceName } from '../onboarding/shared.ts';
+import { introPreview, myIntros } from '../onboarding/contract.ts';
+import type { CandidateX, IntroPreview, IntroX, OpeningX, RuleClause } from '../onboarding/contract.ts';
+import { findEvidence, sourceName } from '../onboarding/shared.ts';
 import './dashboard.css';
 
 const today = () => new Date().toISOString().slice(0, 10);
+const ENTER_MS = 200;
 
 export function CandidateDashboard({ candidateId }: { candidateId: string }) {
   const cand = useQuery(`cand:${candidateId}`, () => deskApi.candidate(candidateId));
   const openings = useQuery(`cand-openings:${candidateId}`, () => deskApi.candidateOpenings(candidateId));
   const inbox = useQuery(`cand-inbox:${candidateId}`, () => deskApi.candidateInbox(candidateId));
-  const list = openings.data ?? [];
-  const fits = list.filter((o) => o.status === 'open');
-  // The funnel counts live on the company desk of the top opening; if it isn't there, the top line leaves them out.
-  const topCompany = fits[0]?.companyId ?? null;
+  const mineQ = useQuery(`cand-intros:${candidateId}`, () => myIntros(candidateId));
+  const list = (openings.data ?? []) as OpeningX[];
+  const topCompany = list.find((o) => o.status === 'open')?.companyId ?? null;
   const desk = useQuery(topCompany ? `cand-desk:${topCompany}` : null, () => deskApi.company(topCompany!));
   const moves = desk.data?.funnel?.find((f) => /job moves/i.test(f.label))?.count ?? null;
-  const c = cand.data;
-  const ranked = [...list].sort((a, b) => rank(a) - rank(b) || b.confidence - a.confidence);
-  const mine = (inbox.data ?? []).filter((r) => r.direction === 'candidate_to_company');
-  const incoming = (inbox.data ?? []).filter((r) => r.direction !== 'candidate_to_company');
+  const c = cand.data as CandidateX | null;
+  const ranked = [...list].sort((a, b) => rank(a) - rank(b));
+  const mine = mineQ.data ?? [];
+  // Delivered company-to-candidate intros only, each with its receipt from the send-once outbox.
+  const delivered = ((inbox.data ?? []) as IntroX[]).filter((r) => r.direction === 'company_to_candidate' && r.status === 'delivered');
 
   return (
     <div className="page dash">
@@ -38,7 +42,7 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
           {c?.fixture && <span className="tag warn">Fictional demo candidate</span>}
         </div>
         <p className="dash-sub">
-          {c?.roleFamily ? ROLE_FAMILY_LABELS[c.roleFamily] : 'Role family not read yet'}
+          {c?.roleFamily ? ROLE_FAMILY_LABELS[c.roleFamily] : 'Role family not set'}
           <a className="dash-edit" href={href({ page: 'candidate', sub: 'onboard' })} onClick={(e) => { e.preventDefault(); navigate({ page: 'candidate', sub: 'onboard' }); }}>
             Edit what you share
           </a>
@@ -47,64 +51,113 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
 
       <section className="dash-sec" aria-labelledby="dash-open-h">
         <div className="dash-sec-head">
-          <h2 id="dash-open-h" className="dash-h2">Companies likely hiring for you</h2>
+          <h2 id="dash-open-h" className="dash-h2">Openings for you</h2>
           {openings.data && (
             <p className="dash-topline" data-num>
-              {moves != null ? `From ${fmtInt(moves)} job moves read, ` : ''}
-              {topLine(list)}.
-              {' '}Predicted by rule O1 over dated Crustdata records{list[0] ? `, checked ${fmtDate(list[0].predictedAt)}` : ''}.
+              {moves != null ? `From ${fmtInt(moves)} job moves read: ` : ''}{topLine(list)}. Rule O1 over dated Crustdata records
+              {list[0] ? `, checked ${fmtDate(list[0].predictedAt)}` : ''}.
             </p>
           )}
         </div>
         <SourceNote source={openings.source} error={openings.error} />
         {openings.loading && !openings.data && <div className="op-ghost surface"><span className="ghost" style={{ width: '40%', height: 34 }} /><span className="ghost" style={{ width: '80%', height: 40 }} /></div>}
         {openings.data && !list.length && (
-          <p className="dash-empty surface">No company in today’s scan has lost two people in your role family without replacing them. DOMINO rescans as new job moves arrive.</p>
+          <p className="dash-empty surface">No company in today’s scan meets rule O1 for your role family. DOMINO rescans as new job moves arrive.</p>
         )}
         <div className="op-list">
           {ranked.map((o) => (
-            <OpeningCard key={o.id} o={o} cand={c} evidence={openings.evidence} intros={inbox.data ?? []} candidateId={candidateId} />
+            <OpeningCard key={o.id} o={o} cand={c} evidence={openings.evidence} mine={mine} candidateId={candidateId} />
           ))}
         </div>
       </section>
 
-      <div className="dash-inbox" data-testid="inbox">
-        {/* the fixture label already sits above the openings; here only a failure needs saying */}
-        <SourceNote source={inbox.source === openings.source ? null : inbox.source} error={inbox.error} />
-        {mine.length > 0 && (
-          <section className="dash-sec" aria-labelledby="dash-mine-h" id="your-requests">
-            <h2 id="dash-mine-h" className="dash-h2">Your intro requests</h2>
-            <Inbox items={mine} />
-          </section>
-        )}
-        <section className="dash-sec" aria-labelledby="dash-inbox-h">
-          <h2 id="dash-inbox-h" className="dash-h2">Companies reaching out</h2>
-          <Inbox items={incoming} />
+      {mine.length > 0 && (
+        <section className="dash-sec" aria-labelledby="dash-mine-h">
+          <h2 id="dash-mine-h" className="dash-h2">Your intro requests</h2>
+          <ol className="inbox">{mine.map((r) => <IntroRow key={r.id} r={r} mine />)}</ol>
         </section>
-      </div>
+      )}
+
+      <section className="dash-sec" aria-labelledby="dash-inbox-h" data-testid="inbox">
+        <h2 id="dash-inbox-h" className="dash-h2">Intro requests to you</h2>
+        <SourceNote source={null} error={inbox.error} />
+        {delivered.length ? (
+          <ol className="inbox">{delivered.map((r) => <IntroRow key={r.id} r={r} />)}</ol>
+        ) : (
+          <p className="dash-empty surface">None yet. A request shows here only after it has been delivered, with its receipt. Companies see only the fields you ticked.</p>
+        )}
+      </section>
     </div>
   );
 }
 
-/** "1 provisional opening fits you, 1 held": say what kind of prediction each count is. */
 function topLine(list: Opening[]): string {
   const n = (l: string) => list.filter((o) => openingLabel(o) === l).length;
-  const parts: string[] = [];
-  if (n('open')) parts.push(`${plural(n('open'), 'predicted opening')}`);
-  if (n('provisional')) parts.push(`${plural(n('provisional'), 'provisional opening')}`);
-  const fit = parts.length ? `${parts.join(' and ')} ${n('open') + n('provisional') === 1 ? 'fits' : 'fit'} you` : 'No opening fits you yet';
-  const rest = [n('watch') ? `${fmtInt(n('watch'))} on watch` : '', n('held') ? `${fmtInt(n('held'))} held` : ''].filter(Boolean);
-  return [fit, ...rest].join(', ');
+  const parts = [
+    n('open') ? plural(n('open'), 'predicted opening') : '',
+    n('provisional') ? plural(n('provisional'), 'provisional opening') : '',
+    n('watch') ? `${fmtInt(n('watch'))} on watch` : '',
+    n('held') ? `${fmtInt(n('held'))} held` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'no openings';
 }
 
 const rank = (o: Opening) => ({ open: 0, provisional: 0, watch: 1, held: 2 })[openingLabel(o)];
 
-function OpeningCard({ o, cand, evidence, intros, candidateId }: {
-  o: Opening; cand: Candidate | null; evidence: Evidence[]; intros: IntroRequest[]; candidateId: string;
-}) {
+/** Rule-language headline: "O1 · Provisional · window through 30 Nov", "Held · acqui-hire guard · thenextweb.com, 21 Aug". */
+function headline(o: Opening, evidence: Evidence[]): string {
   const label = openingLabel(o);
-  const held = label === 'held';
-  const days = o.windowClosesBy ? daysBetween(today(), o.windowClosesBy) : null;
+  if (label === 'held') {
+    const guard = (o.holdReasons?.[0] ?? 'false-drain guard').split(':')[0].trim().toLowerCase();
+    const ev = findEvidence(evidence, o.reasons.find((r) => r.kind === 'news')?.evidenceId);
+    return ['Held', guard.endsWith('guard') ? guard : `${guard} guard`, ev ? `${sourceName(ev)}, ${fmtDate(ev.observedAt)}` : ''].filter(Boolean).join(' · ');
+  }
+  if (label === 'provisional') return `O1 · Provisional · window through ${fmtDate(o.windowClosesBy)}`;
+  if (label === 'watch') return `O1 · Watch${o.watch ? ` · ${o.watch.have} of ${o.watch.need} clauses met` : ''}`;
+  return 'O1 · Predicted opening';
+}
+
+/** The engine's clauses; for a fixture opening without them, derived from its dated reasons (never a score). */
+function clausesOf(o: OpeningX, evidence: Evidence[]): RuleClause[] {
+  if (o.clauses?.length) return o.clauses;
+  const ids = (endpoint: string) => o.evidenceIds.filter((id) => findEvidence(evidence, id)?.source.endpoint === endpoint);
+  const out: RuleClause[] = [];
+  const sorted = [...o.reasons].sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
+  for (const r of sorted) {
+    const ev = findEvidence(evidence, r.evidenceId);
+    if (r.kind === 'talent_drain') {
+      const rows = ids('person_recent_moves');
+      out.push({ id: 'o1.departures', text: r.label, state: 'met', evidenceIds: rows.length ? rows : r.evidenceId ? [r.evidenceId] : [],
+        detail: `${plural(rows.length || 1, 'dated departure')} in ${fmtDate(r.date, true)}${isMonthLevel(r.date) ? ' (month-level dates)' : ''}, inside the 90-day window.` });
+    } else if (r.kind === 'no_replacement') {
+      out.push({ id: 'o1.no_replacement', text: r.label, state: 'met', evidenceIds: r.evidenceId ? [r.evidenceId] : [],
+        detail: ev ? `${ev.claim}. ${ev.value != null ? `${ev.value} records returned. ` : ''}${sourceName(ev)}, checked ${fmtDate(ev.observedAt, true)}.` : undefined });
+    } else if (r.kind === 'news' && o.status === 'held') {
+      out.push({ id: 'guard.acquihire', text: 'Acqui-hire guard matched', state: 'failed', evidenceIds: r.evidenceId ? [r.evidenceId] : [],
+        detail: ev ? `“${ev.claim}”, ${sourceName(ev)}, ${fmtDate(ev.observedAt, true)}. The departures moved with a deal, so they don’t count as a drain.` : undefined });
+    } else if (r.kind === 'headcount') {
+      out.push({ id: 'o1.size', text: r.label, state: 'met', evidenceIds: r.evidenceId ? [r.evidenceId] : [], detail: ev ? `${ev.claim}, ${fmtDate(ev.observedAt, true)}.` : undefined });
+    }
+  }
+  if (o.status === 'open' && o.windowClosesBy) {
+    const days = daysBetween(today(), o.windowClosesBy);
+    const last = o.reasons.find((r) => r.kind === 'talent_drain')?.date;
+    out.push({ id: 'o1.window', text: `Window open through ${fmtDate(o.windowClosesBy)}`, state: 'open', evidenceIds: [],
+      detail: `As of ${fmtDate(o.predictedAt, true)}: latest departure ${fmtDate(last, true)}${isMonthLevel(last) ? ' (month-level, so counted from its last day)' : ''}; the 30-day no-replacement window ends ${fmtDate(o.windowClosesBy, true)}${days >= 0 ? `, ${plural(days, 'day')} from today` : ''}.` });
+  }
+  return out;
+}
+
+const MARK: Record<RuleClause['state'], string> = { met: '✓', open: '', failed: '✗', cant_verify: '?' };
+const STATE_WORD: Record<RuleClause['state'], string> = { met: 'met', open: 'still open', failed: 'failed', cant_verify: 'I can’t verify' };
+
+function OpeningCard({ o, cand, evidence, mine, candidateId }: {
+  o: OpeningX; cand: CandidateX | null; evidence: Evidence[]; mine: IntroX[]; candidateId: string;
+}) {
+  const held = openingLabel(o) === 'held';
+  const clauses = clausesOf(o, evidence);
+  const [openClause, setOpenClause] = useState<string | null>(null);
+  const shown = clauses.find((cl) => cl.id === openClause) ?? null;
   return (
     <article className={`op surface ${held ? 'is-held' : ''}`} data-testid={`opening-${o.id}`}>
       <div className="op-head">
@@ -112,23 +165,24 @@ function OpeningCard({ o, cand, evidence, intros, candidateId }: {
           <h3 className="op-co">{o.companyName}</h3>
           <span className="op-role">{o.roleTitle}</span>
         </div>
-        <div className="op-status">
-          {label === 'open' && <span className="tag live">Predicted opening</span>}
-          {label === 'provisional' && <span className="tag warn">Predicted opening (provisional)</span>}
-          {label === 'watch' && <span className="tag">Watch{o.watch ? `: ${o.watch.have} of ${o.watch.need} signals` : ''}</span>}
-          {held && <span className="tag warn">Held: not an opening</span>}
-          <span className="op-conf" data-num title="Rule O1: 2+ dated departures in one role family within 90 days, and no dated replacement hire or job post within 30 days of the last one.">
-            <b>{held ? 'O1, held' : `O1, ${fmtPct(o.confidence)}`}</b>
-            {!held && <small>rule confidence</small>}
-          </span>
-        </div>
+        <p className={`op-rule ${held ? 'held' : openingLabel(o)}`} data-num>{headline(o, evidence)}</p>
       </div>
 
-      <Proof o={o} evidence={evidence} days={days} />
+      <ol className="clauses" aria-label="Rule O1 clauses">
+        {clauses.map((cl) => (
+          <li key={cl.id}>
+            <button type="button" className={`clause s-${cl.state}`} data-testid="reason-chip" aria-expanded={openClause === cl.id}
+              onClick={() => setOpenClause((cur) => (cur === cl.id ? null : cl.id))}>
+              <span className="clause-mark" aria-hidden="true">{MARK[cl.state]}</span>
+              <span className="clause-text">{cl.text}</span>
+              <span className="sr-only">, {STATE_WORD[cl.state]}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      {shown && <ClauseDetail key={shown.id} cl={shown} evidence={evidence} />}
 
-      {held ? (
-        <HeldNote o={o} evidence={evidence} />
-      ) : (
+      {!held && (
         <>
           {o.fit && o.fit.length > 0 && (
             <div className="fit">
@@ -145,93 +199,62 @@ function OpeningCard({ o, cand, evidence, intros, candidateId }: {
             </div>
           )}
           {o.watch?.reason && <p className="op-watch">{o.watch.reason}</p>}
-          {o.status === 'open' && <IntroAction o={o} cand={cand} intros={intros} candidateId={candidateId} />}
+          {o.status === 'open' && <IntroAction o={o} cand={cand} mine={mine} candidateId={candidateId} />}
         </>
       )}
     </article>
   );
 }
 
-/** The dated reason chips, left to right, as a small proof timeline. Each chip opens its source. */
-function Proof({ o, evidence, days }: { o: Opening; evidence: Evidence[]; days: number | null }) {
-  const steps = o.reasons.filter((r) => r.kind === 'talent_drain' || r.kind === 'no_replacement' || r.kind === 'news')
-    .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999')); // oldest first: the proof reads as a timeline
-  const rest = o.reasons.filter((r) => !steps.includes(r));
-  const monthLevel = o.reasons.some((r) => r.kind === "talent_drain" && isMonthLevel(r.date));
+function ClauseDetail({ cl, evidence }: { cl: RuleClause; evidence: Evidence[] }) {
+  const ref = useEnterOnce<HTMLDivElement>(false, undefined, ENTER_MS);
   return (
-    <div className="proof">
-      <ol className="proof-line">
-        {steps.map((r) => <ReasonChip key={`${r.kind}-${r.label}`} r={r} evidence={evidence} />)}
-        {o.windowClosesBy && o.status === 'open' && (
-          <li className="proof-step is-end">
-            <div className="proof-chip proof-end">
-              <span className="proof-date" data-num>Window closes by {fmtDate(o.windowClosesBy)}{days != null && days >= 0 ? `, ${plural(days, 'day')} left` : ''}</span>
-              <span className="proof-claim">Meets O1 if no replacement is recorded by then</span>
-              <span className="proof-src">{monthLevel ? "The departures have month-level dates, so this is the latest possible cutoff" : "Rule O1: 30 days after the last departure"}</span>
-            </div>
-          </li>
-        )}
-      </ol>
-      {rest.length > 0 && (
-        <p className="proof-also">
-          {rest.map((r) => (
-            <button key={r.label} type="button" className="proof-also-item" data-testid="reason-chip" onClick={() => r.evidenceId && openEvidence(r.evidenceId)} disabled={!r.evidenceId}>
-              {r.label}, {fmtDate(r.date, true)}
-            </button>
-          ))}
-        </p>
+    <div className={`clause-detail s-${cl.state}`} ref={ref}>
+      <p className="clause-detail-text">{cl.detail ?? cl.text}</p>
+      {cl.evidenceIds.length > 0 && (
+        <ul className="clause-rows">
+          {cl.evidenceIds.map((id) => {
+            const ev = findEvidence(evidence, id);
+            return (
+              <li key={id}>
+                <button type="button" className="clause-row" onClick={() => openEvidence(id)}>
+                  <span className="clause-row-date" data-num>
+                    {ev ? fmtDate(ev.observedAt, true) : 'Source'}
+                    {ev && isMonthLevel(ev.observedAt) && <span className="tag">month-level date</span>}
+                  </span>
+                  <span className="clause-row-claim">{ev?.claim ?? `Record ${id}`}</span>
+                  <span className="clause-row-src">{ev ? sourceName(ev) : ''}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
 }
 
-function ReasonChip({ r, evidence }: { r: OpeningReason; evidence: Evidence[] }) {
-  const ev = findEvidence(evidence, r.evidenceId);
-  const checked = r.kind === 'no_replacement';
-  return (
-    <li className={`proof-step k-${r.kind}`}>
-      <button type="button" className="proof-chip" data-testid="reason-chip" disabled={!r.evidenceId} onClick={() => r.evidenceId && openEvidence(r.evidenceId)}>
-        <span className="proof-date" data-num>
-          {checked ? `Checked ${fmtDate(r.date, true)}` : fmtDate(r.date, true)}
-          {isMonthLevel(r.date) && <span className="tag">month-level date</span>}
-        </span>
-        <span className="proof-claim">{r.label}</span>
-        <span className="proof-src">{ev ? sourceName(ev) : 'Source'}, open the record</span>
-      </button>
-    </li>
-  );
-}
-
-/** A held opening says why, with its dated source in plain view: the trust beat. */
-function HeldNote({ o, evidence }: { o: Opening; evidence: Evidence[] }) {
-  const news = o.reasons.find((r) => r.kind === 'news');
-  const ev = findEvidence(evidence, news?.evidenceId);
-  return (
-    <div className="held">
-      <p className="held-why">{(o.holdReasons ?? ['A false-drain guard fired']).join('. ')}. DOMINO doesn’t count this as an opening, so it doesn’t suggest an intro.</p>
-      {ev && (
-        <p className="held-src">
-          “{ev.claim}”, <span data-num>{sourceName(ev)}, {fmtDate(ev.observedAt, true)}</span>
-        </p>
-      )}
-    </div>
-  );
-}
-
-function IntroAction({ o, cand, intros, candidateId }: { o: Opening; cand: Candidate | null; intros: IntroRequest[]; candidateId: string }) {
-  const existing = intros.find((r) => r.openingId === o.id && r.direction === 'candidate_to_company') ?? null;
-  const [asking, setAsking] = useState(false);
+function IntroAction({ o, cand, mine, candidateId }: { o: Opening; cand: CandidateX | null; mine: IntroX[]; candidateId: string }) {
+  const existing = mine.find((r) => r.openingId === o.id) ?? null;
+  const [preview, setPreview] = useState<IntroPreview | null>(null);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const shares = cand ? joinList(sharedFields(cand.consent)) : 'what you agreed to share';
 
+  async function open() {
+    if (!cand) return;
+    setLoading(true);
+    setError(null);
+    try { setPreview(await introPreview(cand, o)); } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
+  }
   async function send() {
     setBusy(true);
     setError(null);
     try {
       await deskApi.requestIntro(candidateId, o.id);
-      setAsking(false);
+      setPreview(null);
+      invalidate(`cand-intros:${candidateId}`);
       invalidate(`cand-inbox:${candidateId}`);
     } catch (e) {
       setError((e as Error).message);
@@ -244,7 +267,7 @@ function IntroAction({ o, cand, intros, candidateId }: { o: Opening; cand: Candi
     return (
       <div className="intro">
         <button type="button" className="btn intro-done" data-testid={`request-intro-${o.id}`}
-          onClick={() => setNote(`Already requested on ${fmtDate(existing.receivedAt)}, ${fmtTime(existing.receivedAt)}. It’s under Your intro requests below.`)}>
+          onClick={() => setNote(`Already requested on ${fmtDate(existing.receivedAt)}, ${fmtTime(existing.receivedAt)}. It’s under Your intro requests.`)}>
           <span aria-hidden="true">✓</span> Intro requested
         </button>
         {note && <span className="intro-note" role="status">{note}</span>}
@@ -253,31 +276,52 @@ function IntroAction({ o, cand, intros, candidateId }: { o: Opening; cand: Candi
   }
   return (
     <div className="intro">
-      {!asking ? (
-        <button type="button" className="btn primary" data-testid={`request-intro-${o.id}`} onClick={() => setAsking(true)}>Request intro</button>
+      {!preview ? (
+        <button type="button" className="btn primary" data-testid={`request-intro-${o.id}`} disabled={loading || !cand} onClick={() => void open()}>
+          {loading ? 'Preparing preview' : 'Request intro'}
+        </button>
       ) : (
-        <IntroConfirm company={o.companyName} shares={shares} busy={busy} onSend={() => void send()} onCancel={() => { setAsking(false); setError(null); }} />
+        <IntroConfirm p={preview} busy={busy} onSend={() => void send()} onCancel={() => { setPreview(null); setError(null); }} />
       )}
       {error && <span className="intro-err" role="alert">Couldn’t request it: {error}</span>}
     </div>
   );
 }
 
-function IntroConfirm({ company, shares, busy, onSend, onCancel }: { company: string; shares: string; busy: boolean; onSend: () => void; onCancel: () => void }) {
-  const ref = useEnterOnce<HTMLDivElement>();
+function IntroConfirm({ p, busy, onSend, onCancel }: { p: IntroPreview; busy: boolean; onSend: () => void; onCancel: () => void }) {
+  const ref = useEnterOnce<HTMLDivElement>(false, undefined, ENTER_MS);
+  const [agreed, setAgreed] = useState(false);
   useEffect(() => { ref.current?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); }, [ref]);
   return (
     <div className="intro-confirm" ref={ref}>
-      <p><b>{company} will see:</b> {shares}. Not your contact details.</p>
+      <div className="intro-cols">
+        <div>
+          <h4 className="intro-h">{p.companyName} will see</h4>
+          <dl className="intro-fields">
+            {p.shared.map((f) => <div key={f.field}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}
+          </dl>
+        </div>
+        <div>
+          <h4 className="intro-h">Not shared</h4>
+          <dl className="intro-fields withheld">
+            {p.withheld.map((f) => <div key={f.field}><dt>{f.label}</dt><dd>{f.reason}</dd></div>)}
+          </dl>
+        </div>
+      </div>
+      <label className="consent-item intro-agree">
+        <input data-testid="intro-consent" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+        <span className="consent-box" aria-hidden="true" />
+        <span className="consent-text"><b>Share these fields with {p.companyName} for this intro</b></span>
+      </label>
       <div className="intro-btns">
-        <button type="button" className="btn primary" data-testid="intro-confirm" disabled={busy} onClick={onSend}>{busy ? 'Requesting' : 'Request intro'}</button>
+        <button type="button" className="btn primary" data-testid="intro-confirm" disabled={busy || !agreed} onClick={onSend}>{busy ? 'Requesting' : 'Request intro'}</button>
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
       </div>
     </div>
   );
 }
 
-const STATUS: Record<IntroRequest['status'], { text: string; cls: string }> = {
+const STATUS: Record<IntroX['status'], { text: string; cls: string }> = {
   new: { text: 'New', cls: 'live' },
   awaiting_approval: { text: 'Awaiting approval', cls: 'warn' },
   accepted: { text: 'Accepted', cls: 'ok' },
@@ -285,19 +329,8 @@ const STATUS: Record<IntroRequest['status'], { text: string; cls: string }> = {
   delivered: { text: 'Delivered', cls: 'ok' },
 };
 
-function Inbox({ items }: { items: IntroRequest[] }) {
-  if (!items.length) {
-    return <p className="dash-empty surface">When a company with a matching opening asks to meet you, it shows here. They see only what you agreed to share.</p>;
-  }
-  return (
-    <ol className="inbox">
-      {items.map((r) => <InboxRow key={r.id} r={r} />)}
-    </ol>
-  );
-}
-
-function InboxRow({ r }: { r: IntroRequest }) {
-  const ref = useEnterOnce<HTMLLIElement>();
+function IntroRow({ r, mine }: { r: IntroX; mine?: boolean }) {
+  const ref = useEnterOnce<HTMLLIElement>(false, undefined, ENTER_MS);
   const s = STATUS[r.status];
   return (
     <li className="inbox-row surface" ref={ref}>
@@ -305,9 +338,12 @@ function InboxRow({ r }: { r: IntroRequest }) {
         <b className="inbox-co">{r.companyName}</b>
         <span className="inbox-role">{r.roleTitle}</span>
         <span className={`tag ${s.cls}`}>{s.text}</span>
-        <span className="inbox-date" data-num>{r.direction === 'candidate_to_company' ? 'You asked' : 'They asked'}, {fmtDate(r.receivedAt)}, {fmtTime(r.receivedAt)}</span>
+        <span className="inbox-date" data-num>{mine ? 'You asked' : 'Received'} {fmtDate(r.receivedAt)}, {fmtTime(r.receivedAt)}</span>
       </div>
-      <div className="inbox-msg">{r.message.split(/\n\n+/).map((p, i) => <p key={i}>{p}</p>)}</div>
+      {!mine && <div className="inbox-msg">{r.message.split(/\n\n+/).map((p, i) => <p key={i}>{p}</p>)}</div>}
+      {r.receipt && (
+        <p className="inbox-receipt" data-num>Receipt {r.receipt.idempotencyKey.slice(0, 8)}, delivered {fmtDate(r.receipt.receivedAt)}, {fmtTime(r.receipt.receivedAt)}</p>
+      )}
     </li>
   );
 }

@@ -64,12 +64,21 @@
 .onb-summary-text b { font-size: var(--fs-body); overflow-wrap: anywhere; }
 .onb-summary-text span { font-size: var(--fs-ui); color: var(--paper-2); }
 
-.onb-confirm { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: var(--s6); align-items: start; }
-.onb-card-col { display: grid; gap: var(--s3); min-width: 0; }
-.onb-card-col .banner { margin: 0; }
 .onb-h2 { margin: 0; font-size: 32px; font-weight: 760; line-height: 1.1; font-variation-settings: 'wdth' 112; }
-.onb-side { display: grid; gap: var(--s3); padding-top: 52px; }
-.onb-side .btn.primary { height: 52px; font-size: 17px; margin-top: var(--s2); }
+/* profile check: the raw record on the left, the confirm form on the right */
+.onb-check { display: grid; gap: var(--s4); }
+.onb-check .banner { margin: 0; }
+.onb-check-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s5); align-items: start; }
+.raw-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+.raw-call { font-size: var(--fs-ui); color: var(--paper-2); font-variation-settings: 'wdth' 86; font-variant-numeric: tabular-nums; }
+.raw-skills { color: var(--paper); }
+.onb-confirm-form { padding: var(--s5); display: grid; gap: var(--s4); align-content: start; }
+.fsrc { margin: 0; font-size: var(--fs-body); font-weight: 650; color: var(--paper-2); padding-bottom: var(--s3); border-bottom: 1px solid var(--line-soft); }
+.onb-select { appearance: none; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, var(--paper-2) 50%), linear-gradient(135deg, var(--paper-2) 50%, transparent 50%); background-position: calc(100% - 22px) 23px, calc(100% - 16px) 23px; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 40px; font-size: var(--fs-body); }
+.chip-x { border: 0; background: none; color: var(--paper-3); padding: 0 0 0 8px; font-size: 18px; line-height: 1; }
+.chip-x:hover { color: var(--paper); }
+.onb-form-ghost { display: grid; gap: var(--s3); }
+.onb-confirm-form .onb-go { justify-self: start; }
 
 .pcard { padding: var(--s5); display: grid; gap: var(--s3); }
 .pcard-top { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; min-height: 40px; }
@@ -93,20 +102,14 @@
 .pcard-source { padding-top: var(--s3); border-top: 1px solid var(--line-soft); font-size: var(--fs-ui); color: var(--paper-2); }
 .pcard-reading { display: inline-flex; align-items: center; gap: 10px; color: var(--live-text); }
 .pcard-reading.is-slow { color: var(--warn); }
-.pulse { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: live-breathe 1.4s ease-in-out infinite; flex: none; }
-
-.ghost { display: block; border-radius: 6px; background: var(--panel-2); animation: onb-ghost 1.6s ease-in-out infinite; }
+/* ghosts hold the shape still: no looping shimmer */
+.ghost { display: block; border-radius: 6px; background: var(--panel-2); }
 .ghost.pill { display: inline-block; border-radius: 999px; }
-@keyframes onb-ghost { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
 .onb-failed { padding: var(--s5); display: grid; gap: var(--s2); max-width: 760px; border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
 .onb-failed p { margin: 0; color: var(--paper-2); font-size: var(--fs-lead); }
 .onb-fail-actions { display: flex; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s3); }
 
 @media (max-width: 1000px) {
-  .onb-form, .onb-confirm { grid-template-columns: 1fr; }
-  .onb-side { padding-top: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ghost, .pulse { animation: none; }
+  .onb-form, .onb-check-grid { grid-template-columns: 1fr; }
 }
