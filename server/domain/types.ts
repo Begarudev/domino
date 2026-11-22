@@ -53,6 +53,7 @@ export interface ReasonedNode extends GraphNode {
   whyNow?: string;
   whyNowDate?: IsoDate | null;
   hold?: { reasons: string[] };
+  watch?: { reason: string };
 }
 
 // A person as seen in ONE response. Minimal personal data only.

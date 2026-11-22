@@ -107,6 +107,7 @@ type Supporting = {
 type Candidate = {
   trigger: Trigger; person: string; hirer: Company; loser: Company; month: boolean; ambiguousDate: boolean;
   unknownTitle: boolean; conclusive: boolean; firstStart: string; lastStart: string;
+  departedAt: string | null;
 };
 
 export function buildCascade(intent: Intent, triggers: Trigger[], companies: Company[], evidence: Evidence[]): CascadeGraph {
@@ -181,9 +182,10 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
   const windowStart = shiftDays(intent.asOf, -(replay ? DRAIN_REPLAY_WINDOW_DAYS : DRAIN_WINDOW_DAYS));
   const profileCutoff = shiftDays(intent.asOf, -PROFILE_LAG_DAYS);
   const historyStart = shiftDays(intent.asOf, -(replay ? DRAIN_REPLAY_HISTORY_DAYS : DRAIN_HISTORY_DAYS));
+  const afterHistory = replay ? historyStart : shiftDays(historyStart, -1);
   const movesByPair = new Map<string, Map<string, Candidate>>();
   for (const trigger of triggers) {
-    if (!isMove(trigger) || !trigger.relatedCompanyId || !inWindow(trigger.date, historyStart, intent.asOf) ||
+    if (!isMove(trigger) || !trigger.relatedCompanyId || !inWindow(trigger.date, afterHistory, intent.asOf) ||
       (intent.runKind === 'replay' && trigger.date > profileCutoff)) continue;
     const hirer = byId.get(trigger.kind === 'hire' ? trigger.companyId : trigger.relatedCompanyId);
     const loser = byId.get(trigger.kind === 'hire' ? trigger.relatedCompanyId : trigger.companyId);
@@ -203,28 +205,34 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
     const ambiguousDate = month && (!detail?.startInterval || (firstStart <= windowStart && lastStart > windowStart) ||
       (firstStart <= historyStart && lastStart > historyStart));
     const earliestEnd = detail?.previousEndInterval?.[0] ?? previousRole?.observedAt;
-    // Dates on month-granular evidence record the latest plausible day, while the interval governs eligibility.
-    const conclusive = !ambiguousDate && !unknownTitle && currentRole?.observedAt === lastStart && Boolean(earliestEnd &&
-      previousRole?.observedAt && earliestEnd <= lastStart && daysBetween(earliestEnd, lastStart) <= 60);
+    // Month-granular evidence records the latest plausible day. Window eligibility uses the interval.
+    const datedMove = currentRole?.observedAt === lastStart && Boolean(earliestEnd && previousRole?.observedAt &&
+      earliestEnd <= lastStart && daysBetween(earliestEnd, lastStart) <= 60);
+    const qualifyingRole = datedMove && !unknownTitle;
+    const conclusive = qualifyingRole && !ambiguousDate;
+    const departedAt = qualifyingRole && firstStart >= historyStart && earliestEnd && earliestEnd >= historyStart
+      ? previousRole?.observedAt ?? null : null;
 
     const person = trigger.personId || currentRole?.source.recordId || trigger.evidenceIds.join('|');
     if (!person) continue;
     const key = hirer.id + '|' + loser.id;
     const pair = movesByPair.get(key) ?? new Map<string, Candidate>();
-    if (!pair.has(person) || trigger.kind === 'hire') pair.set(person, { hirer, loser, person, trigger, month, ambiguousDate, unknownTitle, conclusive, firstStart, lastStart });
+    if (!pair.has(person) || trigger.kind === 'hire') {
+      pair.set(person, { hirer, loser, person, trigger, month, ambiguousDate, unknownTitle, conclusive, firstStart, lastStart, departedAt });
+    }
     movesByPair.set(key, pair);
   }
 
   const lostPeople = new Map<string, Set<string>>();
   for (const pair of movesByPair.values()) for (const move of pair.values()) {
-    if (!move.conclusive || sameCompanyIdentity(move.hirer, move.loser) || relatedDomains(move.hirer.domain, move.loser.domain)) continue;
+    if (!move.conclusive || move.trigger.date <= historyStart || sameCompanyIdentity(move.hirer, move.loser) || relatedDomains(move.hirer.domain, move.loser.domain)) continue;
     const people = lostPeople.get(move.loser.id) ?? new Set<string>();
     people.add(move.person);
     lostPeople.set(move.loser.id, people);
   }
 
   for (const pair of movesByPair.values()) {
-    const moves = [...pair.values()].sort((a, b) => a.trigger.date.localeCompare(b.trigger.date));
+    const moves = [...pair.values()].filter(move => move.trigger.date > historyStart).sort((a, b) => a.trigger.date.localeCompare(b.trigger.date));
     if (moves.length < 3) continue;
     const { hirer, loser } = moves[0];
     const confirmed = moves.filter(move => move.conclusive);
@@ -253,6 +261,30 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
     const last = moveDate(confirmed.at(-1)!);
     const when = first === last ? first : first + '–' + last;
     add('TALENT_DRAIN', hirer.id, loser.id, `${confirmed.length} serving engineers left for ${hirer.name}, ${when}`, confirmed.map(move => move.trigger));
+  }
+
+  const watchByCompany = new Map<string, { reason: string; date: string; triggers: Trigger[] }>();
+  if (!replay) {
+    const confirmedDrains = new Set(edges.filter(edge => edge.mechanism === 'TALENT_DRAIN').map(edge => edge.to));
+    const byLoser = new Map<string, Map<string, { date: string; trigger: Trigger }>>();
+    for (const pair of movesByPair.values()) for (const move of pair.values()) {
+      if (!move.departedAt || !isIcp(move.loser) || held.has(move.loser.id) || confirmedDrains.has(move.loser.id)) continue;
+      const fixture = move.trigger.evidenceIds.some(id => rowById.get(id)?.mode === 'fixture');
+      if (relationshipReasons(move.hirer, move.loser, move.lastStart, intent.asOf, fixture).length) continue;
+      const people = byLoser.get(move.loser.id) ?? new Map<string, { date: string; trigger: Trigger }>();
+      const prior = people.get(move.person);
+      if (!prior || move.departedAt > prior.date) people.set(move.person, { date: move.departedAt, trigger: move.trigger });
+      byLoser.set(move.loser.id, people);
+    }
+    for (const [id, people] of byLoser) {
+      if (people.size !== 2) continue;
+      const departures = [...people.values()].sort((a, b) => a.date.localeCompare(b.date));
+      const months = unique(departures.map(move => formatMonth(move.date))).join(', ');
+      watchByCompany.set(id, {
+        reason: `2 of 3 serving departures seen (${months}); the card fires on the 3rd`,
+        date: departures[1].date, triggers: departures.map(move => move.trigger),
+      });
+    }
   }
 
   for (const [companyId, group] of triggered) {
@@ -336,28 +368,32 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
     const incoming = edges.filter(edge => edge.to === company.id);
     const directSignal = direct.get(company.id);
     const hold = held.get(company.id);
-    if (!group.length && !distances.has(company.id) && !hold) continue;
+    const watch = watchByCompany.get(company.id);
+    if (!group.length && !distances.has(company.id) && !hold && !watch) continue;
     const top = [...incoming, ...(directSignal ? [{ ...directSignal, mechanism: 'DIRECT' as const }] : [])]
       .sort((a, b) => b.confidence - a.confidence)[0];
     const nodeMechanisms: Mechanism[] = [
       ...incoming.map(edge => edge.mechanism),
       ...(jobCompanies.has(company.id) ? ['DIRECT' as const] : []),
       ...(fundingByCompany.has(company.id) ? ['CAPITAL' as const] : []),
-      ...(hold ? ['TALENT_DRAIN' as const] : []),
+      ...(hold || watch ? ['TALENT_DRAIN' as const] : []),
     ];
     nodes.push({
       id: company.id, name: company.name, tier: distances.get(company.id) ?? 0,
-      need: top ? mechanisms[top.mechanism as Rule].need : hold ? mechanisms.TALENT_DRAIN.need : null,
-      confidence: hold ? null : top?.confidence ?? null,
-      whyNow: hold?.label ?? top?.label, whyNowDate: hold ? hold.triggers.filter(trigger => (trigger as MoveTrigger).move?.datePrecision !== 'month' && hasDatedFact(trigger))
-        .map(trigger => trigger.date).sort().at(-1) ?? null : top?.observedAt,
+      need: watch ? 'Watchlist for serving staffing changes'
+        : top ? mechanisms[top.mechanism as Rule].need : hold ? mechanisms.TALENT_DRAIN.need : null,
+      confidence: hold ? null : watch ? round(0.35 * 2 ** (-daysBetween(watch.date, intent.asOf) / 30)) : top?.confidence ?? null,
+      whyNow: hold?.label ?? watch?.reason ?? top?.label,
+      whyNowDate: hold ? hold.triggers.filter(trigger => (trigger as MoveTrigger).move?.datePrecision !== 'month' && hasDatedFact(trigger))
+        .map(trigger => trigger.date).sort().at(-1) ?? null : watch?.date ?? top?.observedAt,
       hold: hold ? { reasons: hold.reasons } : undefined,
+      watch: watch ? { reason: watch.reason } : undefined,
       mechanisms: unique(nodeMechanisms), netNew: !jobCompanies.has(company.id),
-      triggerIds: unique([...group, ...(hold?.triggers ?? [])].map(trigger => trigger.id)),
+      triggerIds: unique([...group, ...(hold?.triggers ?? []), ...(watch?.triggers ?? [])].map(trigger => trigger.id)),
       evidenceIds: unique([...company.evidenceIds, ...group.flatMap(trigger => trigger.evidenceIds), ...incoming.flatMap(edge => edge.evidenceIds),
-        ...(hold?.triggers.flatMap(trigger => trigger.evidenceIds) ?? []), ...(directSignal?.evidenceIds ?? [])])
+        ...[...(hold?.triggers ?? []), ...(watch?.triggers ?? [])].flatMap(trigger => trigger.evidenceIds), ...(directSignal?.evidenceIds ?? [])])
         .filter(id => intent.runKind !== 'replay' || rowById.has(id)),
-      status: top && !hold ? 'hypothesis' : 'unverifiable',
+      status: (top || watch) && !hold ? 'hypothesis' : 'unverifiable',
     });
   }
   nodes.sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
@@ -389,12 +425,13 @@ export function rankTargets(intent: Intent, graph: CascadeGraph, companies: Comp
     return [{ score, node, company, date, label: node.whyNow ?? edge?.label ?? node.need }];
   }).sort((a, b) => b.score - a.score || a.company.name.localeCompare(b.company.name));
 
-  const actionable = ranked.filter(item => !item.node.hold).slice(0, intent.maxTargets);
+  const actionable = ranked.filter(item => !item.node.hold && !item.node.watch).slice(0, intent.maxTargets);
+  const watchlist = ranked.filter(item => item.node.watch).slice(0, intent.maxTargets);
   const holds = ranked.filter(item => item.node.hold).slice(0, intent.maxTargets);
-  const targets = [...actionable, ...holds].map(({ score, node, company, date, label }, index): Target => ({
+  const targets = [...actionable, ...watchlist, ...holds].map(({ score, node, company, date, label }, index): Target => ({
     companyId: node.id, rank: index + 1, score: round(score), confidence: node.confidence ?? 0,
-    need: node.need!, mechanisms: node.mechanisms, netNew: !baseline.has(node.id), hold: node.hold,
-    testedClaim: node.mechanisms.includes('TALENT_DRAIN') && !node.hold
+    need: node.need!, mechanisms: node.mechanisms, netNew: !baseline.has(node.id), hold: node.hold, watch: node.watch,
+    testedClaim: node.mechanisms.includes('TALENT_DRAIN') && !node.hold && !node.watch
       ? `serving staffing activity at ${company.name} within 60 days (a dated hire or job post)` : undefined,
     whyNow: label, whyNowDate: date, decider: null, path: null, draftId: null,
   }));

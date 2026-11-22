@@ -113,6 +113,35 @@ test('talent drain needs three distinct conclusive hires at the same company and
   assert.equal(targets[0].testedClaim, 'serving staffing activity at Alpha Query within 60 days (a dated hire or job post)');
 });
 
+test('exactly two dated serving departures produce a capped, non-firing Watchlist account', () => {
+  const september = move('sep', '2026-09-17', 'Inference Engineer');
+  const october = move('oct', '2026-10-31', 'ML Platform Engineer');
+  october.trigger.move = { ...october.trigger.move!, datePrecision: 'month', startInterval: ['2026-10-01', '2026-10-31'] };
+  const { graph, targets } = cascadeMoves([september, october], [a, b]);
+  assert.ok(!graph.edges.some(edge => edge.mechanism === 'TALENT_DRAIN'));
+  assert.equal(targets.length, 1);
+  const [watch] = targets;
+  assert.equal(watch.watch?.reason, '2 of 3 serving departures seen (Sep 2026, Oct 2026); the card fires on the 3rd');
+  assert.ok(watch.confidence > 0 && watch.confidence <= 0.35);
+  assert.equal(watch.testedClaim, undefined);
+  assert.equal(watch.draftId, null);
+  assert.equal(watch.hold, undefined);
+
+  const duplicate = { ...september, trigger: { ...september.trigger, id: 'tr_duplicate' } };
+  assert.equal(cascadeMoves([september, duplicate], [a, b]).targets.length, 0);
+  const nonServing = move('non-serving', '2026-11-04', 'Account Manager');
+  const acquisition: ResolvedCompany = { ...a, acquisitions: [{ acquirer: b.name, acquired: a.name, date: '2026-09-08' }] };
+  assert.ok(!cascadeMoves([september, nonServing], [a, b]).targets.some(row => row.watch));
+  assert.ok(!cascadeMoves([september, october], [acquisition, b]).targets.some(row => row.watch));
+  assert.ok(!cascadeMoves([september, october], [{ ...a, headcount: 5_001 }, b]).targets.some(row => row.watch));
+
+  const november = move('nov', '2026-11-08', 'GPU Engineer');
+  const exactOctober = move('oct-exact', '2026-10-29', 'ML Platform Engineer');
+  const fired = cascadeMoves([september, exactOctober, november], [a, b]);
+  assert.ok(fired.graph.edges.some(edge => edge.mechanism === 'TALENT_DRAIN'));
+  assert.ok(fired.targets.every(row => !row.watch));
+});
+
 test('same-company and same-root subsidiary moves are held without a talent-drain edge', () => {
   for (const loser of [b, subsidiary]) {
     const rows = ['2026-11-04', '2026-11-11', '2026-11-13'].map((date, index) =>

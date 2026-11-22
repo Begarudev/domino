@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { Company, Intent } from '../../shared/types.ts';
 import { parseIntentRules } from '../domain/index.ts';
 import type { ParseMeta } from '../domain/types.ts';
-import { endpoints, fixtureFor, NonsenseError } from './index.ts';
+import { endpoints, fixtureFor, movesPageLimit, NonsenseError, readMovesPages } from './index.ts';
 import type { EndpointSpec } from './spec.ts';
 
 const today = '2026-11-22';
@@ -63,6 +63,61 @@ test('person search records month precision and looks back 120–30 days in repl
   assert.match(JSON.stringify(historical.body), /"field":"experience.employment_details.current.start_date","type":"<","value":"2026-08-03"/);
   assert.deepEqual(historical.parsed.triggers.filter(row => row.kind === 'hire').map(row => row.date).sort(),
     ['2026-07-29', '2026-07-31', '2026-08-02']);
+});
+
+test('live moves search on the past role and keep both sides of a departure even when the new job is non-infra', () => {
+  const input = { intent };
+  const { body, meta } = evaluate(endpoints.person_recent_moves, input);
+  assert.match(JSON.stringify(body), /"field":"experience.employment_details.past.title","type":"\[\.\]","value":"inference"/);
+  assert.match(JSON.stringify(body), /"field":"experience.employment_details.current.start_date","type":"=>","value":"2026-08-24"/);
+  assert.doesNotMatch(JSON.stringify(body), /"sorts"|"field":"experience.employment_details.current.title"/);
+  assert.equal((body as { limit: number }).limit, 200);
+  assert.equal(endpoints.person_recent_moves.estimateCredits(null, input), 46);
+  const raw = {
+    profiles: [{
+      crustdata_person_id: 100, basic_profile: { name: 'Navi Ember' },
+      experience: { employment_details: {
+        current: [{ name: 'Slate Grid', title: 'Developer Advocate', start_date: '2026-08-24', company_headquarters_country: 'United States' }],
+        past: [{ name: 'Reed Signals', title: 'Inference Engineer', start_date: '2021-01-01', end_date: '2026-08-22',
+          company_headquarters_country: 'India' }],
+      } },
+    }],
+    next_cursor: 'opaque+/=',
+  };
+  const page = endpoints.person_recent_moves.parse(raw, input, meta);
+  assert.equal(page.nextCursor, 'opaque+/=');
+  assert.deepEqual(page.triggers.map(trigger => trigger.kind), ['hire', 'departure']);
+  assert.match(page.triggers[0].summary, /Developer Advocate/);
+  assert.ok(page.triggers[1].evidenceIds.some(id => page.evidence.find(row => row.id === id)?.value === 'Inference Engineer'));
+  assert.equal(page.mentions.find(company => company.key === page.triggers[1].companyId)?.name, 'Reed Signals');
+});
+
+test('moves pagination sends opaque cursors unchanged and stops at the budgeted page count or a repeated cursor', async () => {
+  assert.equal(movesPageLimit(''), 2);
+  assert.equal(movesPageLimit('invalid'), 2);
+  assert.equal(movesPageLimit('3'), 3);
+  const spec = endpoints.person_recent_moves;
+  const bodies: { cursor?: string; limit: number }[] = [];
+  const pages = readMovesPages(intent, async input => {
+    const body = spec.build(input) as { cursor?: string; limit: number };
+    bodies.push(body);
+    return { nextCursor: 'opaque+/=' };
+  }, 4);
+  for await (const _ of pages) { /* Read all available pages. */ }
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[1], { ...bodies[0], cursor: 'opaque+/=' });
+
+  const fixtureBodies: unknown[] = [];
+  for await (const page of readMovesPages(intent, async input => {
+    const body = spec.build(input) as Record<string, unknown>;
+    fixtureBodies.push(body);
+    const raw = fixtureFor(spec.name, { ...body, limit: 1 });
+    return spec.parse(raw, input, { mode: 'fixture', asOf: today, windowDays: 30, endpoint: spec.path, retrievedAt: today + 'T12:00:00Z' });
+  }, 1)) {
+    assert.equal(page.people.length, 1);
+    assert.equal(page.nextCursor, 'fixture_profiles:1');
+  }
+  assert.equal(fixtureBodies.length, 1);
 });
 
 test('company_growth uses the provider snapshot date and preserves the legal alias', () => {

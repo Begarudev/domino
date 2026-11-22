@@ -17,6 +17,7 @@ export const endpoints = {
 };
 
 export { companyCohort, companyEnrich, companyPosts, companySearchGrowth, jobSearch, outcomeCheck, personCohortDepartures, personSearchDeciders, personSearchRecentMoves };
+export { movesPageLimit, readMovesPages } from './person-search.ts';
 export { outcomeHireCheck } from './outcome-check.ts';
 export { fixtureFor } from './fixtures.ts';
 export { NonsenseError } from '../domain/types.ts';

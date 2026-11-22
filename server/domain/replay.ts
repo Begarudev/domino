@@ -28,7 +28,7 @@ export function scoreReplay(intent: Intent, targets: Target[], baseline: { first
   }
 
   const late = targets.filter(target => target.whyNowDate && target.whyNowDate > intent.asOf);
-  const actionable = targets.filter(target => !target.hold && !late.includes(target));
+  const actionable = targets.filter(target => !target.hold && !target.watch && !late.includes(target));
   const dominoIds = new Set(actionable.map(target => target.companyId));
   const drainIds = new Set(actionable.filter(target => target.mechanisms.includes('TALENT_DRAIN')).map(target => target.companyId));
   const firstIds = new Set(baseline.firstOrder);

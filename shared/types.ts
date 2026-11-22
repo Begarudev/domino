@@ -190,6 +190,7 @@ export interface Target {
   // Reasons: acquisition/acqui-hire, shared parent, >40% of headcount moving, ambiguous company id,
   // month-only dates that cannot settle the window, unrecognised titles.
   hold?: { reasons: string[] } | null;
+  watch?: { reason: string } | null; // Two qualifying serving departures. No outreach or approval.
   // What the replay tests for this account: e.g. "serving staffing activity at Orbital Voice within 60 days".
   testedClaim?: string | null;
 }
