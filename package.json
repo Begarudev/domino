@@ -1,0 +1,32 @@
+{
+  "name": "domino",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DOMINO: an Outbound Desk agent that books meetings on cross-company triggers from the last 30 days, every claim traced to a dated source.",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "demo": "node scripts/demo.ts",
+    "start": "node server/index.ts",
+    "dev": "node scripts/dev.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "test": "node --test 'server/**/*.test.ts'",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
