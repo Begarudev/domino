@@ -1,0 +1,81 @@
+/*
+  DOMINO v2 tokens: the approved design mock (~/Documents/domino-design/index.html, Garud 14:50). This is the one
+  source of truth for web2. Light is the default; dark applies by system preference unless data-theme="light", or
+  always with data-theme="dark". The accent is used ONLY for state (provisional, verified, delivered).
+  Note: the mock's canvas token is called --canvas here, because --paper keeps its older meaning (primary text)
+  for code written against the first palette. New code: use --canvas / --surface / --ink / --rule / --acc.
+*/
+:root {
+  color-scheme: light;
+  --canvas: #F5F6F7; --surface: #FFFFFF; --raised: #FFFFFF; --hover: #F0F2F4; --row-hover: #FAFBFB; --sel: #FBFBFC;
+  --ink: #15171C; --ink-2: #474D59; --ink-3: #6B717C; --on-ink: #FFFFFF; --ink-hover: #2A2E36;
+  --rule: #DFE2E6; --rule-2: #ECEEF1;
+  --acc: #0A6B5C; --acc-2: #0E8572; --acc-weak: #E4F1EE; --acc-line: #9CCBC1; --on-acc: #FFFFFF;
+  --hatch: rgba(132, 138, 149, .18); --sample-a: #ECEEF1; --sample-b: #F5F6F7;
+  --shadow: 0 8px 24px rgba(21, 23, 28, .10);
+  --err: #B42318; --err-weak: #FDECEA;
+  --serif-w: 500;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) {
+    color-scheme: dark;
+    --canvas: #0E1013; --surface: #15181D; --raised: #1C2026; --hover: #1F2329; --row-hover: #191C21; --sel: #1A1E23;
+    --ink: #E7E9EC; --ink-2: #A8AEB8; --ink-3: #808792; --on-ink: #0E1013; --ink-hover: #FFFFFF;
+    --rule: #2A2F37; --rule-2: #21252B;
+    --acc: #3DBFA6; --acc-2: #5ED0BA; --acc-weak: #112C27; --acc-line: #235C51; --on-acc: #06201B;
+    --hatch: rgba(168, 174, 184, .22); --sample-a: #22262D; --sample-b: #15181D;
+    --shadow: none;
+    --err: #F97066; --err-weak: #2A1715;
+    --serif-w: 400;
+  }
+}
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --canvas: #0E1013; --surface: #15181D; --raised: #1C2026; --hover: #1F2329; --row-hover: #191C21; --sel: #1A1E23;
+  --ink: #E7E9EC; --ink-2: #A8AEB8; --ink-3: #808792; --on-ink: #0E1013; --ink-hover: #FFFFFF;
+  --rule: #2A2F37; --rule-2: #21252B;
+  --acc: #3DBFA6; --acc-2: #5ED0BA; --acc-weak: #112C27; --acc-line: #235C51; --on-acc: #06201B;
+  --hatch: rgba(168, 174, 184, .22); --sample-a: #22262D; --sample-b: #15181D;
+  --shadow: none;
+  --err: #F97066; --err-weak: #2A1715;
+  --serif-w: 400;
+}
+
+:root {
+  /* type */
+  --serif: 'Newsreader Variable', 'Newsreader', Georgia, serif;
+  --sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --fs-cap: 12px; --fs-ui: 13px; --fs-body: 14px; --fs-lead: 15px; --fs-h: 20px; --fs-title: 30px;
+
+  /* rhythm: 4px base */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --r-sm: 3px; --r: 4px; --r-lg: 6px;
+
+  /* motion: one scale. Entrances once at 220 ms, menus 160 ms, everything else 200 ms. */
+  --ease: cubic-bezier(.2, .7, .2, 1); --t: 200ms;
+  --ease-establish: var(--ease); --ease-print: var(--ease); --ease-fire: var(--ease);
+  --t-establish: 220ms; --t-print: 220ms; --t-fire: 200ms;
+
+  /* ---- aliases for code written against the first palette (keep it compiling and on-theme) ---- */
+  --font: var(--sans);
+  --bg: var(--canvas); --bg-deep: var(--surface); --stage: var(--canvas);
+  --panel: var(--surface); --panel-2: var(--hover);
+  --line: var(--rule); --line-soft: var(--rule-2);
+  --paper: var(--ink); --paper-2: var(--ink-2); --paper-3: var(--ink-3);
+  --tile: var(--ink);
+  --live: var(--acc); --live-text: var(--acc); --live-wash: var(--acc-weak); --live-glow: transparent;
+  --ok: var(--acc); --ok-text: var(--acc); --ok-wash: var(--acc-weak);
+  --warn: var(--ink-2); --warn-wash: var(--hover);
+  --bad: var(--err); --bad-text: var(--err); --bad-wash: var(--err-weak);
+  --shadow-lift: var(--shadow);
+  --w-condensed: 100; --w-normal: 100; --w-title: 100;
+}
+
+@keyframes print-in { 0% { opacity: 0; transform: translateY(4px); } 100% { opacity: 1; transform: none; } }
+@keyframes slide-in-right { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes live-breathe { 50% { opacity: .45; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+}

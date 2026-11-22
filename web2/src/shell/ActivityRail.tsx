@@ -130,7 +130,7 @@ const Card = memo(function Card({ card, settled }: { card: SourceCard; settled: 
         {card.domain && <span>{card.domain}</span>}
         <span className="call">{MODE_LABEL[card.callMode] ?? card.callMode}</span>
       </span>
-      <span className={`src-signal${card.matched ? '' : ' off'}`}>{card.matched ? 'Kept' : 'Discarded'}{card.signal ? `: ${prettyText(card.signal)}` : ''}</span>
+      <span className={`src-signal${card.matched ? '' : ' off'}`}><b>{card.matched ? 'Kept' : 'Discarded'}</b>{card.signal ? `: ${prettyText(card.signal)}` : ''}</span>
     </div>
   );
 });

@@ -7,7 +7,6 @@ import { runStore } from './data/store.ts';
 import { CandidatePage } from './pages/CandidatePage.tsx';
 import { CompaniesPage, CompanyPage } from './pages/CompanyPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
-import { ActivityRail } from './shell/ActivityRail.tsx';
 import { TopBar } from './shell/TopBar.tsx';
 import { LedgerDrawer } from './features/ledger/Ledger.tsx';
 import { EvidenceDrawer } from './shell/EvidenceDrawer.tsx';
@@ -29,7 +28,7 @@ function guard(route: Route, role: Role | null): Route | null {
   if (role === 'candidate' && route.page !== 'candidate') return { page: 'candidate', sub: 'dashboard' };
   if (role === 'company' && route.page === 'candidate') {
     const id = getShell().companyId;
-    return id ? { page: 'company', id, tab: 'openings' } : { page: 'companies' };
+    return id ? { page: 'company', id, tab: 'recruitment' } : { page: 'companies' };
   }
   return null;
 }
@@ -74,7 +73,6 @@ export function App() {
             {route.page === 'company' && <CompanyPage route={route} />}
           </PageFade>
         </main>
-        <ActivityRail />
       </div>
       <LedgerDrawer />
       <EvidenceDrawer />

@@ -1,153 +1,122 @@
+// Top bar (design mock): mark; candidate tabs on the candidate side; the run chip on the company side (run id, how
+// its data was read, when); the account menu with theme and sign out. Each role sees only its own chrome.
 import { useEffect, useRef, useState } from 'react';
-import type { PointerEvent as RPointerEvent } from 'react';
-import { navigate } from '../data/router.ts';
+import { href, navigate, useRoute } from '../data/router.ts';
+import type { Route } from '../data/router.ts';
 import { runStore, useRunSel } from '../data/store.ts';
-import { Count } from '../lib/motion.ts';
-import { fmtClock, fmtCredits, fmtDate, fmtInt, fmtTime, fmtUsd } from '../lib/format.ts';
-import { openLedger, signOut, useShell } from './ui.ts';
+import { fmtDate, fmtTime } from '../lib/format.ts';
+import { getShell, signOut, useShell } from './ui.ts';
+import { setTheme, useTheme } from './theme.ts';
+import type { ThemeChoice } from './theme.ts';
+
+export function Mark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden>
+      <rect x="2" y="3" width="6.5" height="16" rx="1.2" fill="var(--ink)" />
+      <rect x="11.5" y="3" width="6.5" height="16" rx="1.2" fill="none" stroke="var(--ink)" strokeWidth="1.5" transform="rotate(16 14.75 19)" />
+      <circle cx="5.25" cy="7.5" r="1" fill="var(--canvas)" />
+      <circle cx="5.25" cy="14.5" r="1" fill="var(--canvas)" />
+    </svg>
+  );
+}
 
 export function TopBar({ minimal = false }: { minimal?: boolean }) {
   const role = useShell((s) => s.role);
-  const home = () => navigate(role === 'company' ? { page: 'companies' } : role === 'candidate' ? { page: 'candidate', sub: 'dashboard' } : { page: 'login' });
+  const route = useRoute();
+  const home = () => {
+    const s = getShell();
+    navigate(s.role === 'company' ? (s.companyId ? { page: 'company', id: s.companyId, tab: 'recruitment' } : { page: 'companies' }) : s.role === 'candidate' ? { page: 'candidate', sub: 'dashboard' } : { page: 'login' });
+  };
   return (
     <header className="bar" data-testid="topbar">
-      <a className="mark" href="/" onClick={(e) => { e.preventDefault(); home(); }}>
-        <span className="mark-tile" aria-hidden />
-        <span className="mark-word">DOMINO</span>
-      </a>
+      <a className="mark" href="/" onClick={(e) => { e.preventDefault(); home(); }}><Mark />DOMINO</a>
+      {!minimal && role === 'candidate' && <CandidateTabs route={route} />}
+      {!minimal && role === 'company' && <RunChip />}
       <div className="bar-spacer" />
-      {!minimal && role === 'company' && <><DataPill /><CreditMeter /><TimeMeter /><LedgerTotal /></>}
-      {!minimal && role === 'candidate' && <DataPill />}
       {!minimal && <Account />}
     </header>
   );
 }
 
-/** Signed-in identity and the only way to change role: sign out. */
+function CandidateTabs({ route }: { route: Route }) {
+  const sub = route.page === 'candidate' ? route.sub : null;
+  const tab = (to: Route, label: string, on: boolean, id: string) => (
+    <a href={href(to)} aria-current={on ? 'page' : undefined} data-testid={`ctab-${id}`}
+      onClick={(e) => { e.preventDefault(); navigate(to); }}>{label}</a>
+  );
+  return (
+    <nav className="bar-tabs" aria-label="Candidate">
+      {tab({ page: 'candidate', sub: 'onboard' }, 'Profile', sub === 'onboard', 'profile')}
+      {tab({ page: 'candidate', sub: 'dashboard' }, 'Openings', sub === 'dashboard', 'openings')}
+    </nav>
+  );
+}
+
+/** The run behind the page: id, how its data was read (live / cached / fixture / recorded), and when. */
+function RunChip() {
+  const runId = useRunSel((v) => v.runId);
+  const mode = useRunSel((v) => v.mode);
+  const status = useRunSel((v) => v.ui.snap.status);
+  const dataMode = useRunSel((v) => v.ui.snap.dataMode);
+  const created = useRunSel((v) => v.ui.snap.createdAt);
+  const page = useShell((s) => s.pageSource);
+  const companyId = useShell((s) => s.companyId);
+  const running = status === 'running' || status === 'queued';
+  let how = dataMode === 'cache' ? 'cached live' : dataMode === 'fixture' ? 'fixture' : 'live';
+  if (mode === 'sample') how = 'recorded';
+  if (mode === 'mock') how = 'mock';
+  if (!runId) {
+    return <span className="runchip" title="No run behind this page" data-testid="run-chip"><span className="dot idle" />{page === 'fixture' ? 'snapshot of today’s scan' : 'no run'}</span>;
+  }
+  return (
+    <a className="runchip" data-testid="run-chip" title={`${runId}: open its reading log`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
+      onClick={(e) => { e.preventDefault(); if (companyId) navigate({ page: 'company', id: companyId, tab: 'reading' }); }}>
+      <span className={`dot${running ? ' run' : ''}`} />
+      {runId.replace(/^(run_[0-9a-f]{8}).*/, '$1')} {how}{created ? ` · ${fmtDate(created, true)}, ${fmtTime(created)} IST` : ''}
+    </a>
+  );
+}
+
+/** Signed-in identity, theme, and the only way to change role: sign out. */
 function Account() {
   const s = useShell((x) => x);
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('mousedown', off);
-    return () => window.removeEventListener('mousedown', off);
+    window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('mousedown', off); window.removeEventListener('keydown', esc); };
   }, [open]);
   if (!s.role) return null;
   const who = s.role === 'company' ? s.companyName ?? 'Company' : s.candidateLabel ?? 'Candidate';
   const initial = who.trim()[0]?.toUpperCase() ?? '?';
+  const themes: ThemeChoice[] = ['auto', 'light', 'dark'];
   return (
     <div className="acct" ref={ref}>
-      <button className="acct-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="account">
+      <button className="acct-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" data-testid="account">
         <span className="acct-av" aria-hidden>{initial}</span>
         <span className="acct-who">{who}</span>
       </button>
       {open && (
         <div className="acct-menu" role="menu">
-          <div className="acct-line">Signed in as <b>{who}</b></div>
-          <button role="menuitem" className="acct-item" data-testid="sign-out" onClick={() => { setOpen(false); signOut(); runStore.detach(); navigate({ page: 'login' }); }}>Sign out</button>
+          <div className="acct-line"><b>{who}</b>{s.role === 'company' ? 'Company account' : 'Candidate account'}</div>
+          {s.role === 'candidate' && (
+            <button role="menuitem" className="acct-item" onClick={() => { setOpen(false); navigate({ page: 'candidate', sub: 'onboard' }); }}>Profile and consent</button>
+          )}
+          <button role="menuitem" className="acct-item" data-testid="sign-out"
+            onClick={() => { setOpen(false); signOut(); runStore.clear(); navigate({ page: 'login' }); }}>Sign out</button>
+          <div className="thm">
+            <span>Theme</span>
+            <span className="seg" role="group" aria-label="Theme">
+              {themes.map((t) => <button key={t} aria-pressed={theme === t} onClick={() => setTheme(t)} data-testid={`theme-${t}`}>{t[0].toUpperCase() + t.slice(1)}</button>)}
+            </span>
+          </div>
         </div>
       )}
     </div>
-  );
-}
-
-/** One truthful data-source state for the page in view. */
-function DataPill() {
-  const mode = useRunSel((v) => v.mode);
-  const health = useRunSel((v) => v.health);
-  const err = useRunSel((v) => v.error);
-  const page = useShell((s) => s.pageSource);
-  const runMode = useRunSel((v) => (v.runId ? v.ui.snap.dataMode : null));
-  const created = useRunSel((v) => (v.runId ? v.ui.snap.createdAt : null));
-  const runAt = created ? `${fmtDate(created)} ${fmtTime(created)}` : null;
-  let cls = 'live';
-  let text = 'Live Crustdata';
-  let title = 'The facts on this page came from live Crustdata calls.';
-  if (mode === 'sample') { cls = 'sample'; text = 'Recorded run, 22 Nov'; title = 'A recorded run on live Crustdata data (docs/sample-run-events.json). Nothing here is live.'; }
-  else if (mode === 'mock') { cls = 'mock'; text = 'Mock data'; title = 'Synthetic events from the in-browser mock. No real company data.'; }
-  else if (err || !health) { cls = 'down'; text = 'Server offline'; title = err ?? 'Waiting for /api/health'; }
-  else if (page === 'fixture') { cls = 'fixture'; text = 'Snapshot of today’s live scan'; title = 'This page shows fixture rows built from today’s live O1 scan (22 Nov) while its endpoint is finished.'; }
-  else if (page === 'cache' || runMode === 'cache') { cls = 'cache'; text = `Cached live scan${runAt ? `, ${runAt}` : ''}`; title = 'Facts on this page came from live Crustdata responses cached at the time shown; no credits were spent re-reading them.'; }
-  return <span className={`pill ${cls}`} title={title} data-testid="data-pill"><span className="dot" />{text}</span>;
-}
-
-/** Credits used against the cap. Drag the handle left to lower the cap mid-run (never below what's spent). */
-function CreditMeter() {
-  const budget = useRunSel((v) => v.ui.snap.budget);
-  const status = useRunSel((v) => v.ui.snap.status);
-  const runId = useRunSel((v) => v.runId);
-  const mode = useRunSel((v) => v.mode);
-  const track = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<number | null>(null);
-  const cap = drag ?? budget.limits.maxCredits;
-  const used = budget.used.credits;
-  const scale = Math.max(budget.limits.maxCredits, 1);
-  const frac = Math.min(1, used / scale);
-  const editable = !!runId && mode !== 'sample' && (status === 'running' || status === 'queued' || status === 'awaiting_input');
-  const tone = budget.exhausted === 'credits' ? 'bad' : used / Math.max(cap, 1) > 0.8 ? 'warn' : '';
-  const valueAt = (clientX: number) => {
-    const r = track.current!.getBoundingClientRect();
-    const f = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-    return Math.max(Math.ceil(used), Math.round(f * scale));
-  };
-  const onDown = (e: RPointerEvent<HTMLButtonElement>) => {
-    if (!editable) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag(valueAt(e.clientX));
-  };
-  const onMove = (e: RPointerEvent<HTMLButtonElement>) => { if (drag != null) setDrag(valueAt(e.clientX)); };
-  const onUp = () => {
-    if (drag == null) return;
-    const v = drag;
-    setDrag(null);
-    if (v < budget.limits.maxCredits) void runStore.setLimits({ maxCredits: v });
-  };
-  return (
-    <div className={`meter ${tone}`} data-testid="credit-meter" title={editable ? 'Drag the handle left to lower this run’s credit cap' : 'Crustdata credits used against this run’s cap'}>
-      <div className="meter-top"><span>Credits</span><span><Count value={used} format={fmtCredits} /> of <b data-num>{fmtInt(cap)}</b></span></div>
-      <div className="meter-track" ref={track}>
-        <div className="meter-fill" style={{ transform: `scaleX(${frac})` }} />
-        <button className="meter-cap" aria-label={`Credit cap ${fmtInt(cap)}. Arrow left lowers it.`} disabled={!editable}
-          style={{ left: `${(cap / scale) * 100}%` }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
-          onKeyDown={(e) => { if (e.key === 'ArrowLeft' && editable) void runStore.setLimits({ maxCredits: Math.max(Math.ceil(used), budget.limits.maxCredits - 10) }); }} />
-      </div>
-    </div>
-  );
-}
-
-function TimeMeter() {
-  const budget = useRunSel((v) => v.ui.snap.budget);
-  const status = useRunSel((v) => v.ui.snap.status);
-  const running = status === 'running' || status === 'queued';
-  const [extra, setExtra] = useState(0);
-  const since = useRef(performance.now());
-  useEffect(() => { since.current = performance.now(); setExtra(0); }, [budget.used.seconds]);
-  useEffect(() => {
-    if (!running) return;
-    const t = setInterval(() => setExtra((performance.now() - since.current) / 1000), 1000);
-    return () => clearInterval(t);
-  }, [running]);
-  const used = budget.used.seconds + (running ? extra : 0);
-  const max = Math.max(budget.limits.maxSeconds, 1);
-  const left = Math.max(0, max - used);
-  const tone = budget.exhausted === 'seconds' ? 'bad' : left / max < 0.2 ? 'warn' : '';
-  return (
-    <div className={`meter ${tone}`} data-testid="time-meter" title="Wall-clock cap for this run">
-      <div className="meter-top"><span>Time left</span><b data-num>{fmtClock(left)}</b></div>
-      <div className="meter-track"><div className="meter-fill" style={{ transform: `scaleX(${Math.min(1, used / max)})` }} /></div>
-    </div>
-  );
-}
-
-function LedgerTotal() {
-  const used = useRunSel((v) => v.ui.snap.budget.used);
-  const calls = useRunSel((v) => v.ui.snap.ledger.length);
-  return (
-    <button className="ledger-total" data-testid="ledger-open" onClick={openLedger} title="Open the cost ledger">
-      <span>{fmtInt(calls)} paid {calls === 1 ? 'call' : 'calls'}</span>
-      <b data-num>{fmtCredits(used.credits)} credits + {fmtUsd(used.modelUsd)}</b>
-    </button>
   );
 }

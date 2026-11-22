@@ -16,7 +16,7 @@ function OpeningRow({ o }: { o: Opening }) {
   return (
     <article className={`surface op-row ${label}`} data-testid={`opening-${o.id}`}>
       <div className="op-top">
-        <span className={`tag ${label === 'held' ? 'warn' : label === 'provisional' ? 'warn' : 'live'}`}>O1 · {LABEL[label]}{o.windowClosesBy ? ` · window through ${fmtDate(o.windowClosesBy)}` : ''}</span>
+        <span className={`st ${label === 'held' ? 'held' : label === 'provisional' ? 'prov' : 'verified'}`}>O1 · {LABEL[label]}{o.windowClosesBy ? ` · window through ${fmtDate(o.windowClosesBy)}` : ''}</span>
         <h3 className="op-role">{o.roleTitle}</h3>
       </div>
       {o.holdReasons?.length ? <p className="op-hold">Held: {o.holdReasons[0]}</p> : null}

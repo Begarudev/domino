@@ -2,22 +2,26 @@
 // Company: /company (pick), /company/:id/:tab. Query params (mode, run, speed) survive navigation.
 import { useSyncExternalStore } from 'react';
 
-export type CompanyTab = 'openings' | 'matches' | 'rundesk' | 'file' | 'rules' | 'outreach' | 'replay' | 'ledger';
-export type TabGroup = 'Predict' | 'Act';
+// Company navigation, from the approved design mock: Act (Recruitment, Outreach), Read (Reading log, Company file,
+// Chains, Verifier), Check (Replay, Ledger).
+export type CompanyTab = 'recruitment' | 'outreach' | 'reading' | 'file' | 'chains' | 'verifier' | 'replay' | 'ledger';
+export type TabGroup = 'Act' | 'Read' | 'Check';
 export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hint: string }[] = [
-  { id: 'openings', label: 'Openings and talent drain', group: 'Predict', hint: 'Rule O1 over dated job moves: who left, and what that opens' },
-  { id: 'file', label: 'Company file', group: 'Predict', hint: 'Dated facts, headcount, talent flows and the rules that fired' },
-  { id: 'rules', label: 'Rules and verifier', group: 'Predict', hint: 'Every rule, its thresholds, and today’s live fire count' },
-  { id: 'replay', label: 'Replay', group: 'Predict', hint: 'The rules run on 1 Sep data, scored against what happened' },
-  { id: 'matches', label: 'Matched candidates', group: 'Act', hint: 'Opted-in candidates, fit checked field by field' },
-  { id: 'rundesk', label: 'Run desk', group: 'Act', hint: 'Start a live run and watch every read it keeps or discards' },
-  { id: 'outreach', label: 'Outreach', group: 'Act', hint: 'Footnoted draft, approve, delivered once' },
-  { id: 'ledger', label: 'Ledger', group: 'Act', hint: 'Every paid call against the caps' },
+  { id: 'recruitment', label: 'Recruitment', group: 'Act', hint: 'Who left, what that predicts, and who you can hire. People appear as role and initial.' },
+  { id: 'outreach', label: 'Outreach', group: 'Act', hint: 'A footnoted draft, your approval, then delivered once.' },
+  { id: 'reading', label: 'Reading log', group: 'Read', hint: 'Every record the run read, kept or discarded, and why.' },
+  { id: 'file', label: 'Company file', group: 'Read', hint: 'Dated facts, headcount, talent flows and the rules that apply. No generated prose.' },
+  { id: 'chains', label: 'Chains', group: 'Read', hint: 'Rules that link a move at one company to a need at another, with today’s fire counts.' },
+  { id: 'verifier', label: 'Verifier', group: 'Read', hint: 'Each claim checked against a dated source, or marked “I can’t verify”.' },
+  { id: 'replay', label: 'Replay', group: 'Check', hint: 'The rules run on 1 Sep data, scored against what happened next.' },
+  { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Every paid call against the run’s caps.' },
 ];
 /** Tabs whose feature is built. Unbuilt tabs are hidden, never shown as stubs. */
-export const BUILT_TABS = new Set<CompanyTab>(['openings']);
+export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'reading']);
 
-const ALIASES: Record<string, CompanyTab> = { drain: 'openings', analysis: 'file', needs: 'file', chains: 'rules', reading: 'rundesk' };
+const ALIASES: Record<string, CompanyTab> = {
+  openings: 'recruitment', drain: 'recruitment', matches: 'recruitment', analysis: 'file', needs: 'verifier', rules: 'chains', rundesk: 'reading',
+};
 
 export type Route =
   | { page: 'login' }
@@ -29,8 +33,8 @@ export function parse(pathname: string): Route {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
   if (parts[0] === 'company') {
     if (!parts[1]) return { page: 'companies' };
-    const raw = parts[2] ?? 'openings';
-    const tab = (COMPANY_TABS.find((t) => t.id === raw)?.id ?? ALIASES[raw] ?? 'openings') as CompanyTab;
+    const raw = parts[2] ?? 'recruitment';
+    const tab = (COMPANY_TABS.find((t) => t.id === raw)?.id ?? ALIASES[raw] ?? 'recruitment') as CompanyTab;
     return { page: 'company', id: decodeURIComponent(parts[1]), tab };
   }
   if (parts[0] === 'candidate') return { page: 'candidate', sub: parts[1] === 'onboard' ? 'onboard' : 'dashboard' };
