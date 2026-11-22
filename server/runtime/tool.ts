@@ -50,6 +50,16 @@ export class BudgetError extends Error {
   }
 }
 
+// "Blocked before spend · cap credits 600 · would have cost ≈ 2.3 credits"
+export function blockedNote(reason: Exhausted, limits: { maxCredits: number; maxModelUsd: number; maxSeconds: number },
+  estimate?: { credits?: number; usd?: number }): string {
+  const cap = reason === 'credits' ? `credits ${limits.maxCredits}` : reason === 'model_usd' ? `model $${limits.maxModelUsd}`
+    : `time ${limits.maxSeconds}s`;
+  const cost = reason === 'credits' && estimate?.credits ? `≈ ${Math.round(estimate.credits * 100) / 100} credits`
+    : reason === 'model_usd' && estimate?.usd ? `≈ $${estimate.usd.toFixed(4)}` : 'not estimated';
+  return `Blocked before spend · cap ${cap} · would have cost ${cost}`;
+}
+
 interface FailureDetails {
   status?: number;
   retryAfterMs?: number;
@@ -379,7 +389,8 @@ export class ToolContext {
             mode, status: reason ? 'budget_blocked' : 'error', attempt, latencyMs: 0, injected: injected && !reason,
           }, requestHash);
           if (reason) {
-            this.store.finishLedger({ ...row, error: new BudgetError(reason).message });
+            // The ledger says what the cap did: the call was never dispatched, so nothing was spent.
+            this.store.finishLedger({ ...row, error: blockedNote(reason, this.store.budget(this.runId).limits, estimate) });
             if (!this.recheck) exhaust(this.store, this.runId, reason);
             else this.store.recordEvent(this.runId, { type: 'budget.update', budget: this.store.budget(this.runId) });
           } else {

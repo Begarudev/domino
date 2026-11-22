@@ -14,7 +14,7 @@
   --hatch: rgba(132, 138, 149, .18); --sample-a: #ECEEF1; --sample-b: #F5F6F7;
   --shadow: 0 8px 24px rgba(21, 23, 28, .10);
   --err: #B42318; --err-weak: #FDECEA;
-  --serif-w: 500;
+  --serif-w: 600;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
@@ -26,7 +26,7 @@
     --hatch: rgba(168, 174, 184, .22); --sample-a: #22262D; --sample-b: #15181D;
     --shadow: none;
     --err: #F97066; --err-weak: #2A1715;
-    --serif-w: 400;
+    --serif-w: 600;
   }
 }
 :root[data-theme=dark] {
@@ -38,12 +38,12 @@
   --hatch: rgba(168, 174, 184, .22); --sample-a: #22262D; --sample-b: #15181D;
   --shadow: none;
   --err: #F97066; --err-weak: #2A1715;
-  --serif-w: 400;
+  --serif-w: 600;
 }
 
 :root {
   /* type */
-  --serif: 'Newsreader Variable', 'Newsreader', Georgia, serif;
+  --serif: var(--sans); /* Garud 15:17: no serif anywhere. Kept as an alias so older rules render in the sans. */
   --sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
   --fs-cap: 12px; --fs-ui: 13px; --fs-body: 14px; --fs-lead: 15px; --fs-h: 20px; --fs-title: 30px;

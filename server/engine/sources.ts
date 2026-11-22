@@ -47,7 +47,9 @@ export async function readSource<I, O extends SourceResult = SourceResult>(ctx: 
   const evidence = raw.evidence.map(item => {
     const id = ids.get(item.id)!;
     sources.set(id, { endpoint: spec.name, path: spec.path, input, rawId: item.id, time });
-    return { ...item, id };
+    // Crustdata person role dates are month-level (always the 1st): say so, so nothing renders "1 Oct" or "31 Oct".
+    const precision = item.precision ?? (spec.path.startsWith('/person/') && item.observedAt?.endsWith('-01') ? 'month' as const : undefined);
+    return { ...item, id, ...precision && { precision } };
   });
   const withIds = <T extends { evidenceIds: string[] }>(rows: T[] = []): T[] =>
     rows.map(row => ({ ...row, evidenceIds: row.evidenceIds.flatMap(id => ids.has(id) ? [ids.get(id)!] : []) }));

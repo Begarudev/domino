@@ -46,25 +46,26 @@ export function classifyProfile(title: string | null, headline: string | null, s
 
 export const familyLabel = (family: RoleFamily) => ROLE_FAMILY_LABELS[family];
 
-type Profile = Pick<Candidate, 'displayName' | 'headline' | 'roleFamily' | 'skills' | 'history' | 'consent'>;
+type Profile = Pick<Candidate, 'displayName' | 'headline' | 'roleFamily' | 'skills' | 'history' | 'consent' | 'provenance'>;
 
 export function fitFor(candidate: Profile, opening: Opening, evidence: Map<string, Evidence>): { fit: FitReason[]; score: number } | null {
   const fit: FitReason[] = [];
   let score = 0;
   const family = candidate.roleFamily;
   const label = familyLabel(opening.roleFamily);
+  const edited = (field: 'roleFamily' | 'skills') => candidate.provenance?.[field] === 'Edited by candidate' ? ' (edited by candidate)' : '';
   if (family === opening.roleFamily) {
     score += 0.6;
-    fit.push({ text: `Profile role family is ${label}, the same family as this opening`, status: 'verified', profileField: 'roleFamily' });
+    fit.push({ text: `Profile role family${edited('roleFamily')} is ${label}, the same family as this opening`, status: 'verified', profileField: 'roleFamily' });
   } else if (family && adjacent(family, opening.roleFamily)) {
     score += 0.3;
-    fit.push({ text: `Profile role family ${familyLabel(family)} is adjacent to ${label}`, status: 'verified', profileField: 'roleFamily' });
+    fit.push({ text: `Profile role family${edited('roleFamily')} ${familyLabel(family)} is adjacent to ${label}`, status: 'verified', profileField: 'roleFamily' });
   }
   const skills = candidate.consent.shareSkills
     ? candidate.skills.filter(skill => FAMILY_SKILLS[opening.roleFamily].test(skill)).slice(0, 4) : [];
   if (skills.length) {
     score += Math.min(0.2, skills.length * 0.06);
-    fit.push({ text: `Profile skills relevant to ${label}: ${skills.join(', ')}`, status: 'verified', profileField: 'skills' });
+    fit.push({ text: `Profile skills${edited('skills')} relevant to ${label}: ${skills.join(', ')}`, status: 'verified', profileField: 'skills' });
   }
   const past = candidate.consent.shareHistory ? candidate.history.find(item => roleFamilyOf(item.title) === opening.roleFamily) : undefined;
   if (past) {

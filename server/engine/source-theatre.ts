@@ -1,5 +1,6 @@
 import { ALL_STEPS } from '../../shared/types.ts';
 import type { Evidence, Intent, SourceItem, SourceReadEvent, StepName } from '../../shared/types.ts';
+import { matchesSignal, servingSignalKeywords, servingTitleStatus } from '../domain/facts.ts';
 import type { MoveTrigger, ParseMeta, TriggerBatch } from '../domain/types.ts';
 import type { CrustReadMeta } from '../runtime/tool.ts';
 
@@ -8,6 +9,17 @@ const dateShift = (date: string, days: number) =>
   new Date(Date.parse(date) + days * 86_400_000).toISOString().slice(0, 10);
 const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const formatDate = (date: string) => dateFormat.format(new Date(date));
+
+// Decision log for a job post: the rule that kept or discarded it, never a vague "relevant".
+export function jobDecision(title: string, triggered: boolean, used: boolean): { kept: boolean; reason: string } {
+  const status = servingTitleStatus(title);
+  const keyword = servingSignalKeywords.find(word => matchesSignal(title, [word]));
+  if (used && !triggered) return { kept: true, reason: 'Kept: the description names a tracked product or system; used as evidence' };
+  if (status === 'excluded') return { kept: false, reason: 'Discarded: not an engineering role for serving or infrastructure' };
+  if (!triggered) return { kept: false, reason: keyword ? 'Discarded: outside the window or the company is out of scope' : 'Discarded: title names no serving or infrastructure system' };
+  if (status !== 'serving') return { kept: false, reason: 'Discarded: title names no serving or infrastructure system' };
+  return { kept: true, reason: used ? `Kept: title matches “${keyword ?? 'infrastructure'}”; used as evidence` : `Kept: title matches “${keyword ?? 'infrastructure'}”` };
+}
 
 function publicUrl(value?: string | null) {
   if (!value) return null;
@@ -163,9 +175,11 @@ export function describeRead(
       const trigger = batch.triggers.find(trigger => trigger.evidenceIds.some(id => ids.includes(id)));
       const company = (trigger && companies.get(trigger.companyId)) ??
         batch.mentions.find(company => company.evidenceIds.includes(row.id));
-      items.push({ kind: 'job_post', title: typeof row.value === 'string' ? row.value : row.claim,
+      const title = typeof row.value === 'string' ? row.value : row.claim;
+      const decision = jobDecision(title, Boolean(trigger), matched(ids));
+      items.push({ kind: 'job_post', title,
         company: company?.name ?? null, url: publicUrl(row.source.url), ...timing(row),
-        signal: trigger?.kind === 'post' ? trigger.summary : trigger ? 'Relevant job posting' : null, matched: matched(ids) });
+        signal: trigger?.kind === 'post' ? trigger.summary : decision.kept ? decision.reason : null, matched: matched(ids), decision });
     }
   } else {
     for (const company of batch.mentions) {

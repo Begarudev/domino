@@ -25,6 +25,11 @@ const sources = [join(dir, 'src'), join(dir, 'vite.config.ts'), join(dir, 'index
 if (existsSync(join(dir, 'vite.config.ts')) && latestChange(join(dir, 'dist/index.html')) < Math.max(...sources.map(latestChange))) {
   runBun('run', ui === 'web2' ? 'build:web2' : 'build:web');
 }
+// With web2 as the main UI, the original run view is served at /classic (built with that base).
+const classicSources = [join(root, 'web/src'), join(root, 'web/index.html'), join(root, 'shared')];
+if (ui === 'web2' && latestChange(join(root, 'web/dist-classic/index.html')) < Math.max(...classicSources.map(latestChange))) {
+  runBun('run', 'build:classic');
+}
 
 const { portError, startServer } = await import('../server/index.ts');
 startServer().on('error', portError);

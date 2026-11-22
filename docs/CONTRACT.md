@@ -24,15 +24,16 @@ All shared types live in `shared/types.ts`. Do not change a type there without t
 
 ## Stack (fixed)
 
-- Node 24, TypeScript run **directly** by Node's native type stripping (`node server/index.ts`). Erasable syntax only:
-  no `enum`, no `namespace`, no constructor parameter properties; relative imports end in `.ts`.
-- One root `package.json` (no workspaces). Server deps: `hono`, `@hono/node-server`, `zod`. Web: `vite`, `react`,
-  `react-dom`, `@vitejs/plugin-react`, `typescript`. Add others only if they clearly pay for themselves.
+- Bun 1.4 runs TypeScript directly (`bun server/index.ts`); Bun is also the package manager (`bun.lock`). Erasable
+  syntax only: no `enum`, no `namespace`, no constructor parameter properties; relative imports end in `.ts`.
+- One root `package.json` (no workspaces). Server: `hono`, `@hono/node-server`, `zod`. Web: `vite`, `react`,
+  `react-dom`, `@vitejs/plugin-react`, `typescript`, `motion`. Add others only if they clearly pay for themselves.
 - SQLite via built-in `node:sqlite` (`DatabaseSync`), file `data/domino.db`, WAL mode, `busy_timeout=5000`.
-- Web UI: Vite + React in `web/`, built to `web/dist`, served by the server at `/`.
+- Web UI: Vite + React. `web2/` is the Search Desk app (candidate + company), `web/` the original run view; the server
+  serves `web2/dist` when `DOMINO_UI=web2`, else `web/dist`.
 - Port: `DOMINO_PORT` default `4321`.
-- Scripts: `npm run demo` (install if needed, build web, start server, print URL), `npm run dev` (server + vite dev with
-  `/api` proxy), `npm test` (`node --test` over `server/**/*.test.ts`).
+- Scripts: `bun start` (install if needed, build the UI if stale, start the server), `bun run dev` (server + vite dev
+  with `/api` proxy), `bun run test` (`bun test server`), `bun run test:e2e`, `bun run smoke`, `bun run proof:send-once`.
 
 ## Process model (this is what makes kill-and-resume real)
 
@@ -287,3 +288,9 @@ target/held/watch with hold reasons), `openings`, `outreach` (decider, verified 
 sentences and "I can't verify" claims, approvals, outbox actions sent once), `evidence` (every cited row).
 Company ids are canonical (`co_…`, stable for the same Crustdata id/domain); an alias name is also accepted.
 Start an analysis run with the existing `POST /api/runs {request}` and approve with `POST /api/approvals/:id`.
+
+### Rules registry
+
+`GET /api/rules` → `RuleCard[]` (`shared/desk.ts`): O1, R1, CONTAGION, DISPLACEMENT, DIRECT, each with its statement,
+thresholds, guards, lock time and live fire counts (O1 from the latest openings scan: open / provisional / held /
+watch; R1/CONTAGION/DISPLACEMENT/DIRECT from the latest analysis run).

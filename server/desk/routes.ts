@@ -3,28 +3,45 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Company, Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
-import type { Candidate, CompanySummary, CompanyView, IntroRequest, Opening } from '../../shared/desk.ts';
+import type { Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
+import type {
+  Candidate, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
+} from '../../shared/desk.ts';
+import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
+import type { RoleFamily } from '../../shared/desk.ts';
 import type { Store } from '../db.ts';
 import { linkedinProfileUrl } from '../crustdata/person-enrich.ts';
+import { introSharedFields } from '../engine/candidate-steps.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
+import { compareOpenings, whyThisTarget } from './why.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
   listCandidateRows, listIntroRows, openingsSnapshot, setCandidateRun, setIntroRun,
+  companiesOf, companySummaries,
 } from './store.ts';
-import type { IntroRow, OpeningsSnapshot } from './store.ts';
+import type { CandidateEdits, IntroRow, OpeningsSnapshot } from './store.ts';
+
+// The send-once proof's fault injection (scripts/send-once-proof.ts); /api/runs accepts the same flag.
+type InjectedChaos = { crashAfterDeliver?: boolean };
 
 export interface DeskDeps {
   store: Store;
   // Creates a run of the given pipeline and forks its engine worker; returns the run id.
-  launch(pipeline: Pipeline, request: string, options?: { limits?: Partial<RunLimits>; dataMode?: 'live' | 'cache' | 'fixture' }): string;
+  launch(pipeline: Pipeline, request: string, options?: {
+    limits?: Partial<RunLimits>; dataMode?: 'live' | 'cache' | 'fixture'; chaos?: InjectedChaos;
+  }): string;
 }
 
 const consentSchema = z.object({
   shareHistory: z.boolean(), shareSkills: z.boolean(), shareSamples: z.boolean(), discoverable: z.boolean(),
 }).strict();
+const confirmSchema = z.object({
+  consent: consentSchema.optional(),
+  roleFamily: z.enum(Object.keys(ROLE_FAMILY_LABELS) as [RoleFamily, ...RoleFamily[]]).nullable().optional(),
+  skills: z.array(z.string().max(60)).max(40).optional(),
+});
 const candidateSchema = z.object({
   linkedinUrl: z.string().max(300),
   samples: z.array(z.string().max(2000)).max(5).optional(),
@@ -34,11 +51,18 @@ const candidateSchema = z.object({
 // One enrich call lists at 1-9 credits; cap the candidate run far below the 600 per-run ceiling.
 const CANDIDATE_LIMITS: Partial<RunLimits> = { maxCredits: 25 };
 
-const byId = <T extends { id: string }>(rows: T[]) => [...new Map(rows.map(row => [row.id, row])).values()];
 const pick = (evidence: Evidence[], ids: Iterable<string>) => {
   const wanted = new Set(ids);
   return evidence.filter(row => wanted.has(row.id));
 };
+// Anti-wrapper rule 4: no bare scores leave the API. Ranking uses them internally; the UI shows clauses and fit reasons.
+function publicOpening<T extends Opening>(opening: T): Omit<T, 'confidence' | 'matchScore'> {
+  const { confidence: _confidence, matchScore: _matchScore, ...rest } = opening as T & { matchScore?: number };
+  return rest;
+}
+function publicMatch({ score: _score, ...rest }: Match): Omit<Match, 'score'> {
+  return rest;
+}
 const shortId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
 export function deskRoutes({ store, launch }: DeskDeps) {
@@ -50,18 +74,23 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const drafted = row.runId ? store.getOutput<CandidateOutputs['draft_intro']>(row.runId, 'draft_intro') : undefined;
     const approval = row.runId ? store.getApprovals(row.runId)[0] : undefined;
     const delivered = Boolean(row.runId && approval && store.getOutbox(row.runId).some(action => action.approvalId === approval.id));
-    const status: IntroRequest['status'] = delivered ? 'delivered' : approval?.status === 'rejected' ? 'declined'
+    const received = approval && store.sql.prepare('SELECT received_at FROM inbox_received WHERE idempotency_key = ?')
+      .get(approval.idempotencyKey) as { received_at: string } | undefined;
+    const receipt = received ? { idempotencyKey: approval!.idempotencyKey, receivedAt: received.received_at } : null;
+    const blocked = drafted?.draft?.status === 'not_drafted' ? drafted.draft.blockedReason ?? 'Not drafted' : null;
+    const status: IntroRequest['status'] = blocked ? 'not_drafted' : delivered || receipt ? 'delivered' : approval?.status === 'rejected' ? 'declined'
       : approval?.status === 'pending' ? 'awaiting_approval' : 'new';
     return {
       id: row.id, direction: row.direction, candidateId: row.candidateId, companyId: row.companyId,
       companyName: opening?.companyName ?? drafted?.company.name ?? row.companyId, openingId: row.openingId,
       roleTitle: opening?.roleTitle ?? drafted?.roleTitle ?? '', message: drafted?.draft?.body ?? '', status, runId: row.runId,
       approvalId: approval?.id ?? null, evidenceIds: drafted?.draft?.citations.map(item => item.evidenceId) ?? [],
-      receivedAt: row.createdAt,
+      receipt, ...(blocked && { blockedReason: blocked }), receivedAt: receipt?.receivedAt ?? row.createdAt,
     };
   };
 
-  const startIntro = (direction: IntroRow['direction'], candidate: Candidate, opening: Opening, snapshot: OpeningsSnapshot) => {
+  const startIntro = (direction: IntroRow['direction'], candidate: Candidate, opening: Opening, snapshot: OpeningsSnapshot,
+    chaos?: InjectedChaos) => {
     // One intro per direction, candidate and opening: a repeated request returns the existing one.
     const existing = listIntroRows(store, { candidateId: candidate.id })
       .find(row => row.direction === direction && row.openingId === opening.id && row.runId);
@@ -69,7 +98,7 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const id = shortId('in');
     insertIntro(store, { id, direction, candidateId: candidate.id, companyId: opening.companyId, openingId: opening.id,
       openingsRunId: snapshot.runId });
-    setIntroRun(store, id, launch('intro', `intro:${id}`));
+    setIntroRun(store, id, launch('intro', `intro:${id}`, { chaos }));
     return { intro: introView(listIntroRows(store, { candidateId: candidate.id }).find(row => row.id === id)!), created: true };
   };
 
@@ -81,13 +110,22 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   // ---------- openings ----------
 
   api.post('/openings/scan', async c => {
-    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string } };
+    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string };
+    // dataMode 'cache' replays a previous live scan from the tool cache (0 credits); 'fixture' uses fictional companies.
+    const dataMode = body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
     const asOf = /^\d{4}-\d{2}-\d{2}$/.test(body.replay?.asOf ?? '') ? body.replay!.asOf : null;
     const request = (body.request?.trim() || 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles') +
       (asOf ? `, replay as of ${asOf}` : '');
     // A full cohort pull is 8–13 person-search pages paced for the rate limit (about 4 minutes and 300–600 credits).
-    const runId = launch('openings', request, { limits: { maxCredits: 1500, maxSeconds: asOf ? 1200 : 900 } });
+    const runId = launch('openings', request, { dataMode, limits: { maxCredits: 1500, maxSeconds: asOf ? 1200 : 900 } });
     return c.json({ runId }, 201);
+  });
+
+  api.get('/openings/funnel', c => {
+    const runId = latestOpeningsRunId(store);
+    const funnel = runId ? store.getOutput<{ funnel?: OpeningsFunnel }>(runId, 'detect_openings')?.funnel : undefined;
+    if (!funnel) return c.json({ error: 'No completed openings scan with a funnel yet' }, 404);
+    return c.json(funnel);
   });
 
   // ---------- candidates ----------
@@ -120,11 +158,20 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const candidate = loadCandidate(id);
     if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
     if (candidate.status !== 'ready') return c.json({ error: 'The profile is not ready to confirm yet' }, 409);
-    const body = z.object({ consent: consentSchema.optional() }).safeParse(await c.req.json().catch(() => ({})));
-    if (!body.success) return c.json({ error: 'Expected an optional consent object' }, 400);
-    confirmCandidate(store, id, body.data.consent);
+    const body = confirmSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: 'Expected optional consent, roleFamily (a role family or null) and skills (strings)' }, 400);
+    // Only a real change counts as a candidate edit, so unchanged fields keep their "parsed by" provenance.
+    const { roleFamily, skills } = body.data;
+    const edits: CandidateEdits = {};
+    if (roleFamily !== undefined && roleFamily !== candidate.roleFamily) edits.roleFamily = roleFamily;
+    const cleanSkills = skills && [...new Set(skills.map(skill => String(sanitize(skill.trim(), true))).filter(Boolean))].slice(0, 30);
+    if (cleanSkills && cleanSkills.join('\n') !== candidate.skills.join('\n')) edits.skills = cleanSkills;
+    confirmCandidate(store, id, body.data.consent, edits);
     const confirmed = loadCandidate(id)!;
-    return c.json({ ...confirmed, evidence: candidateEvidence(store, confirmed) });
+    // Matching re-runs on the confirmed profile (edited family and skills, current consent).
+    const snapshot = openingsSnapshot(store);
+    const openings = snapshot ? openingsForCandidate(confirmed, snapshot.openings, snapshot.evidence).map(publicOpening) : [];
+    return c.json({ ...confirmed, evidence: candidateEvidence(store, confirmed), openings });
   });
 
   api.get('/candidates/:id/openings', c => {
@@ -132,13 +179,40 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
     const snapshot = openingsSnapshot(store);
     if (candidate.status !== 'ready' || !snapshot) return c.json([]);
-    return c.json(openingsForCandidate(candidate, snapshot.openings, snapshot.evidence));
+    const ranked: OpeningForCandidate[] = openingsForCandidate(candidate, snapshot.openings, snapshot.evidence);
+    return c.json(ranked.map(publicOpening));
   });
 
   api.get('/candidates/:id/inbox', c => {
     const id = c.req.param('id');
     if (!getCandidateRow(store, id)) return c.json({ error: 'Candidate not found' }, 404);
-    return c.json(listIntroRows(store, { candidateId: id }).filter(row => row.direction === 'company_to_candidate').map(introView));
+    // Fed only by the send-once outbox: an intro appears here once the test-inbox receiver has accepted it.
+    return c.json(listIntroRows(store, { candidateId: id }).filter(row => row.direction === 'company_to_candidate')
+      .map(introView).filter(intro => intro.receipt));
+  });
+
+  api.get('/candidates/:id/intros/preview', c => {
+    const candidate = loadCandidate(c.req.param('id'));
+    if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
+    if (candidate.status !== 'ready') return c.json({ error: 'The profile is not ready yet' }, 409);
+    const opening = openingsSnapshot(store)?.openings.find(item => item.id === c.req.query('openingId'));
+    if (!opening) return c.json({ error: 'Opening not found in the latest scan' }, 404);
+    const shared = introSharedFields(candidate, candidateEvidence(store, candidate));
+    const preview: IntroPreview = {
+      candidateId: candidate.id, openingId: opening.id, companyName: opening.companyName, roleTitle: opening.roleTitle,
+      shared: [{ field: 'displayName', label: 'Name', value: candidate.displayName },
+        ...shared.map(({ field, label, value, evidenceId }) => ({ field, label, value, evidenceId }))],
+      withheld: [
+        { field: 'fullName', label: 'Full name', reason: 'Never shared: first name and last initial only' },
+        { field: 'contact', label: 'Email, phone, profile URL', reason: 'Never in the intro: replies go through the desk' },
+        ...(!candidate.consent.shareSkills ? [{ field: 'skills', label: 'Skills', reason: 'You did not share skills' }] : []),
+        ...(!candidate.consent.shareHistory ? [{ field: 'history', label: 'Work history', reason: 'You did not share work history' }] : []),
+        ...(candidate.consent.shareHistory ? [{ field: 'pastRoles', label: 'Past roles', reason: 'Only the current role goes into an intro' }] : []),
+        { field: 'samples', label: 'Work samples', reason: 'Not included in intros' },
+        { field: 'headline', label: 'Headline', reason: 'Not included in intros' },
+      ],
+    };
+    return c.json(preview);
   });
 
   api.get('/candidates/:id/intros', c => {
@@ -151,41 +225,34 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const candidate = loadCandidate(c.req.param('id'));
     if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
     if (candidate.status !== 'ready' || !candidate.confirmedAt) return c.json({ error: 'Confirm your profile before requesting an intro' }, 409);
-    const body = z.object({ openingId: z.string().min(1) }).safeParse(await c.req.json().catch(() => null));
+    const body = z.object({ openingId: z.string().min(1), chaos: z.object({ crashAfterDeliver: z.boolean().optional() }).strict().optional() })
+      .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: 'Expected openingId' }, 400);
     const snapshot = openingsSnapshot(store);
     const opening = snapshot?.openings.find(item => item.id === body.data.openingId);
     if (!snapshot || !opening) return c.json({ error: 'Opening not found in the latest scan' }, 404);
     if (opening.status === 'held') return c.json({ error: 'Held: not an opening' }, 409);
-    const { intro, created } = startIntro('candidate_to_company', candidate, opening, snapshot);
+    const { intro, created } = startIntro('candidate_to_company', candidate, opening, snapshot, body.data.chaos);
     return c.json(intro, created ? 201 : 200);
   });
 
   // ---------- companies ----------
 
-  const companiesOf = (snapshot: OpeningsSnapshot): Company[] => byId([
-    ...snapshot.companies,
-    ...snapshot.openings.map(opening => ({ id: opening.companyId, name: opening.companyName, aliases: [], evidenceIds: [] })),
-  ]);
-
   api.get('/companies', c => {
     const snapshot = openingsSnapshot(store);
-    if (!snapshot) return c.json([]);
-    const rows: CompanySummary[] = companiesOf(snapshot).map(company => ({
-      id: company.id, name: company.name, domain: company.domain ?? null, headcount: company.headcount ?? null,
-      openings: snapshot.openings.filter(opening => opening.companyId === company.id && opening.status === 'open').length,
-      departures90d: snapshot.departures.filter(departure => departure.companyId === company.id).length,
-    })).filter(row => row.departures90d || snapshot.openings.some(opening => opening.companyId === row.id));
-    rows.sort((a, b) => b.openings - a.openings || b.departures90d - a.departures90d || a.name.localeCompare(b.name));
-    return c.json(rows);
+    return c.json(snapshot ? companySummaries(snapshot) : []);
   });
 
   api.get('/companies/:id', c => {
     const id = c.req.param('id');
     const snapshot = openingsSnapshot(store);
-    const company = snapshot && companiesOf(snapshot).find(item => item.id === id);
+    // Accept the canonical id or a name slug ("abacus-ai" for Abacus.AI).
+    const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const company = snapshot && companiesOf(snapshot).find(item => item.id === id || slug(item.name) === slug(id));
     if (!snapshot || !company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
-    const openings = snapshot.openings.filter(opening => opening.companyId === id);
+    if (company.id !== id) return c.redirect(`/api/companies/${company.id}`, 302);
+    const openings = snapshot.openings.filter(opening => opening.companyId === id).sort(compareOpenings);
+    const summaries = companySummaries(snapshot);
     const departures = snapshot.departures.filter(departure => departure.companyId === id);
     const candidates = listCandidateRows(store).map(row => candidateView(store, row))
       .filter(candidate => candidate.status === 'ready' && candidate.consent.discoverable);
@@ -197,7 +264,10 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       ...company.evidenceIds, ...openings.flatMap(opening => opening.evidenceIds), ...departures.map(departure => departure.evidenceId),
       ...matches.flatMap(match => match.fit.flatMap(reason => reason.evidenceId ?? [])),
     ];
-    const view: CompanyView = { company, departures, openings, matches, intros, runId: snapshot.runId, replay, evidence: pick(snapshot.evidence, cited) };
+    const view: CompanyView = {
+      company, departures, openings: openings.map(opening => ({ ...publicOpening(opening), why: whyThisTarget(opening, snapshot.openings, summaries) })), matches: matches.map(publicMatch), intros, runId: snapshot.runId, replay,
+      evidence: pick(snapshot.evidence, cited),
+    };
     return c.json(view);
   });
 

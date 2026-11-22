@@ -29,6 +29,8 @@ export function EvidenceDrawer() {
   }, [id]);
   if (!id) return null;
   const ev = findEvidence(id, runEvidence);
+  // A month-precision row (flagged by the source or its claim) shows its month, never a day ("Oct 2026", not "31 Oct").
+  const monthly = !!ev && (isMonthLevel(ev.observedAt) || (ev as { precision?: string }).precision === 'month' || /month precision/i.test(ev.claim));
   return (
     <div className="ev-scrim" onClick={closeEvidence}>
       <aside className="ev-drawer" role="dialog" aria-label="Source" data-testid="evidence-drawer" onClick={(e) => e.stopPropagation()}>
@@ -38,8 +40,8 @@ export function EvidenceDrawer() {
         ) : (
           <>
             <div className="ev-date">
-              {ev.observedAt ? fmtDate(ev.observedAt, true) : 'Undated'}
-              {isMonthLevel(ev.observedAt) && <span className="tag">month-level date</span>}
+              {ev.observedAt ? fmtDate(monthly ? ev.observedAt.slice(0, 7) : ev.observedAt, true) : 'Undated'}
+              {monthly && <span className="tag">month-level date</span>}
               {!ev.verifiable && <span className="tag warn">I can’t verify</span>}
             </div>
             <p className="ev-claim">{ev.claim}</p>

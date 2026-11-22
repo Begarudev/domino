@@ -11,9 +11,9 @@ test('inference request reaches approval with evidence-backed drafts', async t =
   const drafts = new Map(snapshot.drafts.map(draft => [draft.id, draft]));
   const evidence = new Map(snapshot.evidence.map(item => [item.id, item]));
   for (const target of snapshot.targets) {
-    const parked = target.hold || (target as { watch?: unknown }).watch;
+    const parked = target.hold || target.watch || target.notDrafted;
     if (parked) {
-      // Held and watchlist accounts are shown with their reasons and are never drafted.
+      // Held, watchlist and not-drafted (fewer than 2 verified facts) accounts are shown with reasons, never drafted.
       assert.equal(target.draftId, null, `Parked target ${target.companyId} must not have a draft`);
       continue;
     }

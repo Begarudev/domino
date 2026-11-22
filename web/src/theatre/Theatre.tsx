@@ -8,6 +8,7 @@ import { MissionControl } from '../centrepiece/mission/index.ts';
 import type { MissionControls } from '../centrepiece/mission/index.ts';
 import type { Backend } from '../api.ts';
 import { pickBackend } from '../api.ts';
+import { MAX_REQUEST_CHARS } from '../../../shared/types.ts';
 import { MAIN_REQUEST, REPLAY_REQUEST } from '../mock/events.ts';
 import { useRun } from '../useRun.ts';
 
@@ -84,7 +85,7 @@ export function Theatre() {
       <style>{CSS}</style>
       <form className="th-bar" style={{ height: BAR }} onSubmit={(e) => { e.preventDefault(); if (request.trim()) run(request.trim()); }}>
         <span className="th-mark">DOMINO</span>
-        <input className="th-req" value={request} onChange={(e) => setRequest(e.target.value)} aria-label="Request" placeholder="What do you sell, and who should it find?" />
+        <input className="th-req" value={request} maxLength={MAX_REQUEST_CHARS} onChange={(e) => setRequest(e.target.value)} aria-label="Request" placeholder="What do you sell, and who should it find?" />
         <button type="submit" className="th-go" disabled={!backend || busy || !request.trim()}>Run</button>
         <button type="button" className={`th-btn${hiringFilterView ? ' on' : ''}`} disabled={!snapshot.targets.length} onClick={() => setHiringFilterView((v) => !v)}>Hiring-filter view</button>
         <button type="button" className="th-btn" disabled={!backend || busy} onClick={() => run(REPLAY_REQUEST)}>Replay 1 Sep → 22 Nov</button>

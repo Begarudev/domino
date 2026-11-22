@@ -98,11 +98,13 @@ async function smoke(base: string) {
   console.log(`Ledger totals. Resumed run ${resumed.ledger.length} attempts, ${resumed.budget.used.credits} credits, $${resumed.budget.used.modelUsd.toFixed(6)} USD.`);
 }
 
-async function isolatedSmoke() {
+/** Starts a fixture-mode DOMINO on a free port with a throwaway DB and outbox, runs `body`, then cleans up. */
+export async function withIsolatedServer(body: (base: string, dbPath: string) => Promise<void>) {
   const dir = mkdtempSync(join(tmpdir(), 'domino-smoke-'));
+  const dbPath = join(dir, 'smoke.db');
   const server = spawn(process.execPath, ['server/index.ts'], {
     cwd: root, stdio: ['ignore', 'pipe', 'ignore'],
-    env: { ...process.env, DOMINO_DB: join(dir, 'smoke.db'), DOMINO_OUTBOX: join(dir, 'outbox'), DOMINO_PORT: '0',
+    env: { ...process.env, DOMINO_DB: dbPath, DOMINO_OUTBOX: join(dir, 'outbox'), DOMINO_PORT: '0',
       DOMINO_DATA: 'fixture', CRUSTDATA_API_KEY: '', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' },
   });
   let banner = '';
@@ -112,7 +114,7 @@ async function isolatedSmoke() {
       assert.equal(server.exitCode, null, 'DOMINO server exited during startup');
       return /http:\/\/127\.0\.0\.1:\d+/.exec(banner)?.[0];
     });
-    await smoke(base);
+    await body(base, dbPath);
   } finally {
     if (server.exitCode === null && server.signalCode === null) {
       server.kill();
@@ -125,5 +127,5 @@ async function isolatedSmoke() {
 if (import.meta.main) {
   const base = process.env.DOMINO_URL;
   if (base) await smoke(base);
-  else await isolatedSmoke();
+  else await withIsolatedServer(smoke);
 }

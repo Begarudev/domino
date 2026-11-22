@@ -3,13 +3,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Company, Evidence, IsoDate, ReplayScore } from '../../shared/types.ts';
-import type { Departure, Opening, RoleFamily } from '../../shared/desk.ts';
+import type { Departure, FunnelStage, Opening, OpeningsFunnel, RoleFamily } from '../../shared/desk.ts';
 import { companyHeadcount, DEPARTURE_PAGES, hireOutcomes, jobOutcomes, jobReplacements, personDepartures, personReplacements } from '../crustdata/openings.ts';
 import type { CohortCompany, HeadcountFact, OutcomeInput, OutcomeRow, ReplacementCheck, ScanWindow } from '../crustdata/openings.ts';
 import { parseIntentRules } from '../domain/intent.ts';
 import { detectOpenings, drainWindow, groupDepartures, MAX_STAFF, MIN_STAFF, OUTCOME_DAYS, scoreOpenings } from '../domain/openings.ts';
 import { shiftDays } from '../domain/facts.ts';
-import type { AcquisitionFact, CompanyFacts, DepartureFact, ReplacementFact } from '../domain/openings.ts';
+import type { AcquisitionFact, Check, CompanyFacts, DepartureFact, ReplacementFact } from '../domain/openings.ts';
 import { root } from '../env.ts';
 import type { ToolContext } from '../runtime/tool.ts';
 import { readAcquihireNews } from './acquihire.ts';
@@ -31,9 +31,9 @@ export interface OpeningsOutputs {
   resolve_departures: { companies: Company[]; departures: Departure[]; facts: DepartureFact[]; companyFacts: CompanyFacts[]; evidence: Evidence[] };
   check_replacements: {
     replacements: Replacement[]; replacementFacts: ReplacementFact[]; staleCompanyIds: string[];
-    jobChecks: Record<string, { checkedAt: IsoDate | null; failed?: boolean }>; acquisitions: AcquisitionFact[]; evidence: Evidence[];
+    jobChecks: Record<string, Check>; hireChecks: Record<string, Check>; newsChecked: string[]; acquisitions: AcquisitionFact[]; evidence: Evidence[];
   };
-  detect_openings: { openings: Opening[]; skipped: { companyId: string; roleFamily: RoleFamily; reason: string }[] };
+  detect_openings: { openings: Opening[]; skipped: { companyId: string; roleFamily: RoleFamily; reason: string }[]; funnel: OpeningsFunnel };
   score_openings: ReplayScore;
 }
 
@@ -68,6 +68,35 @@ function analystHints(): { title: string; url: string }[] {
   }
 }
 
+
+/** Company enrich in batches; a batch that fails (Crustdata 500s on some ids) is split down to single ids. */
+async function sizeCompanies(ctx: ToolContext, scope: SearchScope, ids: number[], matched: boolean) {
+  const facts = new Map<number, HeadcountFact>();
+  const evidence: Evidence[] = [];
+  const read = async (chunk: number[]): Promise<boolean> => {
+    try {
+      const batch = await readSource(ctx, companyHeadcount, { asOf: scope.asOf, crustdataIds: chunk }, time(scope));
+      if (!batch.parsed.facts) return false;                // the tool wrapper's "unavailable" fallback
+      ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, matched ? batch.evidence.map(row => row.id) : []));
+      evidence.push(...batch.evidence);
+      for (const fact of batch.parsed.facts) facts.set(fact.crustdataId, { ...fact, evidenceId: fact.evidenceId && batch.remap(fact.evidenceId) });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const visit = async (chunk: number[], size: number): Promise<void> => {
+    for (let i = 0; i < chunk.length; i += size) {
+      const part = chunk.slice(i, i + size);
+      if (await read(part) || size === 1) continue;
+      await pace(ctx, 4000);
+      await visit(part, size > 5 ? 5 : 1);
+    }
+  };
+  await visit(ids, 25);
+  return { facts, evidence };
+}
+
 export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
   scope_search: ctx => {
     const run = ctx.store.requireRun(ctx.runId);
@@ -92,9 +121,11 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     let cursor: string | undefined;
     let totalCount: number | null = null;
     const seen = new Set<string>();
+    let lastLive = false;
     for (let page = 0; page < DEPARTURE_PAGES + 5; page++) {
-      if (page) await pace(ctx);
+      if (lastLive) await pace(ctx);                        // cache hits do not touch the rate limit
       const batch = await readSource(ctx, personDepartures, { window: scanWindow(scope), ...(cursor ? { cursor } : {}) }, time(scope));
+      lastLive = batch.observation?.mode === 'live';
       const parsed = batch.parsed;
       ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, batch.evidence.map(row => row.id)));
       evidence.push(...batch.evidence);
@@ -119,18 +150,12 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     // Live sizes come from the profiles' latest headcount; replay never trusts today's size and enriches as of the cutoff.
     const groups = candidateGroups(scope, facts, id => scope.runKind === 'replay' ? null : byId.get(id)?.headcount ?? null);
     const ids = [...new Set(groups.map(group => byId.get(group.companyId)?.crustdataId).filter((id): id is number => id != null))];
-    const headcounts = new Map<number, HeadcountFact>();
-    const evidence: Evidence[] = [];
-    for (let i = 0; i < ids.length; i += 25) {
-      const batch = await readSource(ctx, companyHeadcount, { asOf: scope.asOf, crustdataIds: ids.slice(i, i + 25) }, time(scope));
-      ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, batch.evidence.map(row => row.id)));
-      evidence.push(...batch.evidence);
-      for (const fact of batch.parsed.facts ?? []) headcounts.set(fact.crustdataId, { ...fact, evidenceId: fact.evidenceId && batch.remap(fact.evidenceId) });
-    }
+    const { facts: headcounts, evidence } = await sizeCompanies(ctx, scope, ids, true);
     const companyFacts: CompanyFacts[] = cohort.map(company => {
       const enriched = headcounts.get(company.crustdataId);
       return { id: company.id, name: company.name, headcount: enriched?.headcount ?? (scope.runKind === 'replay' ? null : company.headcount),
-        headcountChange90d: enriched?.change90d ?? null, headcountEvidenceId: enriched?.evidenceId ?? null };
+        headcountChange90d: enriched?.change90d ?? null, headcountEvidenceId: enriched?.evidenceId ?? null,
+        headcountSeries: enriched?.series ?? [] };
     });
     const size = new Map(companyFacts.map(row => [row.id, row.headcount]));
     const companies: Company[] = cohort.map(company => ({ id: company.id, name: company.name, aliases: [company.name], domain: company.domain,
@@ -152,28 +177,45 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     const checks: ReplacementCheck[] = groups.flatMap(group => {
       const crustdataId = crustId.get(group.companyId);
       const since = group.conclusive.map(d => d.left[0]).sort().at(-1)!;
-      return crustdataId == null ? [] : [{ companyId: group.companyId, crustdataId, roleFamily: group.roleFamily, since }];
+      return crustdataId == null ? [] : [{ companyId: group.companyId, crustdataId, roleFamily: group.roleFamily, since, companyName: group.conclusive[0].companyName }];
     });
     const replacementFacts: ReplacementFact[] = [];
     const evidence: Evidence[] = [];
-    const jobChecks: Record<string, { checkedAt: IsoDate | null; failed?: boolean }> = {};
+    const jobChecks: Record<string, Check> = {};
+    const hireChecks: Record<string, Check> = {};
+    let newsChecked: string[] = [];
     let acquisitions: AcquisitionFact[] = [];
+    const scopeOf = (kind: string, companyId: string) => {
+      const check = checks.find(item => item.companyId === companyId)!;
+      return `${kind} at company_id ${check.crustdataId}, ${check.roleFamily.replace('_', ' ')} title phrases, dated ${check.since} to ${scope.asOf}`;
+    };
     if (checks.length) {
       try {
         const jobs = await readSource(ctx, jobReplacements, { asOf: scope.asOf, checks }, time(scope));
         ctx.store.transaction(() => publishSource(ctx, jobs, jobs.evidence, jobs.evidence.map(row => row.id)));
         evidence.push(...jobs.evidence);
         replacementFacts.push(...(jobs.parsed.replacements ?? []).map(r => ({ ...r, evidenceId: jobs.remap(r.evidenceId) })));
-        for (const id of jobs.parsed.checked ?? []) jobChecks[id] = { checkedAt: scope.asOf };
+        for (const id of jobs.parsed.checked ?? []) jobChecks[id] = { checkedAt: scope.asOf, scope: scopeOf('Job search', id),
+          evidenceId: jobs.parsed.checkEvidence?.[id] ? jobs.remap(jobs.parsed.checkEvidence[id]) : undefined,
+          records: (jobs.parsed.replacements ?? []).filter(r => r.companyId === id).length };
       } catch {
         // A failed job search leaves the leg unverifiable: O1 puts the group on Watch ("I can't verify no replacement was posted").
         for (const check of checks) jobChecks[check.companyId] = { checkedAt: null, failed: true };
       }
       await pace(ctx);
-      const hires = await readSource(ctx, personReplacements, { asOf: scope.asOf, checks, lagDays: lag(scope) ?? 0 }, time(scope));
-      ctx.store.transaction(() => publishSource(ctx, hires, hires.evidence, hires.evidence.map(row => row.id)));
-      evidence.push(...hires.evidence);
-      replacementFacts.push(...(hires.parsed.replacements ?? []).map(r => ({ ...r, evidenceId: hires.remap(r.evidenceId) })));
+      try {
+        const hires = await readSource(ctx, personReplacements, { asOf: scope.asOf, checks, lagDays: lag(scope) ?? 0 }, time(scope));
+        ctx.store.transaction(() => publishSource(ctx, hires, hires.evidence, hires.evidence.map(row => row.id)));
+        evidence.push(...hires.evidence);
+        const found = (hires.parsed.replacements ?? []).map(r => ({ ...r, evidenceId: hires.remap(r.evidenceId) }));
+        replacementFacts.push(...found);
+        for (const id of hires.parsed.checked ?? []) hireChecks[id] = { checkedAt: scope.asOf, scope: scopeOf('Person search (current role)', id),
+          evidenceId: hires.parsed.checkEvidence?.[id] ? hires.remap(hires.parsed.checkEvidence[id]) : undefined,
+          records: found.filter(r => r.companyId === id).length };
+      } catch {
+        // A timed-out or failed hire check is "I can't verify": O1 keeps the group on Watch, never open.
+        for (const check of checks) hireChecks[check.companyId] = { checkedAt: null, failed: true, scope: scopeOf('Person search (current role)', check.companyId) };
+      }
 
       // Acqui-hire guard from live news: is a departure destination reported as acquiring, licensing or hiring A's team?
       const pairs = groups.slice(0, 3).map(group => ({ loser: group.conclusive[0].companyName,
@@ -182,6 +224,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
       const hints = analystHints();
       const news = await readAcquihireNews(ctx, intent, pairs, { publisherHints: hints });
       evidence.push(...news.evidence);
+      if (!news.reason?.startsWith('Skipped')) newsChecked = groups.slice(0, 3).map(group => group.companyId);
       acquisitions = news.acquisitions.filter(event => event.date).map(event => {
         const row = news.evidence.find(item => item.source.url === event.sourceUrl && item.verifiable);
         const host = event.sourceUrl ? new URL(event.sourceUrl).hostname.replace(/^www\./, '') : 'source';
@@ -192,7 +235,8 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     }
     const replacements: Replacement[] = replacementFacts.map(r => ({ companyId: r.companyId, roleFamily: r.roleFamily, kind: r.kind, date: r.date[0], evidenceId: r.evidenceId }));
     return {
-      output: { replacements, replacementFacts, staleCompanyIds: Object.entries(jobChecks).filter(([, v]) => v.failed).map(([id]) => id), jobChecks, acquisitions, evidence },
+      output: { replacements, replacementFacts, staleCompanyIds: Object.entries(jobChecks).filter(([, v]) => v.failed).map(([id]) => id),
+        jobChecks, hireChecks, newsChecked, acquisitions, evidence },
       summary: `${checks.length} company/role groups checked: ${replacementFacts.length} replacement posts or hires, ${acquisitions.length} dated acquisition reports`,
     };
   },
@@ -203,11 +247,13 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     const r = c.check_replacements!;
     const result = detectOpenings({
       asOf: scope.asOf, runId: ctx.runId, replay: scope.runKind === 'replay', profileLagDays: lag(scope),
-      departures: facts, companies: companyFacts, replacements: r.replacementFacts, jobChecks: r.jobChecks, acquisitions: r.acquisitions,
+      departures: facts, companies: companyFacts, replacements: r.replacementFacts, jobChecks: r.jobChecks, hireChecks: r.hireChecks,
+      newsChecked: r.newsChecked, acquisitions: r.acquisitions,
     });
+    const funnel = buildFunnel(ctx.runId, scope, c.pull_departures!.totalCount, facts, companyFacts, result.openings, ctx.mode);
     const count = (status: Opening['status']) => result.openings.filter(o => o.status === status).length;
     const provisional = result.openings.filter(o => o.provisional).length;
-    return { output: result, summary: `${count('open')} predicted openings (${provisional} provisional), ${count('held')} held, ${count('watch')} on watch` };
+    return { output: { ...result, funnel }, summary: `${count('open')} predicted openings (${provisional} provisional), ${count('held')} held, ${count('watch')} on watch` };
   },
 
   score_openings: async (ctx, c) => {
@@ -218,12 +264,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     // Universe: every company with a family departure known by the cutoff, sized as of the cutoff (enrich timeseries).
     const groups = groupDepartures({ asOf: scope.asOf, departures: facts, profileLagDays: lag(scope) });
     const ids = [...new Set(groups.map(group => byId.get(group.companyId)?.crustdataId).filter((id): id is number => id != null))];
-    const sized = new Map<number, HeadcountFact>();
-    for (let i = 0; i < ids.length; i += 25) {
-      const batch = await readSource(ctx, companyHeadcount, { asOf: scope.asOf, crustdataIds: ids.slice(i, i + 25) }, time(scope));
-      ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, []));
-      for (const fact of batch.parsed.facts ?? []) sized.set(fact.crustdataId, fact);
-    }
+    const { facts: sized } = await sizeCompanies(ctx, scope, ids, false);
     const universe = cohort.filter(company => {
       const size = sized.get(company.crustdataId)?.headcount;
       return ids.includes(company.crustdataId) && size != null && size >= MIN_STAFF && size <= MAX_STAFF;
@@ -261,3 +302,39 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     return { output: score, summary: score.note };
   },
 };
+
+const monthOf = (day: IsoDate) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+const personRow = (d: DepartureFact, detail?: string) => ({
+  label: `${d.initial} ${d.role} · ${d.companyName} · left ${monthOf(d.left[0])} → ${d.toCompanyName ?? '?'} (${monthOf(d.started[0])})`,
+  ...(detail ? { detail } : {}), evidenceId: d.evidenceId,
+});
+
+/** O1 funnel with drill-down rows: people appear only as role + initial + month. */
+export function buildFunnel(runId: string, scope: SearchScope, profiles: number | null, facts: DepartureFact[], companies: CompanyFacts[],
+  openings: Opening[], mode: string): OpeningsFunnel {
+  const size = new Map(companies.map(company => [company.id, company.headcount]));
+  const known = facts.filter(d => scope.runKind !== 'replay' || d.started[1] <= shiftDays(scope.asOf, -30));
+  const inWindow = known.filter(d => drainWindow(d.left, scope.asOf) !== 'outside');
+  const icp = inWindow.filter(d => { const n = size.get(d.companyId); return n == null || (n >= MIN_STAFF && n <= MAX_STAFF); });
+  const groups = groupDepartures({ asOf: scope.asOf, departures: icp, profileLagDays: lag(scope) })
+    .filter(group => group.conclusive.length + group.unsettled.length >= 2);
+  const decided = (status: Opening['status'], provisional?: boolean) => openings.filter(o => o.status === status && (provisional == null || Boolean(o.provisional) === provisional));
+  const openingRows = (rows: Opening[]) => rows.map(o => ({ label: `${o.companyName} · ${o.roleFamily.replace('_', ' ')}`,
+    detail: (o.holdReasons ?? []).join('; ') || o.clauses?.map(c => `${c.state === 'met' ? '✓' : c.state === 'open' ? '⏳' : c.state === 'cant_verify' ? '?' : '✗'} ${c.text}`).join(' · ') }));
+  const multi = openings.filter(o => groups.some(g => g.companyId === o.companyId && g.roleFamily === o.roleFamily));
+  const stages: FunnelStage[] = [
+    { id: 'profiles', label: `People who left an infra/serving title and started a new role (${scope.runKind === 'replay' ? 'replay window' : 'last 90 days'})`, count: profiles ?? facts.length },
+    { id: 'departures', label: 'Direct moves out of an engineering role in a tracked family', count: known.length, rows: known.map(d => personRow(d)) },
+    { id: 'window', label: 'Departure month inside or straddling the 90-day window', count: inWindow.length,
+      rows: inWindow.map(d => personRow(d, drainWindow(d.left, scope.asOf) === 'straddles' ? 'not conclusive: month straddles window start' : undefined)) },
+    { id: 'icp', label: 'At a company with 20–5,000 staff', count: icp.length, rows: icp.map(d => personRow(d)) },
+    { id: 'groups', label: 'Company and role family with 2 or more departures', count: groups.length,
+      rows: groups.flatMap(g => [...g.conclusive.map(d => personRow(d)), ...g.unsettled.map(d => personRow(d, 'not conclusive: month straddles window start'))]) },
+    { id: 'open', label: 'Predicted openings (settled)', count: decided('open', false).length, rows: openingRows(decided('open', false)) },
+    { id: 'provisional', label: 'Predicted openings (provisional: replacement window still open)', count: decided('open', true).length, rows: openingRows(decided('open', true)) },
+    { id: 'held', label: 'Held by a false-drain guard', count: decided('held').filter(o => multi.includes(o)).length, rows: openingRows(decided('held').filter(o => multi.includes(o))) },
+    { id: 'watch', label: 'Watch (2+ departures but a check could not be verified)', count: decided('watch').filter(o => multi.includes(o)).length, rows: openingRows(decided('watch').filter(o => multi.includes(o))) },
+  ];
+  return { runId, rule: 'O1', lockedAt: '22 Nov 2026 14:08 IST (month-interval semantics 14:14 IST), before replay outcomes', stages,
+    snapshot: `${mode === 'live' ? 'Live' : mode === 'cache' ? 'Live-cached' : 'Fixture'} Crustdata, as of ${scope.asOf}` };
+}

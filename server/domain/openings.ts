@@ -6,7 +6,7 @@
 // Crustdata role dates are month-level, so every date is an interval [first, last] and a condition holds only when it
 // holds for every day in the interval.
 import type { IsoDate, ReplayOutcome, ReplayScore } from '../../shared/types.ts';
-import type { Opening, OpeningReason, RoleFamily } from '../../shared/desk.ts';
+import type { Opening, OpeningReason, RoleFamily, RuleClause } from '../../shared/desk.ts';
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import { companyNameKey, daysBetween, relatedDomains, shiftDays, stableId } from './facts.ts';
 
@@ -76,6 +76,7 @@ export interface CompanyFacts {
   headcount: number | null;
   headcountChange90d?: number | null; // percent, from a dated timeseries
   headcountEvidenceId?: string | null;
+  headcountSeries?: { date: IsoDate; count: number }[]; // enrich timeseries up to asOf
   ambiguous?: boolean;
 }
 
@@ -88,6 +89,8 @@ export interface AcquisitionFact {
 
 export interface RestructureFact { companyId: string; date: IsoDate; label: string; evidenceId: string }
 
+export interface Check { checkedAt: IsoDate | null; failed?: boolean; records?: number; scope?: string; evidenceId?: string }
+
 export interface O1Input {
   asOf: IsoDate;
   runId: string;
@@ -96,7 +99,9 @@ export interface O1Input {
   departures: DepartureFact[];
   companies: CompanyFacts[];
   replacements: ReplacementFact[];
-  jobChecks: Record<string, { checkedAt: IsoDate | null; failed?: boolean }>; // per company id
+  jobChecks: Record<string, Check>;  // per company id: the replacement job search
+  hireChecks?: Record<string, Check>; // per company id: the replacement person search
+  newsChecked?: string[];             // company ids whose acqui-hire news was searched
   acquisitions: AcquisitionFact[];
   restructures?: RestructureFact[];
 }
@@ -143,12 +148,6 @@ export function groupDepartures(input: Pick<O1Input, 'asOf' | 'departures' | 'pr
   return [...groups.values()];
 }
 
-function confidence(conclusive: number, provisional: boolean) {
-  // 2 conclusive departures -> 0.62, 3 -> 0.74, 4+ -> 0.80; a still-open replacement window costs 0.1.
-  const base = Math.min(0.8, 0.5 + 0.12 * (conclusive - 1));
-  return Math.round((provisional ? base - 0.1 : base) * 100) / 100;
-}
-
 function mostCommon(values: string[]) {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -191,47 +190,77 @@ export function detectOpenings(input: O1Input): O1Result {
       id: stableId('op_', input.runId, group.companyId, family), companyId: group.companyId, companyName: name,
       roleFamily: family, roleTitle: mostCommon(all.map(d => d.role)), predictedAt: input.asOf, rule: 'O1' as const, runId: input.runId,
     };
-    const finish = (opening: Omit<Opening, keyof typeof base | 'evidenceIds'>) =>
-      openings.push({ ...base, ...opening, evidenceIds: [...evidenceIds] });
+    const clauses: RuleClause[] = [];
+    const months = (rows: DepartureFact[]) => rows.map(d => monthLabel(d.left[0]).split(' ')[0]).join(', ');
+    const windowStart = shiftDays(input.asOf, -DRAIN_DAYS);
+    clauses.push({
+      id: 'o1.departures', state: group.conclusive.length >= 2 ? 'met' : 'failed',
+      text: `${group.conclusive.length} conclusive ${familyLabel} departures${group.conclusive.length ? ` (${months(group.conclusive)})` : ''}; O1 needs 2`,
+      detail: `90-day window ${dayLabel(shiftDays(windowStart, 1))}–${dayLabel(input.asOf)}; month-level dates count only when the whole month is inside.` +
+        group.unsettled.map(d => ` ${d.initial} ${d.role}, ${monthLabel(d.left[0])} → ${d.toCompanyName ?? '?'}: not conclusive, month straddles window start.`).join(''),
+      evidenceIds: all.map(d => d.evidenceId),
+    });
+    const finish = (opening: Omit<Opening, keyof typeof base | 'evidenceIds' | 'clauses'>) =>
+      openings.push({ ...base, ...opening, clauses, evidenceIds: [...evidenceIds] });
 
     if (group.conclusive.length < 2) {
       if (all.length >= 2) {
-        finish({ status: 'held', confidence: 0, reasons, holdReasons: ['Month-only dates cannot settle the 90-day window'] });
+        clauses.push({ id: 'guard.month_only', state: 'failed', text: 'Month-only dates cannot settle the 90-day window', evidenceIds: group.unsettled.map(d => d.evidenceId) });
+        finish({ status: 'held', reasons, holdReasons: ['Month-only dates cannot settle the 90-day window'] });
       } else {
-        finish({ status: 'watch', confidence: 0, reasons, watch: { have: group.conclusive.length, need: 2,
+        finish({ status: 'watch', reasons, watch: { have: group.conclusive.length, need: 2,
           reason: group.unsettled.length ? 'Its one departure month straddles the 90-day edge' : 'One departure so far' } });
       }
       continue;
     }
 
-    // False-drain guards -> Hold.
+    // False-drain guards -> Hold. Each guard that ran is a clause, met (passed) or failed (held).
     const hold: string[] = [];
     const firstLeft = all[0].left[0];
-    for (const acquisition of input.acquisitions) {
-      const closeInTime = Math.abs(daysBetween(acquisition.date, firstLeft)) <= ACQUIHIRE_DAYS ||
-        Math.abs(daysBetween(acquisition.date, lastLeft)) <= ACQUIHIRE_DAYS;
-      if (!closeInTime || !sameName(acquisition.acquired, name) ||
-        !destinations.some(destination => sameName(destination, acquisition.acquirer))) continue;
+    const matchedAcquisitions = input.acquisitions.filter(acquisition => (Math.abs(daysBetween(acquisition.date, firstLeft)) <= ACQUIHIRE_DAYS ||
+      Math.abs(daysBetween(acquisition.date, lastLeft)) <= ACQUIHIRE_DAYS) && sameName(acquisition.acquired, name) &&
+      destinations.some(destination => sameName(destination, acquisition.acquirer)));
+    for (const acquisition of matchedAcquisitions) {
       hold.push(`Acqui-hire: ${acquisition.label} (${dayLabel(acquisition.date)}${acquisition.analystEntered ? ', analyst-entered, with source' : ''})`);
       if (acquisition.evidenceId) {
         evidenceIds.add(acquisition.evidenceId);
         reasons.push({ kind: 'news', label: acquisition.label, date: acquisition.date, evidenceId: acquisition.evidenceId });
       }
     }
+    const newsChecked = input.newsChecked?.includes(group.companyId);
+    if (matchedAcquisitions.length || newsChecked) {
+      clauses.push({
+        id: 'guard.acquihire', state: matchedAcquisitions.length ? 'failed' : 'met',
+        text: matchedAcquisitions.length ? `Acqui-hire guard matched: ${destinations.join(', ')} acquired, licensed or hired ${name}'s team`
+          : `No dated report of ${destinations.join(' or ')} acquiring or acqui-hiring ${name}`,
+        detail: `News search ±${ACQUIHIRE_DAYS} days around the departures; publication date read from each article page.` +
+          matchedAcquisitions.map(a => ` ${a.label}, ${dayLabel(a.date)}.`).join('') +
+          (matchedAcquisitions.length ? ' The report is company-level; it does not verify either person\'s move.' : ''),
+        evidenceIds: matchedAcquisitions.flatMap(a => a.evidenceId ? [a.evidenceId] : []),
+      });
+    }
     if (company?.ambiguous) hold.push('Ambiguous company identity');
     if (headcount == null) hold.push('Company size unknown, so the 20–5,000 staff filter cannot be checked');
     if (headcount && all.length / headcount > 0.4) hold.push('Movers would be more than 40% of headcount');
-    if (company?.headcountChange90d != null && company.headcountChange90d < -10) {
-      hold.push(`Possible restructure: headcount down ${Math.abs(company.headcountChange90d).toFixed(1)}% over 90 days`);
+    clauses.push({ id: 'guard.size', state: headcount == null ? 'cant_verify' : 'met',
+      text: headcount == null ? 'Company size unknown' : `${headcount.toLocaleString('en-US')} staff (20–5,000), movers ${Math.round(all.length / headcount * 1000) / 10}% of headcount`,
+      evidenceIds: company?.headcountEvidenceId ? [company.headcountEvidenceId] : [] });
+    if (company?.headcountChange90d != null) {
+      const down = company.headcountChange90d < -10;
+      if (down) hold.push(`Possible restructure: headcount down ${Math.abs(company.headcountChange90d).toFixed(1)}% over 90 days`);
       if (company.headcountEvidenceId) evidenceIds.add(company.headcountEvidenceId);
+      clauses.push({ id: 'guard.restructure', state: down ? 'failed' : 'met',
+        text: `Headcount ${company.headcountChange90d >= 0 ? '+' : ''}${company.headcountChange90d.toFixed(1)}% over 90 days${down ? ' (more than 10% down: possible restructure)' : ''}`,
+        detail: 'Company enrich headcount timeseries, latest point vs the point 80–100 days earlier.', evidenceIds: company.headcountEvidenceId ? [company.headcountEvidenceId] : [] });
     }
     for (const restructure of input.restructures ?? []) {
       if (restructure.companyId !== group.companyId || Math.abs(daysBetween(restructure.date, lastLeft)) > DRAIN_DAYS) continue;
       hold.push(`Possible restructure: ${restructure.label} (${dayLabel(restructure.date)})`);
       evidenceIds.add(restructure.evidenceId);
+      clauses.push({ id: 'guard.restructure_news', state: 'failed', text: `${restructure.label} (${dayLabel(restructure.date)})`, evidenceIds: [restructure.evidenceId] });
     }
     if (hold.length) {
-      finish({ status: 'held', confidence: 0, reasons, holdReasons: hold });
+      finish({ status: 'held', reasons, holdReasons: hold });
       continue;
     }
 
@@ -242,24 +271,40 @@ export function detectOpenings(input: O1Input): O1Result {
       skipped.push({ companyId: group.companyId, roleFamily: family, reason: `Replacement found: ${replaced[0].label}` });
       continue;
     }
-    const check = input.jobChecks[group.companyId];
-    if (!check || check.failed || !check.checkedAt || daysBetween(check.checkedAt, input.asOf) > STALE_JOB_DAYS) {
-      finish({ status: 'watch', confidence: 0, reasons, watch: { have: group.conclusive.length, need: group.conclusive.length,
-        reason: "I can't verify no replacement was posted: the job search for this company failed or is more than 14 days old" } });
+    const legClause = (id: string, what: string, check: Check | undefined): RuleClause => {
+      const stale = !check || check.failed || !check.checkedAt || daysBetween(check.checkedAt, input.asOf) > STALE_JOB_DAYS;
+      return { id, state: stale ? 'cant_verify' : 'met',
+        text: stale ? `I can't verify no replacement was ${what === 'job search' ? 'posted' : 'hired'}: the ${what} ${check?.failed ? 'failed or timed out' : 'is missing or more than 14 days old'}`
+          : `Replacement ${what} ${dayLabel(lastLeftStart)}–${dayLabel(input.asOf)}: 0 records`,
+        detail: check?.scope ? `${check.scope}; ${check.records ?? 0} records returned${check.checkedAt ? `, checked ${dayLabel(check.checkedAt)}` : ''}` : undefined,
+        evidenceIds: !stale && check?.evidenceId ? [check.evidenceId] : [] };
+    };
+    const jobs = legClause('o1.no_replacement.jobs', 'job search', input.jobChecks[group.companyId]);
+    const people = legClause('o1.no_replacement.people', 'person search', input.hireChecks?.[group.companyId] ??
+      (input.hireChecks ? undefined : input.jobChecks[group.companyId]));
+    clauses.push(jobs, people);
+    if (jobs.state === 'cant_verify' || people.state === 'cant_verify') {
+      finish({ status: 'watch', reasons, watch: { have: group.conclusive.length, need: group.conclusive.length,
+        reason: "I can't verify no replacement was posted: a replacement check failed, timed out or is more than 14 days old" } });
       continue;
     }
+    const checkedAt = input.jobChecks[group.companyId].checkedAt!;
+    for (const id of [...jobs.evidenceIds, ...people.evidenceIds]) evidenceIds.add(id);
     const closes = shiftDays(lastLeft, REPLACEMENT_DAYS);
     const provisional = closes > input.asOf;
+    clauses.push({ id: 'o1.window', state: provisional ? 'open' : 'met',
+      text: provisional ? `Replacement window open: closes by ${dayLabel(closes)}` : `Replacement window closed ${dayLabel(closes)}`,
+      detail: `As of ${dayLabel(input.asOf)}; latest conclusive departure ${monthLabel(lastLeftStart)} (could be as late as ${dayLabel(lastLeft)}); window = ${REPLACEMENT_DAYS} days after the last possible departure day.`,
+      evidenceIds: group.conclusive.map(d => d.evidenceId) });
     reasons.push({
-      kind: 'no_replacement', date: check.checkedAt, evidenceId: null,
-      label: `No ${familyLabel} job post or hire at ${name} since ${dayLabel(lastLeftStart)} (checked ${dayLabel(check.checkedAt)})` +
+      kind: 'no_replacement', date: checkedAt, evidenceId: jobs.evidenceIds[0] ?? null,
+      label: `No ${familyLabel} job post or hire at ${name} since ${dayLabel(lastLeftStart)} (checked ${dayLabel(checkedAt)})` +
         (provisional ? `; replacement window closes by ${dayLabel(closes)}` : ''),
     });
-    finish({ status: 'open', confidence: confidence(group.conclusive.length, provisional), reasons,
-      provisional, windowClosesBy: provisional ? closes : null });
+    finish({ status: 'open', reasons, provisional, windowClosesBy: provisional ? closes : null });
   }
   const order = { open: 0, watch: 1, held: 2 };
-  openings.sort((a, b) => order[a.status] - order[b.status] || (b.confidence ?? 0) - (a.confidence ?? 0) || a.companyName.localeCompare(b.companyName));
+  openings.sort((a, b) => order[a.status] - order[b.status] || a.companyName.localeCompare(b.companyName));
   return { openings, skipped };
 }
 
