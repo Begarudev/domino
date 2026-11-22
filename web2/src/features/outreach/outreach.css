@@ -19,7 +19,7 @@
 .fn-mark:hover { background: var(--acc-weak); }
 
 .fn-list { display: grid; }
-.fn { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--rule-2); font-size: 13px; color: var(--ink-2); align-items: start; }
+.fn { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--rule-2); font-size: 14px; color: var(--ink-2); align-items: start; }
 .fn:last-child { border-bottom: 0; }
 .fn > b { color: var(--acc); font-weight: 600; padding-top: 5px; }
 .fn-x { padding-top: 5px; }
@@ -79,3 +79,5 @@
 .out-rc-key, .out-rc-time { white-space: nowrap; }
 .out-rc-time { color: var(--ink-2); }
 .fn-glue { white-space: nowrap; }
+[data-testid='receipt'] .mono { font-size: 13px; }
+.out-dup .muted .mono { font-size: 13px; }
