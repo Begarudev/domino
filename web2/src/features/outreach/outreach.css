@@ -81,3 +81,13 @@
 .fn-glue { white-space: nowrap; }
 [data-testid='receipt'] .mono { font-size: 13px; }
 .out-dup .muted .mono { font-size: 13px; }
+/* polish p3: labelled counts, sans tabular times, footnote sources aligned, crash controls read as buttons */
+.out-count-l { display: inline-flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.out-count-l .out-count { font-size: 16px; line-height: 20px; color: var(--ink); }
+.out-rc-time { font-size: 13px; font-variant-numeric: tabular-nums; }
+.out-eng-state { font-size: 13px; }
+.out-engine .btn.ghost { border: 1px solid var(--rule); }
+.out-engine .btn.ghost:hover:not(:disabled) { background: var(--hover); }
+.fn-src { font-variant-numeric: tabular-nums; }
+.fn-mark { font-variant-numeric: tabular-nums; }
+.out-steps small { font-variant-numeric: tabular-nums; }

@@ -17,6 +17,8 @@ export type Account = {
   draft: Draft | null;
   send: Approval | null;
   status: AccountStatus;
+  /** Verified, dated facts behind the account against the 2-fact drafting gate. */
+  facts: { have: number; need: number };
 };
 
 /** Rule ids as the registry writes them: TALENT_DRAIN -> "Talent drain". */
@@ -58,14 +60,16 @@ export function accounts(snap: RunSnapshot): Account[] {
     if (sent) status = { kind: 'sent', label: 'Delivered once', cls: 'verified' };
     else if (t.hold?.reasons?.length) status = { kind: 'held', label: `Held: ${t.hold.reasons[0]}`, cls: 'held', why: t.hold.reasons.join(' · ') };
     else if (t.watch) status = { kind: 'watch', label: 'Watch', cls: 'plain', why: t.watch.reason };
-    else if (t.notDrafted) status = { kind: 'not_drafted', label: `Not drafted (${t.notDrafted.have} of ${t.notDrafted.need} verified facts)`, cls: 'held', why: t.notDrafted.reason };
+    else if (t.notDrafted) status = { kind: 'not_drafted', label: 'Not drafted', cls: 'held', why: t.notDrafted.reason };
     else if (!draft) status = { kind: 'not_drafted', label: 'Not drafted', cls: 'held', why: stop ?? 'No draft was written for this account' };
     // The current evidence gate: a draft needs 2+ verified, dated facts. Older runs drafted below it are held, not sendable.
-    else if (draft.citations.length < 2) status = { kind: 'held', label: `Held: drafted before the evidence gate (${draft.citations.length} of 2 verified facts)`, cls: 'held', why: 'Runs before the 2-fact gate could draft from one fact. This draft cannot be sent.' };
+    else if (draft.citations.length < 2) status = { kind: 'held', label: 'Held: drafted before the 2-fact gate', cls: 'held', why: 'Runs before the 2-fact gate could draft from one fact. This draft cannot be sent.' };
     else if (send?.status === 'approved') status = { kind: 'approved', label: 'Approved, not yet delivered', cls: 'prov' };
     else if (send?.status === 'rejected') status = { kind: 'held', label: 'Rejected by you', cls: 'held' };
     else status = { kind: 'ready', label: 'Draft ready', cls: 'prov' };
-    return { target: t, name: co?.name ?? t.companyId, domain: co?.domain ?? null, trigger: trig[0] ?? null, draft, send, status };
+    const facts = t.notDrafted ? { have: t.notDrafted.have, need: t.notDrafted.need }
+      : { have: draft ? new Set(draft.citations.map((c) => c.evidenceId)).size : 0, need: 2 };
+    return { target: t, name: co?.name ?? t.companyId, domain: co?.domain ?? null, trigger: trig[0] ?? null, draft, send, status, facts };
   });
 }
 
