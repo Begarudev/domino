@@ -1,7 +1,7 @@
 import type { Intent, IsoDate } from '../../shared/types.ts';
-import { isoDay } from './facts.ts';
+import { isoDay, servingSignalKeywords } from './facts.ts';
 
-const inferenceKeywords = ['inference', 'ML platform', 'ML infrastructure', 'GPU', 'LLM serving', 'model serving', 'MLOps'];
+const inferenceKeywords = servingSignalKeywords;
 const inferenceTitles = ['CTO', 'VP Engineering', 'Head of ML/AI', 'Head of Infrastructure', 'Head of ML Platform', 'Co-founder'];
 
 const profiles = [

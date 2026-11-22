@@ -125,7 +125,9 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
     const funding = preference.flatMap(record => record.lastFunding ?? []).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
     const company: ResolvedCompany = {
       id, name: aliases[0], aliases, domain: normalizeDomain(first('domain')), linkedinUrl: normalizeLinkedIn(first('linkedinUrl')),
-      crustdataId: first('crustdataId'), industry: first('industry'), headcount: first('headcount'), headcountGrowthPct: first('headcountGrowthPct'),
+      crustdataId: first('crustdataId'), industry: first('industry'),
+      categories: [...new Set(records.flatMap(record => record.categories ?? []))],
+      headcount: first('headcount'), headcountGrowthPct: first('headcountGrowthPct'),
       ambiguousIdentity: ids.length > 1 || records.some(record => ambiguities.has(record.key) || record.ambiguousIdentity),
       acquisitions: records.flatMap(record => record.acquisitions ?? []),
       hq: first('hq'), foundedYear: first('foundedYear'), lastFunding: funding, evidenceIds: [...new Set(records.flatMap(record => record.evidenceIds))],

@@ -9,6 +9,7 @@ export interface CompanyMention {
   linkedinUrl?: string | null;
   crustdataId?: number | string | null;
   industry?: string | null;
+  categories?: string[];
   headcount?: number | null;
   headcountGrowthPct?: Company['headcountGrowthPct'];
   hq?: string | null;
@@ -33,6 +34,7 @@ export interface AcquisitionEvent {
 }
 
 export interface ResolvedCompany extends Company {
+  categories?: string[];
   acquisitions?: AcquisitionEvent[];
   ambiguousIdentity?: boolean;
 }

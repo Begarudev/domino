@@ -112,6 +112,7 @@ function employer(role: RoleEntry, key: string, historical: boolean): CompanyMen
     key, name, domain: data.company_website, linkedinUrl: data.company_professional_network_profile_url,
     crustdataId: data.crustdata_company_id, hq: data.company_headquarters_country,
     industry: historical ? undefined : data.company_industries?.[0] || data.company_professional_network_industry,
+    categories: historical ? undefined : data.company_industries ?? undefined,
     headcount: historical ? undefined : data.company_headcount_latest, evidenceIds: [],
   };
 }

@@ -126,7 +126,6 @@ test('same-company and same-root subsidiary moves are held without a talent-drai
 test('guarded targets list headcount, identity, title and date uncertainty reasons', () => {
   const dates = ['2026-11-04', '2026-11-11', '2026-11-13'];
   const cases = [
-    { company: { ...a, headcount: 6 }, title: 'Inference Engineer', precision: 'day', expected: /more than 40%/ },
     { company: { ...a, ambiguousIdentity: true } satisfies ResolvedCompany, title: 'Inference Engineer', precision: 'day', expected: /Ambiguous company identity/ },
     { company: a, title: 'Software Engineer', precision: 'day', expected: /unrecognised titles/ },
     { company: a, title: 'Inference Engineer', precision: 'month', expected: /month-only dates/ },
@@ -140,6 +139,9 @@ test('guarded targets list headcount, identity, title and date uncertainty reaso
     assert.equal(graph.edges.length, 0);
     assert.match(targets[0].hold!.reasons.join(' '), scenario.expected);
   }
+  const small = { ...a, headcount: 20 };
+  const largeDrain = Array.from({ length: 9 }, (_, i) => move(String(i), '2026-11-09', 'Inference Engineer', small));
+  assert.match(cascadeMoves(largeDrain, [small, b]).targets[0].hold!.reasons.join(' '), /more than 40%/);
 });
 
 test('whole-month November starts count and hardware or non-engineering roles do not', () => {

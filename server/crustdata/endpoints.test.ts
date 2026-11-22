@@ -131,7 +131,34 @@ test('permissive parsing retains an undated matching fact as unverifiable withou
   const item = payload.job_listings.find(job => job.crustdata_job_id === 900001)!;
   const parsed = endpoints.job_search.parse({ job_listings: [{ ...item, metadata: {}, extra: 'allowed' }] }, { intent }, meta);
   assert.equal(parsed.triggers.length, 0);
-  assert.equal(parsed.evidence.length, 1);
-  assert.equal(parsed.evidence[0].observedAt, null);
-  assert.equal(parsed.evidence[0].verifiable, false);
+  assert.ok(parsed.evidence.some(row => row.source.field === '$.job_details.title'));
+  assert.ok(parsed.evidence.every(row => row.observedAt === null && row.verifiable === false));
+});
+
+test('job triggers are title-only and omit client postings from recruiter accounts', () => {
+  const { body, meta } = evaluate(endpoints.job_search, { intent });
+  assert.match(JSON.stringify(body), /"field":"job_details.title","type":"\[\.\]","value":"inference"/);
+  assert.doesNotMatch(JSON.stringify(body), /"field":"content.description","type":"\[\.\]","value":"inference"/);
+  const posting = (id: number, title: string, name: string, industry: string, description = 'Build GPU infrastructure and inference.') => ({
+    crustdata_job_id: id,
+    job_details: { title, url: 'https://sample.example/jobs/' + id },
+    company: { basic_info: { name, industries: [industry] } },
+    content: { description },
+    metadata: { date_added: '2026-11-14' },
+  });
+  const raw = { job_listings: [
+    posting(1, 'Technical Product Manager', 'Juniper Lattice', 'Artificial Intelligence'),
+    posting(2, 'AI Engineer', 'Juniper Lattice', 'Artificial Intelligence'),
+    posting(3, 'LLM Infra Engineer', 'Juniper Lattice', 'Artificial Intelligence', ''),
+    posting(4, 'Inference Engineer', 'Fonzi AI', 'Artificial Intelligence'),
+    posting(5, 'ML Platform Engineer', 'Flexiple', 'Software Development'),
+    posting(6, 'Serving Engineer', 'RemoteHunter', 'Software Development'),
+    posting(7, 'GPU Software Engineer', 'Toptal', 'Software Development'),
+    posting(8, 'MLOps Engineer', 'Spruce Match', 'Staffing and Recruiting'),
+  ] };
+  const parsed = endpoints.job_search.parse(raw, { intent }, meta);
+  assert.equal(parsed.triggers.filter(trigger => trigger.kind === 'job_post').length, 1);
+  assert.match(parsed.triggers[0].summary, /LLM Infra Engineer/);
+  assert.deepEqual(parsed.evidence.filter(row => row.source.field === '$.content.description').map(row => row.source.recordId), ['1', '2']);
+  assert.ok(parsed.mentions.every(mention => mention.name === 'Juniper Lattice'));
 });
