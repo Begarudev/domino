@@ -1,0 +1,16 @@
+/* Page-level layout shared by the candidate and company pages. Feature CSS lives next to each feature. */
+.cohort { display: grid; gap: var(--s2); }
+.cohort-row {
+  display: grid; grid-template-columns: 1.4fr 1fr 1.4fr 0.8fr; align-items: center; gap: var(--s4);
+  padding: var(--s4) var(--s5); color: var(--paper); font-size: var(--fs-body);
+}
+.cohort-row:hover { text-decoration: none; border-color: var(--line); background: var(--panel-2); }
+.cohort-row b { font-size: var(--fs-lead); }
+.cohort-row > span:nth-child(3) { display: flex; gap: 8px; flex-wrap: wrap; }
+.cohort-row > span:last-child { text-align: right; color: var(--paper-2); }
+.cohort-name { font-size: var(--fs-lead); font-weight: 700; display: grid; }
+.cohort-name small { font-size: var(--fs-cap); color: var(--paper-3); font-weight: 500; }
+
+.co-head { margin-bottom: var(--s4); }
+.crumb { font-size: var(--fs-ui); color: var(--paper-2); display: inline-block; margin-bottom: var(--s2); }
+.co-sub { margin: 0; color: var(--paper-2); font-size: var(--fs-lead); }

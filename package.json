@@ -20,7 +20,10 @@
     "smoke": "bun scripts/smoke.ts",
     "snapshot": "bun scripts/snapshot.ts",
     "test:e2e": "bun test tests/e2e --timeout 180000",
-    "mission": "bun --bun vite --config web/mission/vite.config.ts"
+    "mission": "bun --bun vite --config web/mission/vite.config.ts",
+    "dev:web2": "bun --bun vite --config web2/vite.config.ts",
+    "build:web2": "bun --bun vite build --config web2/vite.config.ts",
+    "typecheck:web2": "tsc --noEmit -p web2/tsconfig.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",

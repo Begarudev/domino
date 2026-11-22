@@ -13,6 +13,7 @@ import type { Pipeline, RunEvent, RunLimits, RunStatus } from '../shared/types.t
 import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts';
 import { decode, Store } from './db.ts';
 import type { RunChaos } from './db.ts';
+import { companyDossier } from './desk/dossier.ts';
 import { deskRoutes } from './desk/routes.ts';
 import { recheckSource } from './engine/sources.ts';
 import { config, defaultLimits, redactSecrets, root } from './env.ts';
@@ -171,6 +172,11 @@ export function createApp(store: Store) {
     return c.json({ id: launch(pipeline ?? 'outbound', request, { dataMode, limits, chaos }) }, 201);
   });
 
+  // Full company analysis for one company (lead-owned; see docs/CONTRACT.md "Company dossier").
+  app.get('/api/companies/:id/dossier', c => {
+    const result = store.transaction(() => companyDossier(store, c.req.param('id'), c.req.query('run') || undefined), 'read');
+    return result ? c.json(result) : c.json({ error: 'No analysis run has this company yet' }, 404);
+  });
   app.route('/api', deskRoutes({ store, launch }));
 
   app.get('/api/runs', c => c.json(store.listRuns()));

@@ -19,6 +19,10 @@ export const STEP_LABELS: Record<StepName, string> = {
   draft_messages: 'Draft and verify messages',
   approval_gate: 'Wait for approval',
   score_replay: 'Score the replay',
+  scope_search: 'Scope the search', pull_departures: 'Pull departures', resolve_departures: 'Resolve companies',
+  check_replacements: 'Check for replacements', detect_openings: 'Predict openings', score_openings: 'Score the replay',
+  fetch_profile: 'Fetch the profile', parse_profile: 'Read the profile', match_openings: 'Match openings',
+  draft_intro: 'Draft the intro', intro_gate: 'Wait for approval',
 };
 
 export type Tone = 'info' | 'retry' | 'fail' | 'ok' | 'warn' | 'entity' | 'engine';

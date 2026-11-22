@@ -1,6 +1,8 @@
 // Search Desk contract (pivot approved 22 Nov 2026, 14:08 IST). Shapes agreed with ui-v2; docs/CONTRACT.md "Search Desk".
 // Evidence stays the shared Evidence type: every response that cites evidence ids also returns those Evidence rows.
-import type { Company, Evidence, IsoDate, IsoDateTime, ReplayScore } from './types.ts';
+import type {
+  Approval, Company, DataMode, Decider, Draft, Evidence, GraphEdge, IsoDate, IsoDateTime, Mechanism, OutboxAction, ReplayScore, TriggerKind,
+} from './types.ts';
 
 export type RoleFamily = 'inference' | 'ml_platform' | 'mlops' | 'gpu_llm_infra' | 'backend_payments';
 export const ROLE_FAMILY_LABELS: Record<RoleFamily, string> = {
@@ -53,6 +55,8 @@ export interface Opening {
   holdReasons?: string[];           // status 'held': acqui-hire, shared parent, >40% moving, ambiguous id, month-only dates,
                                     // unrecognised titles, possible restructure (headcount down >10% / layoff news)
   watch?: { have: number; need: number; reason?: string }; // status 'watch' (e.g. stale job data: can't verify no replacement)
+  provisional?: boolean;            // open, but the 30-day no-replacement leg is not settled yet (month-level dates)
+  windowClosesBy?: IsoDate | null;  // provisional: the date by which the replacement window closes ("closes by 30 Nov")
   evidenceIds: string[];
   runId: string;                    // the openings scan run that produced it
 }
@@ -101,3 +105,34 @@ export interface CompanyView {
 }
 
 export interface OpeningForCandidate extends Opening { fit: FitReason[]; matchScore: number }
+
+// ---------- company dossier (full company analysis; GET /api/companies/:id/dossier) ----------
+// A per-company view of the latest analysis run (outbound pipeline: triggers, entities, cascade rules, targets,
+// drafts, approvals, outbox). People who moved appear only as role + initial + date.
+
+export interface DossierEvent { id: string; date: IsoDate; kind: TriggerKind; summary: string; evidenceIds: string[] }
+export interface TalentFlow {
+  direction: 'in' | 'out';          // in = joined this company, out = left it
+  role: string; initial: string | null; date: IsoDate;
+  otherCompanyId: string | null; otherCompanyName: string | null; evidenceIds: string[];
+}
+export interface DossierChain { edge: GraphEdge; fromName: string; toName: string; side: 'cause' | 'effect' }
+export interface PredictedNeed {
+  need: string; mechanisms: Mechanism[]; confidence: number; netNew: boolean; whyNow: string; whyNowDate: IsoDate | null;
+  status: 'target' | 'held' | 'watch'; holdReasons: string[]; watchReason: string | null; rank: number; evidenceIds: string[];
+}
+export interface DossierOutreach {
+  decider: Decider | null; draft: Draft; approvals: Approval[]; outbox: OutboxAction[];
+  verifier: { verified: boolean; removed: string[]; cantVerify: { claim: string; reason: string }[] };
+}
+export interface CompanyDossier {
+  runId: string; asOf: IsoDate | null; dataMode: DataMode; company: Company;
+  timeline: DossierEvent[];         // news/posts, funding, headcount jumps, hires, departures; newest first
+  jobPosts: DossierEvent[];
+  talentFlows: TalentFlow[];
+  chains: DossierChain[];           // cross-company edges where this company is the cause or the effect
+  predictedNeeds: PredictedNeed[];
+  openings: Opening[];              // Search Desk openings for this company (latest openings scan), if any
+  outreach: DossierOutreach[];
+  evidence: Evidence[];
+}

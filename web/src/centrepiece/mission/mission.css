@@ -549,7 +549,7 @@
 .mc-say--fail { color: #ff9c86; }
 .mc-say--ok { color: var(--ivory); }
 .mc-say.is-live { animation: mc-say-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-@keyframes mc-say-in { from { clip-path: inset(0 100% 0 0); opacity: 0.4; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes mc-say-in { from { opacity: 0; transform: translateY(0.35em); } }
 .mc-head__right { margin-left: 0; }
 
 /* reading desk */
