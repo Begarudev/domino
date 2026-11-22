@@ -87,6 +87,8 @@ test('entity resolution respects strong identity and conflicting namesakes', () 
   assert.notEqual(result.idMap.orphan, result.idMap.job);
   assert.notEqual(result.idMap.orphan, result.idMap.wrong);
   assert.ok(result.keptApart.some(row => row.reason.includes('different domains')));
+  const repeated = { key: 'same-source-key', name: 'Kestrel Labs', evidenceIds: [] };
+  assert.deepEqual(resolveEntities([repeated, repeated], []).merges, []);
 });
 
 test('talent drain needs three distinct conclusive hires at the same company and a recent third hire', () => {

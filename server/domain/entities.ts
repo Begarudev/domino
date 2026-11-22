@@ -122,8 +122,9 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
     companies.push(company);
     companyMembers.set(id, records);
     for (const record of records) idMap[record.key] = id;
-    if (records.length > 1) merges.push({ canonicalId: id, kind: 'company', names: aliases, keys: [...new Set(records.map(record => record.key))],
-      reason: `Merged ${records.length} source records (${records.map(record => record.key).join(', ')}) using ${[...(groups.reasons.get(root) ?? ['the same mention key'])].join(' and ')}.` });
+    const sourceKeys = [...new Set(records.map(record => record.key))];
+    if (sourceKeys.length > 1) merges.push({ canonicalId: id, kind: 'company', names: aliases, keys: sourceKeys,
+      reason: `Merged ${sourceKeys.length} source records (${sourceKeys.join(', ')}) using ${[...(groups.reasons.get(root) ?? [])].join(' and ')}.` });
   }
   companies.sort((a, b) => lexical(a.name, b.name) || lexical(a.id, b.id));
 
@@ -209,9 +210,10 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
       linkedinUrl: url, startedAt: preferred.startedAt, pastEmployers: [...pastEmployers.values()],
       evidenceIds: [...new Set(records.flatMap(record => record.evidenceIds))],
     });
-    if (records.length > 1) merges.push({ canonicalId: id, kind: 'person', names: [...new Set(records.map(record => record.name))],
-      keys: [...new Set(records.map(record => record.key))],
-      reason: `Merged ${records.length} source records (${records.map(record => record.key).join(', ')}) using ${[...(peopleGroups.reasons.get(root) ?? ['the same mention key'])].join(' and ')}.` });
+    const sourceKeys = [...new Set(records.map(record => record.key))];
+    if (sourceKeys.length > 1) merges.push({ canonicalId: id, kind: 'person', names: [...new Set(records.map(record => record.name))],
+      keys: sourceKeys,
+      reason: `Merged ${sourceKeys.length} source records (${sourceKeys.join(', ')}) using ${[...(peopleGroups.reasons.get(root) ?? [])].join(' and ')}.` });
   }
   return { companies, people: resolvedPeople, merges, keptApart, idMap };
 }
