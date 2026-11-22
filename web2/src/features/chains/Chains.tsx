@@ -16,6 +16,7 @@ import {
   useDossier, useHeldExample, useRules, watchCount,
 } from './model.ts';
 import './chains.css';
+import { DominoGraph } from '../network/DominoGraph.tsx';
 
 export function Chains({ desk }: { desk: CompanyDesk }) {
   const rules = useRules();
@@ -44,6 +45,7 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
   const rest = rules.data.filter((r) => r.id !== 'O1' && r.id !== 'R1');
   return (
     <div className="reg" ref={enter}>
+      <div className="reg-wide"><DominoGraph desk={desk} dossier={dossier ?? null} /></div>
       {dq.error && !dossier && <p className="src-note reg-wide">No company file for {desk.company.name} yet ({dq.error}), so the per-company rows are left out.</p>}
       {dossier && dossier.rules.length > 0 && (
         <div className="reg-wide verdict" data-testid="chains-verdict">
@@ -188,6 +190,7 @@ function WatchCard({ desk, dossier, loading }: { desk: CompanyDesk; dossier: Com
   const r1 = dossier?.rules.find((r) => r.id === 'R1');
   const w = watchCount(r1);
   if (!w) return loading ? <div className="rule-card ghost" aria-hidden /> : null;
+  if (desk.openings.some((o) => o.status === 'held')) return null; // O1 held (e.g. acqui-hire): no watchlist count for this company
   const o1dep = desk.openings.flatMap((o) => o.clauses ?? []).find((c) => c.id === 'o1.departures');
   const months = clauseMonths(o1dep);
   const fam = desk.openings[0]?.roleFamily ?? null;

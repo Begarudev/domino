@@ -11,6 +11,7 @@ import { daysBetween, fmtDate, fmtInt, plural } from '../../lib/format.ts';
 import { openEvidence } from '../../shell/ui.ts';
 import { sourceName } from '../../shell/EvidenceDrawer.tsx';
 import './analysis.css';
+import { DominoGraph } from '../network/DominoGraph.tsx';
 
 type EvMap = Map<string, Evidence>;
 const isMonth = (e: Evidence | undefined) => !!e && (e.precision === 'month' || /month precision/i.test(e.claim));
@@ -92,6 +93,7 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
       )}
 
       <div className="cf-bottom">
+        <DominoGraph desk={desk} dossier={d ?? null} />
         <Flows d={d} desk={desk} ev={ev} />
         <News d={d} ev={ev} name={company.name} />
       </div>
