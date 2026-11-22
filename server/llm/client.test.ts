@@ -57,19 +57,43 @@ test('OpenAI takes precedence and uses Chat Completions with estimated pricing f
 });
 
 for (const status of [400, 404]) {
-  test(`OpenAI model_not_found at HTTP ${status} disables calls for that run with one warning`, async t => {
+  test(`two consecutive OpenAI model_not_found responses at HTTP ${status} disable calls for that run`, async t => {
     const fetch = t.mock.method(globalThis, 'fetch', async () =>
-      Response.json({ error: { code: 'model_not_found', message: 'mock-openai-credential' } }, { status }));
+      Response.json({ error: { code: 'model_not_found', message: 'Model unavailable for mock-openai-credential' } }, { status }));
     const id = `missing-${status}`;
     assert.equal(await create(id).complete(completion), null);
+    assert.equal(store.requireRun(id).llm_hard_failures, 1);
+    assert.equal(store.requireRun(id).llm, config.llmLabel);
     const later = modelClient(new ToolContext(store, id, 'draft_messages'));
     assert.equal(await later.complete({ ...completion, purpose: 'draft' }), null);
     assert.equal(await later.complete({ ...completion, purpose: 'draft' }), null);
-    assert.equal(fetch.mock.callCount(), 1);
-    assert.equal(store.getLedger(id).length, 1);
+    assert.equal(fetch.mock.callCount(), 2);
+    assert.equal(store.getLedger(id).length, 2);
     assert.equal(store.requireRun(id).llm, 'template');
     const events = store.getEvents(id, 0);
-    assert.equal(events.filter(row => row.event.type === 'log' && row.event.level === 'warn').length, 1);
+    const warnings = events.flatMap(row => row.event.type === 'log' && row.event.level === 'warn' ? [row.event.message] : []);
+    assert.equal(warnings.length, 2);
+    assert.match(warnings[1], /two consecutive hard failures/);
+    assert(warnings.every(message => message.includes(`HTTP ${status} Model unavailable for [redacted]`)));
+    assert.equal(store.getLedger(id)[0].error, `HTTP ${status} Model unavailable for [redacted]`);
     assert(!JSON.stringify(events).includes('mock-openai-credential'));
   });
 }
+
+
+test('a successful OpenAI response resets the persisted hard failure streak', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => ++calls % 2 ? Response.json({ message: 'Invalid request' }, { status: 400 })
+    : Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }],
+      usage: { prompt_tokens: 100, completion_tokens: 40 },
+    }));
+  const client = create('reset');
+  assert.equal(await client.complete(completion), null);
+  assert.equal(store.requireRun('reset').llm_hard_failures, 1);
+  assert.equal((await client.complete(completion))?.text, '{"ok":true}');
+  assert.equal(store.requireRun('reset').llm_hard_failures, 0);
+  assert.equal(await client.complete(completion), null);
+  assert.equal(store.requireRun('reset').llm_hard_failures, 1);
+  assert.equal(store.requireRun('reset').llm, config.llmLabel);
+});

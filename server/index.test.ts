@@ -275,3 +275,15 @@ test('zero seconds stops the worker before its first step or tool call', async (
   assert(limited.steps.every(step => step.status === 'pending'));
   assert.equal(limited.ledger.length, 0);
 });
+
+test('live runs with unavailable sources finish without any fixture evidence or approvals', async () => {
+  const { id } = await create({ dataMode: 'live' });
+  const snap = await state(id, row => row.status === 'completed');
+  assert.equal(snap.dataMode, 'live');
+  assert.equal(snap.evidence.length, 0);
+  assert.equal(snap.triggers.length, 0);
+  assert.equal(snap.approvals.length, 0);
+  assert(snap.ledger.length > 0 && snap.ledger.every(row => row.mode === 'cache' && row.credits === 0));
+  const rows = read(db => db.prepare("SELECT payload_json FROM events WHERE run_id = ? AND type = 'tool.fallback'").all(id));
+  assert(rows.length > 0 && rows.every(row => JSON.parse(row.payload_json as string).to === 'cache'));
+});

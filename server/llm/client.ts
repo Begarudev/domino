@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { NonsenseError } from '../domain/types.ts';
 import { ANTHROPIC_MODEL, config, redactSecrets } from '../env.ts';
-import { BudgetError, httpError, providerFetch, responseJson, sanitize, ToolError } from '../runtime/tool.ts';
+import { BudgetError, httpError, networkError, providerFetch, responseError, responseJson, sanitize, ToolError } from '../runtime/tool.ts';
 import type { ToolContext } from '../runtime/tool.ts';
 
 // USD per million tokens, cached 2026-11-03. check current pricing before changing models.
@@ -49,13 +49,24 @@ interface CompletionRequest {
 
 export interface Completion { text: string; model: string }
 let anthropic: Anthropic | undefined;
-class ModelNotFound extends ToolError {}
-const openaiDisabled = 'OpenAI model unavailable. Using deterministic output for the rest of this run.';
-const missingOpenAIModel = z.object({ error: z.object({ code: z.literal('model_not_found').optional(), type: z.string().optional() }) });
-
-function openaiDisabledForRun(ctx: ToolContext) {
-  return Boolean(ctx.store.sql.prepare(`SELECT 1 FROM events WHERE run_id = ? AND type = 'log'
-    AND json_extract(payload_json, '$.message') = ? LIMIT 1`).get(ctx.runId, openaiDisabled));
+function updateOpenAIHealth(ctx: ToolContext, failure?: ToolError) {
+  ctx.store.transaction(() => {
+    const run = ctx.store.requireRun(ctx.runId);
+    const status = failure?.httpStatus;
+    const hard = status !== undefined && status >= 400 && status < 500 && ![408, 409, 429].includes(status);
+    const streak = hard ? run.llm_hard_failures + 1 : 0;
+    const disabled = streak >= 2;
+    if (streak !== run.llm_hard_failures) {
+      ctx.store.sql.prepare('UPDATE runs SET llm_hard_failures = ?, llm = ? WHERE id = ?')
+        .run(streak, disabled ? 'template' : run.llm, ctx.runId);
+    }
+    if (failure) {
+      const message = disabled
+        ? `OpenAI unavailable for this run after two consecutive hard failures. ${failure.message}`
+        : `OpenAI request failed. ${failure.message}. Using deterministic output for this step.`;
+      ctx.store.recordEvent(ctx.runId, { type: 'log', level: 'warn', message });
+    }
+  });
 }
 
 function textResult(text: string, model: string, json?: boolean): Completion {
@@ -76,7 +87,7 @@ export function modelClient(ctx: ToolContext) {
   return {
     async complete({ purpose, system, user, maxTokens, json }: CompletionRequest): Promise<Completion | null> {
       const provider = config.llm;
-      if (provider === 'template' || openaiDisabledForRun(ctx)) return null;
+      if (provider === 'template' || ctx.store.requireRun(ctx.runId).llm === 'template') return null;
       const model = provider === 'anthropic' ? ANTHROPIC_MODEL : config.openaiModel;
       const estimated = provider === 'openai' && !openaiPrice(model);
       const billingModel = estimated ? 'gpt-5-mini' : model;
@@ -86,10 +97,10 @@ export function modelClient(ctx: ToolContext) {
       const estimateUsd = price(billingModel, estimateInput, maxTokens)
         + (provider === 'anthropic' ? price('claude-opus-4-8', estimateInput, maxTokens) : 0);
       try {
-        return await ctx.tool<Completion | null>({
+        const completion = await ctx.tool<Completion | null>({
           provider, endpoint: estimated ? `${model} (estimated)` : model, path: model, body: { purpose, system, user, maxTokens, json },
           attempt: {
-            mode: 'model', estimate: { usd: estimateUsd },
+            mode: 'model', estimate: { usd: estimateUsd }, timeoutMs: 60_000,
             inject: () => { throw new NonsenseError('Expected a message object'); },
             async run(signal, report) {
               if (provider === 'anthropic') {
@@ -105,8 +116,10 @@ export function modelClient(ctx: ToolContext) {
                 }, { signal }).catch((error: unknown) => {
                   signal.throwIfAborted();
                   if (error instanceof Anthropic.APIConnectionTimeoutError) throw new ToolError('Model request timed out', 'timeout', 'timeout');
-                  if (error instanceof Anthropic.APIConnectionError) throw new ToolError('Provider network failure', 'network');
-                  if (error instanceof Anthropic.APIError && error.status) throw httpError(error.status);
+                  if (error instanceof Anthropic.APIConnectionError) throw networkError(error);
+                  if (error instanceof Anthropic.APIError && error.status) {
+                    throw httpError(error.status, error.error, error.headers?.get('Retry-After'));
+                  }
                   if (error instanceof SyntaxError) throw new NonsenseError('Invalid model response');
                   throw new ToolError('Anthropic request failed');
                 });
@@ -144,21 +157,11 @@ export function modelClient(ctx: ToolContext) {
                 body: JSON.stringify({
                   model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
                   max_completion_tokens: maxTokens,
-                  ...(openaiPrice(model) ? { reasoning_effort: 'minimal' } : {}),
+                  ...(/^gpt-5(?:[.-]|$)/.test(model) ? { reasoning_effort: 'minimal' } : {}),
                   ...(json ? { response_format: { type: 'json_object' } } : {}),
                 }),
               });
-              if (!response.ok) {
-                if (response.status === 404 || response.status === 400) {
-                  const result = missingOpenAIModel.safeParse(await response.json().catch(() => null));
-                  if (result.success && (result.data.error.code === 'model_not_found' || result.data.error.type === 'model_not_found')) {
-                    throw new ModelNotFound('OpenAI model not found');
-                  }
-                } else {
-                  void response.body?.cancel().catch(() => {});
-                }
-                throw httpError(response.status);
-              }
+              if (!response.ok) throw await responseError(response);
               const raw = sanitize(await responseJson(response));
               const usage = z.object({ usage: openaiUsage }).safeParse(raw);
               if (!usage.success) throw new NonsenseError('Missing model usage');
@@ -172,18 +175,14 @@ export function modelClient(ctx: ToolContext) {
             },
           },
         });
+        if (provider === 'openai') updateOpenAIHealth(ctx);
+        return completion;
       } catch (error) {
         if (error instanceof BudgetError) throw error;
         if (!(error instanceof ToolError)) throw error;
-        if (error instanceof ModelNotFound) {
-          ctx.store.transaction(() => {
-            if (openaiDisabledForRun(ctx)) return;
-            ctx.store.sql.prepare("UPDATE runs SET llm = 'template' WHERE id = ?").run(ctx.runId);
-            ctx.store.recordEvent(ctx.runId, { type: 'log', level: 'warn', message: openaiDisabled });
-          });
-          return null;
-        }
-        ctx.store.appendEvent(ctx.runId, { type: 'log', level: 'warn', message: 'Model unavailable. Using deterministic output.' });
+        if (provider === 'openai') updateOpenAIHealth(ctx, error);
+        else ctx.store.appendEvent(ctx.runId, { type: 'log', level: 'warn',
+          message: `Anthropic request failed. ${error.message}. Using deterministic output for this step.` });
         return null;
       }
     },

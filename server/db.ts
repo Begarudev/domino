@@ -18,6 +18,8 @@ export const stepLabels: Record<StepName, string> = {
 export const now = () => new Date().toISOString();
 const encode = JSON.stringify;
 export type RunChaos = ChaosConfig & { crashAfterDeliver?: boolean };
+export type ToolLedgerEntry = LedgerEntry & { error?: string };
+type JournalEvent = RunEvent & { error?: string };
 export function decode<T>(json: string): T {
   return JSON.parse(json) as T;
 }
@@ -28,6 +30,7 @@ export interface RunRow {
   status: RunStatus;
   data_mode: DataMode;
   llm: string;
+  llm_hard_failures: number;
   intent_json: string | null;
   limits_json: string;
   chaos_json: string;
@@ -38,7 +41,7 @@ export interface RunRow {
   resumes: number;
 }
 type StepRow = StepState & { output_json: string | null };
-type LedgerInput = Omit<LedgerEntry, 'id' | 'ts'>;
+type LedgerInput = Omit<ToolLedgerEntry, 'id' | 'ts'>;
 type EventRow = { seq: number; run_id: string; ts: string; payload_json: string };
 export type EvidenceSource = { endpoint: string; path?: string; input: unknown; rawId: string; time: Pick<Intent, 'asOf' | 'windowDays'> };
 
@@ -53,7 +56,8 @@ export class Store {
       PRAGMA journal_mode=WAL;
       CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY, request TEXT, status TEXT, data_mode TEXT, llm TEXT, intent_json TEXT, limits_json TEXT,
-        chaos_json TEXT, created_at TEXT, updated_at TEXT, engine_pid INTEGER, crashes INTEGER DEFAULT 0, resumes INTEGER DEFAULT 0
+        chaos_json TEXT, created_at TEXT, updated_at TEXT, engine_pid INTEGER, crashes INTEGER DEFAULT 0, resumes INTEGER DEFAULT 0,
+        llm_hard_failures INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS steps (
         run_id TEXT, step TEXT, status TEXT, attempt INTEGER, started_at TEXT, finished_at TEXT, summary TEXT,
@@ -65,7 +69,10 @@ export class Store {
       CREATE TABLE IF NOT EXISTS ledger (
         id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, ts TEXT, step TEXT, provider TEXT, endpoint TEXT, mode TEXT,
         status TEXT, attempt INTEGER, credits REAL, input_tokens INTEGER, output_tokens INTEGER, usd REAL, latency_ms INTEGER,
-        injected INTEGER, request_hash TEXT
+        injected INTEGER, request_hash TEXT, error TEXT
+      );
+      CREATE TABLE IF NOT EXISTS tool_slots (
+        endpoint TEXT PRIMARY KEY, next_at INTEGER NOT NULL, lease_id TEXT, lease_until INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS tool_cache (
         key TEXT PRIMARY KEY, provider TEXT, endpoint TEXT, request_json TEXT, response_json TEXT, fetched_at TEXT
@@ -89,14 +96,20 @@ export class Store {
       CREATE INDEX IF NOT EXISTS outbox_run ON outbox(run_id);
       CREATE INDEX IF NOT EXISTS asks_run ON asks(run_id);
     `);
-    if (!this.sql.prepare('PRAGMA table_info(outbox)').all().some(column => column.name === 'status')) {
-      this.transaction(() => {
-        // Another process can finish the migration while this connection waits for the write lock.
-        if (this.sql.prepare('PRAGMA table_info(outbox)').all().some(column => column.name === 'status')) return;
-        this.sql.exec(`ALTER TABLE outbox ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';
-          UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL;`);
-      });
-    }
+    this.ensureColumn('outbox', 'status', "TEXT NOT NULL DEFAULT 'pending'",
+      "UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL");
+    this.ensureColumn('runs', 'llm_hard_failures', 'INTEGER NOT NULL DEFAULT 0');
+    this.ensureColumn('ledger', 'error', 'TEXT');
+  }
+
+  private ensureColumn(table: 'runs' | 'ledger' | 'outbox', name: string, definition: string, backfill?: string) {
+    const exists = () => this.sql.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === name);
+    if (exists()) return;
+    this.transaction(() => {
+      if (exists()) return;
+      this.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      if (backfill) this.sql.exec(backfill);
+    });
   }
 
   transaction<T>(fn: () => T, mode: 'read' | 'write' = 'write'): T {
@@ -157,12 +170,12 @@ export class Store {
     }
   }
 
-  appendEvent(runId: string, event: RunEvent): StoredEvent {
+  appendEvent(runId: string, event: JournalEvent): StoredEvent {
     return this.transaction(() => this.recordEvent(runId, event));
   }
 
   // This variant participates in the caller's transaction.
-  recordEvent(runId: string, event: RunEvent): StoredEvent {
+  recordEvent(runId: string, event: JournalEvent): StoredEvent {
     const ts = now();
     const { lastInsertRowid } = this.sql.prepare('INSERT INTO events (run_id, ts, type, payload_json) VALUES (?, ?, ?, ?)')
       .run(runId, ts, event.type, encode(event));
@@ -269,7 +282,7 @@ export class Store {
       .run(key, provider, endpoint, request, encode(response), now());
   }
 
-  beginLedger(input: LedgerInput, hash: string): LedgerEntry {
+  beginLedger(input: LedgerInput, hash: string): ToolLedgerEntry {
     const ts = now();
     const { lastInsertRowid } = this.sql.prepare(`INSERT INTO ledger
       (run_id, ts, step, provider, endpoint, mode, status, attempt, credits, input_tokens, output_tokens, usd, latency_ms, injected, request_hash)
@@ -279,18 +292,18 @@ export class Store {
     return { ...input, ts, id: Number(lastInsertRowid) };
   }
 
-  finishLedger(entry: LedgerEntry) {
+  finishLedger(entry: ToolLedgerEntry) {
     this.sql.prepare(`UPDATE ledger SET status = ?, credits = ?, input_tokens = ?, output_tokens = ?, usd = ?,
-      latency_ms = ? WHERE id = ?`).run(entry.status, entry.credits, entry.inputTokens, entry.outputTokens,
-      entry.usd, entry.latencyMs, entry.id);
+      latency_ms = ?, error = ? WHERE id = ?`).run(entry.status, entry.credits, entry.inputTokens, entry.outputTokens,
+      entry.usd, entry.latencyMs, entry.error ?? null, entry.id);
     this.recordEvent(entry.runId, { type: 'ledger.entry', entry });
   }
 
-  getLedger(runId: string): LedgerEntry[] {
+  getLedger(runId: string): ToolLedgerEntry[] {
     const rows = this.sql.prepare(`SELECT id, run_id AS runId, ts, step, provider, endpoint, mode, status, attempt, credits,
-      input_tokens AS inputTokens, output_tokens AS outputTokens, usd, latency_ms AS latencyMs, injected FROM ledger
-      WHERE run_id = ? ORDER BY id`).all(runId) as unknown as LedgerEntry[];
-    return rows.map(row => ({ ...row, injected: Boolean(row.injected) }));
+      input_tokens AS inputTokens, output_tokens AS outputTokens, usd, latency_ms AS latencyMs, injected, error FROM ledger
+      WHERE run_id = ? ORDER BY id`).all(runId) as unknown as (ToolLedgerEntry & { error: string | null })[];
+    return rows.map(({ error, ...row }) => ({ ...row, injected: Boolean(row.injected), ...(error ? { error } : {}) }));
   }
 
   budget(runId: string): BudgetState {

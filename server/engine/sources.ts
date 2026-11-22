@@ -22,7 +22,7 @@ const specs = [
 ];
 
 export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, SourceResult>, input: I, time: SourceTime) {
-  const raw = await ctx.crust(spec, input, time, deps.fixtureFor);
+  const raw = await ctx.crust(spec, input, time, deps.fixtureFor, () => ({ evidence: [] }));
   const previous = ctx.store.sql.prepare(`SELECT evidence.id, json_extract(evidence.json, '$.mode') AS mode,
     json_extract(evidence_sources.json, '$.rawId') AS rawId FROM evidence JOIN evidence_sources USING (id)
     WHERE evidence.run_id = ? AND json_extract(evidence_sources.json, '$.endpoint') = ?
@@ -66,7 +66,7 @@ export async function recheckSource(ctx: ToolContext, old: Evidence, source: Evi
   if (!spec) return;
   // An endpoint name and its original input are persisted together by readSource.
   const result = await ctx.crust(spec as EndpointSpec<unknown, SourceResult>, source.input, source.time,
-    deps.fixtureFor);
+    deps.fixtureFor, () => ({ evidence: [] }));
   const fresh = result.evidence.find(row => row.id === source.rawId ||
     (row.source.recordId !== undefined && row.source.recordId === old.source.recordId && row.source.field === old.source.field));
   return fresh && { ...fresh, id: old.id, retrievedAt: fresh.retrievedAt > old.retrievedAt ? fresh.retrievedAt

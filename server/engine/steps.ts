@@ -88,7 +88,7 @@ async function parseRequest(ctx: ToolContext): Promise<StepResult<'parse_request
   const amended = !rules.offering && answer ? deps.parseIntentRules(`We sell ${answer}. ${run.request}`, today) : rules;
   const intent = { ...amended, offering: rules.offering ?? answer ?? seller.offering };
   const completion = await modelClient(ctx).complete({
-    purpose: 'parse', json: true, maxTokens: 1100,
+    purpose: 'parse', json: true, maxTokens: 2000,
     system: 'Refine an outbound search intent from the request and confirmed offering. Return only buyerProfile, geography, deciderTitles and signalKeywords. Omit any field you cannot infer.',
     user: JSON.stringify({ request: run.request, offering: intent.offering, rules: intent }),
   });
@@ -338,7 +338,7 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
     const completion = await modelClient(ctx).complete({
       purpose: 'draft', user: prompt.user, system: prompt.system +
         '\nUse the exact text of each numbered claim you include. Add a greeting, seller introduction, meeting invitation, and signoff.',
-      json: true, maxTokens: 2400,
+      json: true, maxTokens: 3000,
     });
     const parsed = completion ? messageShape.safeParse(JSON.parse(completion.text)) : null;
     const candidate = parsed?.success ? { ...template, ...parsed.data, generator: completion!.model } : template;
