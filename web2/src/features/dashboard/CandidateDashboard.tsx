@@ -14,7 +14,16 @@ import { openEvidence } from '../../shell/ui.ts';
 import { introPreview, myIntros } from '../onboarding/contract.ts';
 import type { CandidateX, IntroPreview, IntroX, OpeningX, RuleClause } from '../onboarding/contract.ts';
 import { findEvidence, sourceName } from '../onboarding/shared.ts';
+import type { RoleFamily } from '../../data/desk.ts';
+import { CheckedStrip, HowItWorks, NeverEmpty } from './Explainer.tsx';
+import { useScan } from './scan.tsx';
 import './dashboard.css';
+
+/** Demo and screenshot override: ?family=backend_payments renders the dashboard for that role family. */
+const familyParam = (): RoleFamily | null => {
+  const v = new URLSearchParams(location.search).get('family');
+  return v && v in ROLE_FAMILY_LABELS ? (v as RoleFamily) : null;
+};
 
 const today = () => new Date().toISOString().slice(0, 10);
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -27,11 +36,13 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
   const openings = useQuery(`cand-openings:${candidateId}`, () => deskApi.candidateOpenings(candidateId));
   const inbox = useQuery(`cand-inbox:${candidateId}`, () => deskApi.candidateInbox(candidateId));
   const mineQ = useQuery(`cand-intros:${candidateId}`, () => myIntros(candidateId));
-  const list = (openings.data ?? []) as OpeningX[];
+  const scan = useScan();
+  const c = cand.data as CandidateX | null;
+  const family = familyParam() ?? c?.roleFamily ?? null;
+  const list = ((openings.data ?? []) as OpeningX[]).filter((o) => !familyParam() || o.roleFamily === family);
   const topCompany = list.find((o) => o.status === 'open')?.companyId ?? null;
   const desk = useQuery(topCompany ? `cand-desk:${topCompany}` : null, () => deskApi.company(topCompany!));
   const moves = desk.data?.funnel?.find((f) => /job moves/i.test(f.label))?.count ?? null;
-  const c = cand.data as CandidateX | null;
   const ranked = [...list].sort((a, b) => rank(a) - rank(b));
   const mine = mineQ.data ?? [];
   // Delivered company-to-candidate intros only, each with its receipt from the send-once outbox.
@@ -45,12 +56,15 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
           {c?.fixture && <span className="tag warn">Fictional demo candidate</span>}
         </div>
         <p className="dash-sub">
-          {c?.roleFamily ? ROLE_FAMILY_LABELS[c.roleFamily] : 'Role family not set'}
+          {family ? ROLE_FAMILY_LABELS[family] : 'Role family not set'}
           <a className="dash-edit" href={href({ page: 'candidate', sub: 'onboard' })} onClick={(e) => { e.preventDefault(); navigate({ page: 'candidate', sub: 'onboard' }); }}>
             Edit what you share
           </a>
         </p>
       </header>
+
+      <HowItWorks />
+      <CheckedStrip scan={scan} />
 
       <section className="dash-sec" aria-labelledby="dash-open-h">
         <div className="dash-sec-head">
@@ -65,7 +79,8 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
         <SourceNote source={openings.source} error={openings.error} />
         {openings.loading && !openings.data && <div className="op-ghost surface"><span className="ghost" style={{ width: '40%', height: 34 }} /><span className="ghost" style={{ width: '80%', height: 40 }} /></div>}
         {openings.data && !list.length && (
-          <p className="dash-empty surface">No company in today’s scan meets rule O1 for your role family. DOMINO rescans as new job moves arrive.</p>
+          <NeverEmpty scan={scan} cand={c} family={family}
+            renderCard={(o, ev) => <OpeningCard o={o} cand={c} evidence={ev} mine={mine} candidateId={candidateId} compact />} />
         )}
         <div className="op-list">
           {ranked.map((o) => (
@@ -87,7 +102,7 @@ export function CandidateDashboard({ candidateId }: { candidateId: string }) {
         {delivered.length ? (
           <ol className="inbox">{delivered.map((r) => <IntroRow key={r.id} r={r} />)}</ol>
         ) : (
-          <p className="dash-empty surface">None yet. A request shows here only after it has been delivered, with its receipt. Companies see only the fields you ticked.</p>
+          <p className="dash-quiet">None yet. A request appears here once it’s delivered, with its receipt.</p>
         )}
       </section>
     </div>
@@ -102,7 +117,7 @@ function topLine(list: Opening[]): string {
     n('watch') ? `${fmtInt(n('watch'))} on watch` : '',
     n('held') ? `${fmtInt(n('held'))} held` : '',
   ].filter(Boolean);
-  return parts.length ? parts.join(', ') : 'no openings';
+  return parts.length ? parts.join(', ') : 'No openings for your role family yet';
 }
 
 const rank = (o: Opening) => ({ open: 0, provisional: 0, watch: 1, held: 2 })[openingLabel(o)];
@@ -157,15 +172,15 @@ function clausesOf(o: OpeningX, evidence: Evidence[]): RuleClause[] {
 const MARK: Record<RuleClause['state'], string> = { met: '✓', open: '', failed: '✗', cant_verify: '?' };
 const STATE_WORD: Record<RuleClause['state'], string> = { met: 'met', open: 'still open', failed: 'failed', cant_verify: 'I can’t verify' };
 
-function OpeningCard({ o, cand, evidence, mine, candidateId }: {
-  o: OpeningX; cand: CandidateX | null; evidence: Evidence[]; mine: IntroX[]; candidateId: string;
+function OpeningCard({ o, cand, evidence, mine, candidateId, compact }: {
+  o: OpeningX; cand: CandidateX | null; evidence: Evidence[]; mine: IntroX[]; candidateId: string; compact?: boolean;
 }) {
   const held = openingLabel(o) === 'held';
   const clauses = clausesOf(o, evidence);
   const [openClause, setOpenClause] = useState<string | null>(null);
   const shown = clauses.find((cl) => cl.id === openClause) ?? null;
   return (
-    <article className={`op surface ${held ? 'is-held' : ''}`} data-testid={`opening-${o.id}`}>
+    <article className={`op surface ${held ? 'is-held' : ''} ${compact ? 'compact' : ''}`} data-testid={`opening-${o.id}`}>
       <div className="op-head">
         <div className="op-title">
           <h3 className="op-co">{o.companyName}</h3>
@@ -206,7 +221,7 @@ function OpeningCard({ o, cand, evidence, mine, candidateId }: {
             </div>
           )}
           {o.watch?.reason && <p className="op-watch">{o.watch.reason}</p>}
-          {o.status === 'open' && <IntroAction o={o} cand={cand} mine={mine} candidateId={candidateId} />}
+          {o.status === 'open' && !compact && <IntroAction o={o} cand={cand} mine={mine} candidateId={candidateId} />}
         </>
       )}
     </article>
