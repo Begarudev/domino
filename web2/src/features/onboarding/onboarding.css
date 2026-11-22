@@ -88,6 +88,8 @@
 .h-dates { display: inline-flex; gap: 8px; align-items: center; color: var(--paper-2); font-size: var(--fs-ui); }
 .pcard-muted { color: var(--paper-3); }
 .pcard-ghost-rows { display: grid; gap: 8px; }
+.pcard-ghost-rows .ghost:nth-child(2) { margin-bottom: 8px; }
+.pcard-chips .ghost.pill { flex: none; }
 .pcard-source { padding-top: var(--s3); border-top: 1px solid var(--line-soft); font-size: var(--fs-ui); color: var(--paper-2); }
 .pcard-reading { display: inline-flex; align-items: center; gap: 10px; color: var(--live-text); }
 .pcard-reading.is-slow { color: var(--warn); }

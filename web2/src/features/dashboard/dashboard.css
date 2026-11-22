@@ -1,14 +1,14 @@
 /* Candidate dashboard. The memorable element is the proof: dated reason chips read left to right as a timeline.
    Everything around them stays quiet. Transform and opacity only. */
-.dash { padding-top: var(--s6); display: grid; gap: var(--s6); }
+.dash { padding-top: var(--s5); display: grid; gap: var(--s5); }
 
 .dash-head { display: grid; gap: var(--s2); }
 .dash-hi { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-.dash-name { margin: 0; font-size: 48px; line-height: 1; font-weight: 800; font-variation-settings: 'wdth' 125; letter-spacing: -0.01em; }
+.dash-name { margin: 0; font-size: 44px; line-height: 1; font-weight: 800; font-variation-settings: 'wdth' 125; letter-spacing: -0.01em; }
 .dash-sub { margin: 0; font-size: var(--fs-lead); color: var(--paper-2); display: flex; gap: var(--s4); flex-wrap: wrap; align-items: baseline; }
 .dash-edit { font-size: var(--fs-ui); }
 
-.dash-sec { display: grid; gap: var(--s4); }
+.dash-sec { display: grid; gap: var(--s3); }
 .dash-sec .banner { margin: 0; }
 .dash-sec-head { display: grid; gap: 6px; }
 .dash-h2 { margin: 0; font-size: 28px; font-weight: 760; font-variation-settings: 'wdth' 112; }

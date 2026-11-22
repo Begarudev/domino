@@ -289,7 +289,7 @@ function ProfileCard({ cand, evidence, reading, slow, demo }: { cand: Candidate 
           <dd>
             {cand?.skills.length
               ? <Reveal className="pcard-chips">{cand.skills.map((s) => <span key={s} className="chip">{s}</span>)}</Reveal>
-              : <div className="pcard-chips">{[84, 60, 104, 72].map((w, i) => <Ghost key={i} w={`${w}px`} h={30} pill />)}</div>}
+              : <div className="pcard-chips">{[96, 52, 180, 112, 70, 44].map((w, i) => <Ghost key={i} w={`${w}px`} h={30} pill />)}</div>}
           </dd>
         </div>
         <div>
@@ -310,7 +310,7 @@ function ProfileCard({ cand, evidence, reading, slow, demo }: { cand: Candidate 
             ) : cand && !reading && !cand.consent.shareHistory ? (
               <span className="pcard-muted">Not shared</span>
             ) : (
-              <div className="pcard-ghost-rows"><Ghost w="72%" /><Ghost w="56%" /></div>
+              <div className="pcard-ghost-rows"><Ghost w="68%" /><Ghost w="40%" /><Ghost w="60%" /><Ghost w="38%" /></div>
             )}
           </dd>
         </div>

@@ -154,7 +154,8 @@ function OpeningCard({ o, cand, evidence, intros, candidateId }: {
 
 /** The dated reason chips, left to right, as a small proof timeline. Each chip opens its source. */
 function Proof({ o, evidence, days }: { o: Opening; evidence: Evidence[]; days: number | null }) {
-  const steps = o.reasons.filter((r) => r.kind === 'talent_drain' || r.kind === 'no_replacement' || r.kind === 'news');
+  const steps = o.reasons.filter((r) => r.kind === 'talent_drain' || r.kind === 'no_replacement' || r.kind === 'news')
+    .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999')); // oldest first: the proof reads as a timeline
   const rest = o.reasons.filter((r) => !steps.includes(r));
   const monthLevel = o.reasons.some((r) => r.kind === "talent_drain" && isMonthLevel(r.date));
   return (
