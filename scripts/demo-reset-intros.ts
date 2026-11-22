@@ -10,7 +10,7 @@
 //                                         the approved message: Resume then shows "Already delivered · skipped",
 //                                         Deliveries: 1 (the kill-and-resume beat)
 import { Store } from '../server/db.ts';
-import { archiveFixtureIntros } from '../server/desk/store.ts';
+import { archiveFixtureIntros, deskTables } from '../server/desk/store.ts';
 
 const reopen = process.argv.includes('--reopen');
 const crashAfterDeliver = process.argv.includes('--crash-after-deliver');
@@ -18,6 +18,7 @@ const base = process.env.DOMINO_URL ?? `http://127.0.0.1:${process.env.DOMINO_PO
 const store = new Store();
 let pairs: { candidateId: string; openingId: string }[] = [];
 try {
+  deskTables(store);   // adds archived_at on a database the upgraded server hasn't touched yet
   // The candidate-requested intros about to be archived, newest per candidate and opening.
   pairs = (store.sql.prepare(`SELECT DISTINCT candidate_id AS candidateId, opening_id AS openingId FROM desk_intros
     WHERE archived_at IS NULL AND direction = 'candidate_to_company'`).all() as { candidateId: string; openingId: string }[]);
