@@ -129,3 +129,32 @@
 .rec-held ul { list-style: none; padding: 0; }
 .rec-held li { display: grid; grid-template-columns: 14px minmax(0, 1fr); }
 .rec-held li::before { content: '–'; color: var(--ink-3); }
+
+/* held card: the hatch marks the edge only, so the dated sources read cleanly on a projector */
+.rec-held { position: relative; background: var(--surface); padding-left: 20px; }
+.rec-held::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; border-radius: 3px 0 0 3px; border-right: 1px solid var(--ink-3);
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px);
+}
+
+/* round 2 (council): the dated proof line under the role, grouped funnel rows, projector contrast */
+.rec-role { font-size: 26px; line-height: 32px; }
+.rec-proof { list-style: none; margin: 12px 0 4px; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; }
+.rec-proof li { display: inline-flex; align-items: center; }
+.rec-proof li + li::before { content: '→'; color: var(--ink-3); margin: 0 8px; }
+.rec-proof button, .rec-proof span {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--rule); background: var(--surface);
+  color: var(--ink); line-height: 20px; white-space: nowrap;
+}
+.rec-proof button { cursor: pointer; transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+.rec-proof button:hover { background: var(--hover); border-color: var(--ink-3); }
+.rec-proof .tone-open > * { color: var(--acc); border: 1px dashed var(--acc); }
+.rec-proof .tone-held > * { color: var(--ink-2); border-color: var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
+.rec-grp td { background: var(--hover); font-size: 13px; padding-top: 6px; padding-bottom: 6px; }
+.rec-grp:hover td { background: var(--hover); }
+.rec-stage-t td.rec-grp-row { padding-left: 28px; }
+.rec .struck { color: var(--ink-2); }
+.rec-foot { font-size: 13px; color: var(--ink-2); }
+.rec-fun-l { font-size: 14px; }
+.rec-proof button, .rec-proof span { font-size: 13px; padding: 2px 7px; }
+.rec-proof li + li::before { margin: 0 6px; }

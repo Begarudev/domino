@@ -111,21 +111,39 @@ function StageRows({ stage, snapshot, runId, deskRunId }: { stage: FunnelStage; 
         </p>
       ) : (
         <table className="t rec-stage-t">
-          <tbody>
-            {list.map((r, i) => (
-              <tr key={`${r.evidenceId ?? ''}${i}`} className={r.evidenceId ? 'rec-click' : undefined} tabIndex={r.evidenceId ? 0 : undefined}
-                onClick={() => r.evidenceId && openEvidence(r.evidenceId)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && r.evidenceId) openEvidence(r.evidenceId); }}>
-                <td>
-                  <span className={/not conclusive/.test(r.detail ?? '') ? 'struck' : undefined}>{r.label}</span>
-                  {r.detail && <div className="rec-stage-d muted">{r.detail}</div>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          {groupRows(stage, list).map((g) => (
+            <tbody key={g.company ?? 'all'}>
+              {g.company && (
+                <tr className="rec-grp"><td><b>{g.company}</b> <span className="faint">· {g.rows.length === 1 ? '1 person' : `${fmtInt(g.rows.length)} people`}</span></td></tr>
+              )}
+              {g.rows.map((r, i) => (
+                <tr key={`${r.evidenceId ?? ''}${i}`} className={r.evidenceId ? 'rec-click' : undefined} tabIndex={r.evidenceId ? 0 : undefined}
+                  onClick={() => r.evidenceId && openEvidence(r.evidenceId)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && r.evidenceId) openEvidence(r.evidenceId); }}>
+                  <td className={g.company ? 'rec-grp-row' : undefined}>
+                    <span className={/not conclusive/.test(r.detail ?? '') ? 'struck' : undefined}>{g.company ? r.label.replace(` · ${g.company}`, '') : r.label}</span>
+                    {r.detail && <div className="rec-stage-d muted">{r.detail}</div>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       )}
       {rows.length > SHOW && <button type="button" className="btn sm rec-more" onClick={() => setAll((v) => !v)}>{all ? `Show the first ${SHOW}` : `Show all ${fmtInt(rows.length)} rows`}</button>}
     </div>
   );
+}
+
+type Row = NonNullable<FunnelStage['rows']>[number];
+/**
+ * A stage that counts groups ("3 company and role family groups") but lists people: nest the people under their
+ * company, read from the row label ("P. ML Platform Engineer · Abacus.AI · left Oct 2026 → …").
+ */
+function groupRows(stage: FunnelStage, rows: Row[]): { company: string | null; rows: Row[] }[] {
+  const companyOf = (r: Row) => (r.label.includes(' · left ') ? r.label.split(' · left ')[0].split(' · ').at(-1) ?? null : null);
+  if (stage.count >= rows.length || !rows.every(companyOf)) return [{ company: null, rows }];
+  const out = new Map<string, Row[]>();
+  for (const r of rows) { const c = companyOf(r)!; out.set(c, [...(out.get(c) ?? []), r]); }
+  return [...out].map(([company, rs]) => ({ company, rows: rs }));
 }

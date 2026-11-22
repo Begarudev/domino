@@ -98,7 +98,7 @@ export const guardName = (id: string) => GUARD_NAME[id] ?? `${id.replace(/^guard
 export function stateChip(o: Opening): { cls: 'prov' | 'held' | 'verified' | 'plain'; text: string } {
   if (o.status === 'held') {
     const first = o.clauses?.find((c) => c.id.startsWith('guard.') && c.state === 'failed');
-    return { cls: 'held', text: first ? `Held · ${guardName(first.id)}` : 'Held' };
+    return { cls: 'held', text: first ? heldChip(o) : 'Held' };
   }
   if (o.status === 'watch') return { cls: 'plain', text: o.watch ? `Watch · ${o.watch.have} of ${o.watch.need}` : 'Watch' };
   if (o.provisional || o.windowClosesBy) return { cls: 'prov', text: o.windowClosesBy ? `Provisional · window closes ${fmtDate(o.windowClosesBy)}` : 'Provisional' };
@@ -112,3 +112,41 @@ export function sentenceCase(s: string): string {
 
 /** Rewrites ISO dates inside a server string ("as of 2026-11-22") into the screen's date format. */
 export const prettyDates = (s: string) => s.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => fmtDate(iso, true));
+
+export interface ProofStep { text: string; clauseId: string | null; tone: 'fact' | 'open' | 'held' }
+
+/**
+ * The decision as a dated timeline, read from its own clauses: left in Oct → no replacement through 22 Nov → window
+ * closes 30 Nov. A held decision reads: left in Sep → acqui-hire report 21 Aug → held.
+ */
+export function proofSteps(o: Opening, rows: DepartureRow[]): ProofStep[] {
+  const steps: ProofStep[] = [];
+  const counted = rows.filter((r) => r.conclusive === true && r.month);
+  if (counted.length) {
+    const months = counted.map((r) => fmtDate(r.month!, false).split(' ')[0]);
+    steps.push({ text: `${counted.length} left in ${[...new Set(months)].join(', ')}`, clauseId: 'o1.departures', tone: 'fact' });
+  }
+  if (o.status === 'held') {
+    for (const c of (o.clauses ?? []).filter((x) => x.id.startsWith('guard.') && x.state === 'failed')) {
+      const news = c.id === 'guard.acquihire' ? o.reasons.filter((r) => r.kind === 'news' && r.date).sort((a, b) => (a.date! < b.date! ? -1 : 1))[0] : null;
+      steps.push({ text: news ? `Acqui-hire report ${fmtDate(news.date)}` : guardName(c.id).replace(/^./, (s) => s.toUpperCase()) + ' matched', clauseId: c.id, tone: 'held' });
+    }
+    steps.push({ text: 'Held, no opening predicted', clauseId: null, tone: 'held' });
+    return steps;
+  }
+  const repl = (o.clauses ?? []).filter((c) => c.id.startsWith('o1.no_replacement'));
+  if (repl.length && repl.every((c) => c.state === 'met')) {
+    const checked = repl.map((c) => c.detail?.match(/checked (\d{1,2} [A-Z][a-z]{2})/)?.[1]).find(Boolean);
+    steps.push({ text: `No replacement${checked ? ` through ${checked}` : ''}`, clauseId: repl[0].id, tone: 'fact' });
+  }
+  if (o.windowClosesBy) steps.push({ text: `Window closes ${fmtDate(o.windowClosesBy)}`, clauseId: (o.clauses ?? []).find((c) => c.id.includes('window'))?.id ?? null, tone: 'open' });
+  else if (o.status === 'open') steps.push({ text: 'Opening predicted', clauseId: null, tone: 'fact' });
+  return steps;
+}
+
+/** "Held · acqui-hire and restructure guards" when more than one guard matched. */
+export function heldChip(o: Opening): string {
+  const names = (o.clauses ?? []).filter((c) => c.id.startsWith('guard.') && c.state === 'failed').map((c) => guardName(c.id).replace(/ guard$/, ''));
+  if (!names.length) return 'Held';
+  return names.length === 1 ? `Held · ${names[0]} guard` : `Held · ${names.slice(0, -1).join(', ')} and ${names.at(-1)} guards`;
+}

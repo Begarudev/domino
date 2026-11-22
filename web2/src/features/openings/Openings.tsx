@@ -11,7 +11,7 @@ import { openEvidence, useShell } from '../../shell/ui.ts';
 import { HireTable } from '../matches/HireTable.tsx';
 import type { Clause, DepartureRow } from './derive.ts';
 import {
-  clauseCount, departureRows, evidenceIndex, familyLabel, guardName, isMonthPrecision, sentenceCase, splitClauses, stateChip, windowText,
+  clauseCount, departureRows, evidenceIndex, familyLabel, guardName, isMonthPrecision, proofSteps, sentenceCase, splitClauses, stateChip, windowText,
 } from './derive.ts';
 import { FunnelStrip } from './Funnel.tsx';
 import './openings.css';
@@ -46,7 +46,7 @@ export function Openings({ desk }: { desk: CompanyDesk }) {
           <Departures rows={rows} opening={opening} />
           <FunnelStrip runId={desk.runId} />
         </div>
-        {opening ? <OpeningPanel key={opening.id} o={opening} ev={ev} /> : <NoOpening desk={desk} />}
+        {opening ? <OpeningPanel key={opening.id} o={opening} ev={ev} rows={rows} /> : <NoOpening desk={desk} />}
       </div>
       <HireTable desk={desk} opening={opening} routeId={routeId} source={source} ev={ev} />
     </div>
@@ -103,7 +103,7 @@ function DepRow({ r }: { r: DepartureRow }) {
 
 // ---------------------------------------------------------------- the decision
 
-function OpeningPanel({ o, ev }: { o: OpeningWithWhy; ev: Map<string, Evidence> }) {
+function OpeningPanel({ o, ev, rows }: { o: OpeningWithWhy; ev: Map<string, Evidence>; rows: DepartureRow[] }) {
   const chip = stateChip(o);
   const { rule, guards } = splitClauses(o);
   const [open, setOpen] = useState<string | null>(null);
@@ -117,6 +117,15 @@ function OpeningPanel({ o, ev }: { o: OpeningWithWhy; ev: Map<string, Evidence> 
       <div className="pad">
         <p className="serif rec-role">{sentenceCase(o.roleTitle)}</p>
         <p className="faint rec-role-sub">Rule O1 · decided {fmtDate(o.predictedAt, true)} · {familyLabel(o.roleFamily)} role family</p>
+        <ol className="rec-proof" aria-label="The decision, dated" data-testid="proof">
+          {proofSteps(o, rows).map((s) => (
+            <li key={s.text} className={`tone-${s.tone}`}>
+              {s.clauseId
+                ? <button type="button" onClick={() => setOpen(s.clauseId)} aria-label={`${s.text}: show the clause`}>{s.text}</button>
+                : <span>{s.text}</span>}
+            </li>
+          ))}
+        </ol>
         {o.status === 'held' && <HeldCard o={o} />}
         <ul className="clauses rec-clauses">
           {rule.map((c) => <ClauseRow key={c.id} c={c} o={o} ev={ev} open={open === c.id} onToggle={() => toggle(c.id)} />)}
@@ -214,8 +223,8 @@ function WhyRow({ why, open, onToggle }: { why: Why; open: boolean; onToggle: ()
     <li className={`rec-clause rec-whyrow ${open ? 'x' : ''}`} data-testid="why-target">
       <button type="button" className="rec-clause-btn" onClick={onToggle} aria-expanded={open}>
         <span className="open-c" aria-hidden>§</span>
-        <span className="rec-clause-text">Why this target?</span>
-        <span className="count rec-count">{co ? `${fmtInt(co.position)} of ${fmtInt(co.of)} companies` : 'the rule'}</span>
+        <span className="rec-clause-text">Why this target? {co && <span className="muted">{fmtInt(co.position)} of {fmtInt(co.of)} companies, ordered by {co.rule.replace(/^Companies are ordered by /, "").replace(/ \([^)]*\)/g, "").replace(/\.$/, "")}. No score.</span>}</span>
+        <span className="count rec-count">the rule</span>
       </button>
       <div className={`rec-x ${open ? 'on' : ''}`} aria-hidden={!open}>
         <div className="rec-x-in">
