@@ -349,7 +349,7 @@ export function startServer() {
     launch('openings', 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles', { dataMode: 'fixture' });
   }
   const timer = setInterval(reapMissingWorkers, 1000).unref();
-  const server = serve({ fetch: app.fetch, port: config.port, hostname: '127.0.0.1' }, ({ port }) => {
+  const server = serve({ fetch: app.fetch, port: config.port, hostname: process.env.DOMINO_HOST || '127.0.0.1' }, ({ port }) => {
     console.log(`DOMINO http://127.0.0.1:${port} · data ${config.dataMode} · LLM ${config.llm}`);
   });
   server.on('close', () => { clearInterval(timer); store.sql.close(); });

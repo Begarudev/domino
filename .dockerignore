@@ -1,0 +1,17 @@
+.env
+.env.*
+**/.env
+**/.env.*
+.git
+node_modules
+**/node_modules
+web/dist
+web/dist-classic
+web2/dist
+data/*
+!data/domino.db
+!data/cache-snapshot
+data/outbox
+*.log
+.DS_Store
+tests/e2e/artifacts
