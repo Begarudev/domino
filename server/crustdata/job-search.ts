@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import sellerJson from '../../config/seller.json' with { type: 'json' };
 import type { Intent, IsoDate } from '../../shared/types.ts';
-import { isRecruiter } from '../domain/company-fit.ts';
+import { isNonBuyer, isRecruiter } from '../domain/company-fit.ts';
 import { containsPhrase, inWindow, isoDay, matchesSignal, shiftDays, stableId } from '../domain/facts.ts';
 import type { CompanyMention, ParseMeta, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import {
@@ -95,7 +95,9 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
     const recordId = String(row.crustdata_job_id ?? row.job_details?.job_id ??
       stableId('job_', row.job_details?.url || '', row.company?.basic_info?.name || '', title, day || ''));
     const company = jobCompany(row, 'job_search:' + recordId + ':company', intent.runKind === 'replay');
-    if (!company || seen.has(recordId) || isRecruiter({ name: company.name, categories: row.company?.basic_info?.industries ?? [] })) continue;
+    if (!company || seen.has(recordId)) continue;
+    const profile = { name: company.name, categories: row.company?.basic_info?.industries ?? [] };
+    if (isRecruiter(profile) || isNonBuyer(profile)) continue;
     seen.add(recordId);
 
     const url = row.job_details?.url;

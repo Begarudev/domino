@@ -55,6 +55,13 @@ export function isServicesCompany(company: CompanyProfile): boolean {
     [...names(company).map(normalizeName), ...companySegments(company)].some(value => servicesPattern.test(value));
 }
 
+// Never buyers of infrastructure software: a school district posting a role "serving Lafayette High School".
+const nonBuyerPattern = /\b(?:primary and secondary education|education administration|government administration|government relations|public policy|religious institutions|civic and social organizations|individual and family services|armed forces)\b/;
+export function isNonBuyer(company: CompanyProfile): boolean {
+  return companySegments(company).some(value => nonBuyerPattern.test(value)) ||
+    names(company).some(name => /\b(?:public schools?|school district|county schools|city council|ministry of)\b/i.test(name));
+}
+
 export function looksLikeAiCompany(company: CompanyProfile): boolean {
   return [...companySegments(company), ...names(company).map(normalizeName)].some(value => aiPattern.test(value));
 }
