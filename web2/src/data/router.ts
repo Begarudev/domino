@@ -17,7 +17,7 @@ export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hin
   { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Every paid call against the run’s caps.' },
 ];
 /** Tabs whose feature is built. Unbuilt tabs are hidden, never shown as stubs. */
-export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'outreach', 'reading', 'file']);
+export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'outreach', 'reading', 'file', 'chains', 'verifier']);
 
 const ALIASES: Record<string, CompanyTab> = {
   openings: 'recruitment', drain: 'recruitment', matches: 'recruitment', analysis: 'file', needs: 'verifier', rules: 'chains', rundesk: 'reading',
