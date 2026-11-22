@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "DOMINO: an Outbound Desk agent that books meetings on cross-company triggers from the last 30 days, every claim traced to a dated source.",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "demo": "node scripts/demo.ts",
     "start": "node server/index.ts",
@@ -12,7 +14,8 @@
     "build:web": "vite build --config web/vite.config.ts",
     "dev:web": "vite --config web/vite.config.ts",
     "test": "node --test 'server/**/*.test.ts'",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "mission": "vite --config web/mission/vite.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
