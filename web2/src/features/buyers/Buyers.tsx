@@ -199,9 +199,11 @@ function Row({ a, ev, sel, onSel }: { a: Account; ev: Map<string, Evidence>; sel
           const what = a.trigger ? readableDates(trigEv ? tidyClaim(trigEv.claim) : a.trigger.summary).replace(/ on \d{1,2} [A-Z][a-z]{2} \d{4}(?=\.?$)/, '') : readableDates(t.whyNow);
           return (
             <span className="by-l2">
-              <span className="by-ell" title={what}>{what}</span>
-              {trigEv && <button className="srclink" onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{sourceName(trigEv.source.endpoint, trigEv.source.provider)}</button>}
               {trigEv?.mode === 'fixture' && <span className="tag">fixture</span>}
+              {trigEv ? (
+                <button className="by-ell by-evbtn" title={`${what} · source: ${sourceName(trigEv.source.endpoint, trigEv.source.provider)}`}
+                  onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{what}</button>
+              ) : <span className="by-ell" title={what}>{what}</span>}
             </span>
           );
         })()}
