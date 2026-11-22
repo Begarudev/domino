@@ -109,3 +109,9 @@
 .lg-lower input, .ledger .btn { border-radius: var(--r-ctl); }
 .ledger { max-width: none; grid-template-columns: minmax(0, 1fr); }
 .lg-table thead th, .lg-table tbody td, .lg-table tfoot td { padding-left: var(--cell-x); padding-right: var(--cell-x); } .lg-table th:first-child, .lg-table td:first-child { padding-left: 16px; } .lg-table th:last-child, .lg-table td:last-child { padding-right: 16px; } .lg-table td.lg-step { max-width: 300px; }
+
+.lg-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; padding: 14px 16px; }
+.lg-chart { min-width: 0; }
+.lg-chart .apexcharts-bar-area { cursor: pointer; }
+.lg-tip { display: grid; gap: 2px; padding: 8px 10px; font-size: 12px; }
+.lg-tip i { font-style: normal; color: var(--h-grey-fg); }
