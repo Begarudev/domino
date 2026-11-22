@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Evidence, IsoDate } from '../../shared/types.ts';
-import { containsPhrase, companyNameKey, normalizeDomain, shiftDays, stableId } from '../domain/facts.ts';
+import { containsPhrase, companyNameKey, normalizeDomain, relatedDomains, shiftDays, stableId } from '../domain/facts.ts';
 import { NonsenseError } from '../domain/types.ts';
 import type { CompanyMention, ParseMeta, TriggerBatch } from '../domain/types.ts';
 
@@ -134,6 +134,13 @@ export function sameCompany(a: CompanyInput, b: CompanyInput): boolean {
   const domainB = normalizeDomain(b.domain);
   if (domainA && domainB) return domainA === domainB;
   return Boolean(a.name && b.name && companyNameKey(a.name) === companyNameKey(b.name));
+}
+
+export function sameEmployer(a: CompanyInput, b: CompanyInput): boolean {
+  const id = companyNumber(a.crustdataId);
+  const name = companyNameKey(a.name);
+  return (id !== null && id === companyNumber(b.crustdataId)) || relatedDomains(a.domain, b.domain)
+    || (name !== '' && name === companyNameKey(b.name));
 }
 
 export function mentionFor(batch: TriggerBatch, key: string): CompanyMention | undefined {
