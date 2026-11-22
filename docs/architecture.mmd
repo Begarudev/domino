@@ -1,0 +1,57 @@
+flowchart LR
+  subgraph Browser["Browser (React UI)"]
+    REQ["Request bar<br/>+ limits + chaos toggles"]
+    TABLE["The table:<br/>domino cascade"]
+    DRAWER["Evidence drawer<br/>dated source per claim"]
+    INBOX["Approvals + test inbox"]
+    REPLAY["Replay score<br/>vs baselines"]
+    LEDGER["Cost ledger + budget meters"]
+  end
+
+  subgraph Server["server/index.ts (Hono)"]
+    API["REST API"]
+    SSE["SSE stream<br/>tails events table"]
+    OUTBOX["Outbox<br/>idempotency key = PK<br/>.eml / .ics test files only"]
+  end
+
+  subgraph Engine["engine/worker.ts (child process per run)"]
+    direction TB
+    S1["1 parse_request<br/>ask only if offer missing"]
+    S2["2 pull_triggers<br/>jobs, moves, growth, funding"]
+    S3["3 resolve_entities<br/>merge namesakes, keep strangers apart"]
+    S4["4 enrich_companies"]
+    S5["5 cascade<br/>TALENT_DRAIN / DISPLACEMENT / CONTAGION<br/>>= 2 dated rows per rule"]
+    S6["6 rank_targets<br/>net-new vs hiring filter"]
+    S7["7 find_deciders"]
+    S8["8 warm_paths"]
+    S9["9 draft_messages<br/>LLM writes from numbered claims,<br/>verifier deletes uncited sentences"]
+    S10["10 approval_gate"]
+    S11["11 score_replay<br/>as-of date, 0 facts after it"]
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11
+  end
+
+  subgraph Tool["runtime/tool.ts (every external call)"]
+    T["timeout, retry with backoff,<br/>schema check (nonsense guard),<br/>budget check BEFORE call,<br/>ledger row per attempt,<br/>live -> cache -> fixture fallback"]
+  end
+
+  DB[("SQLite data/domino.db<br/>runs, steps (checkpoints), events,<br/>ledger, tool_cache, evidence,<br/>approvals, outbox, asks")]
+
+  CD["Crustdata API<br/>/job/search, /person/search,<br/>/company/search, /company/enrich"]
+  LLM["Claude API<br/>claude-opus-5-5"]
+  FX["Fixtures<br/>synthetic companies"]
+
+  REQ -->|POST /api/runs| API
+  API -->|fork / SIGKILL / resume| Engine
+  Engine --> Tool
+  Tool --> CD
+  Tool --> LLM
+  Tool --> FX
+  Engine -->|checkpoint each step in one transaction| DB
+  Tool -->|ledger + cache| DB
+  SSE -->|poll 150 ms| DB
+  SSE --> TABLE
+  SSE --> DRAWER
+  SSE --> LEDGER
+  SSE --> REPLAY
+  INBOX -->|POST /api/approvals/:id| OUTBOX
+  OUTBOX -->|unique key: never sends twice| DB
