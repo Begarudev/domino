@@ -31,7 +31,7 @@ export const DECISION_STAGES = new Set(['open', 'provisional', 'held', 'watch'])
 const SHORT: Record<string, [one: string, many: string]> = {
   profiles: ['job move read', 'job moves read'],
   departures: ['left a tracked engineering role', 'left a tracked engineering role'],
-  window: ['inside the 90-day window', 'inside the 90-day window'],
+  window: ['in or straddling the 90-day window', 'in or straddling the 90-day window'],
   conclusive: ['conclusive, dated', 'conclusive, dated'],
   icp: ['at a company of 20–5,000 staff', 'at a company of 20–5,000 staff'],
   groups: ['group of 2 or more', 'groups of 2 or more'],
