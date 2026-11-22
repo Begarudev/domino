@@ -12,6 +12,7 @@ import { openEvidence } from '../../shell/ui.ts';
 import { sourceName } from '../../shell/EvidenceDrawer.tsx';
 import './analysis.css';
 import { DominoGraph } from '../network/DominoGraph.tsx';
+import { FlowsBar, HeadcountArea, type FlowPoint } from './charts.tsx';
 
 type EvMap = Map<string, Evidence>;
 const isMonth = (e: Evidence | undefined) => !!e && (e.precision === 'month' || /month precision/i.test(e.claim));
@@ -113,7 +114,7 @@ function Headcount({ d, desk }: { d?: CompanyDossier | null; desk: CompanyDesk }
   const latest = last?.count ?? d?.company.headcount ?? desk.company.headcount ?? null;
 
   return (
-    <section className="panel cf-p" data-testid="file-headcount">
+    <section className="panel cf-p cf-wide" data-testid="file-headcount">
       <header><h2>Headcount</h2>{evId ? <button className="srclink" onClick={() => openEvidence(evId)}>company/enrich timeseries</button> : <span className="faint">company/enrich</span>}</header>
       {latest == null ? (
         <p className="cf-empty">No headcount in this {d ? 'file' : 'view'}.</p>
@@ -127,36 +128,14 @@ function Headcount({ d, desk }: { d?: CompanyDossier | null; desk: CompanyDesk }
             )}
           </div>
           {series.length >= 2
-            ? <Spark series={series} mark={base?.date ?? null} onOpen={evId ? () => openEvidence(evId) : undefined} />
+            ? <>
+                <HeadcountArea series={series} mark={base?.date ?? null} markLabel={change != null ? pct1(change) : undefined} onOpen={evId ? () => openEvidence(evId) : undefined} />
+                <span className="cf-spark-ax"><span>{fmtDate(series[0].date, true)}</span><span>{plural(series.length, 'dated point')}</span><span>{fmtDate(last!.date, true)}</span></span>
+              </>
             : <p className="cf-empty sm">Headcount series not read in this scan, so no curve is drawn.</p>}
         </div>
       )}
     </section>
-  );
-}
-
-function Spark({ series, mark, onOpen }: { series: { date: string; count: number }[]; mark: string | null; onOpen?: () => void }) {
-  const t0 = Date.parse(series[0].date), t1 = Date.parse(series[series.length - 1].date);
-  const lo = Math.min(...series.map((p) => p.count)), hi = Math.max(...series.map((p) => p.count));
-  const pad = Math.max(1, (hi - lo) * 0.25);
-  const x = (d: string) => ((Date.parse(d) - t0) / Math.max(1, t1 - t0)) * 100;
-  const y = (c: number) => 100 - ((c - (lo - pad)) / (hi - lo + 2 * pad)) * 100;
-  const pts = series.map((p) => `${x(p.date).toFixed(2)},${y(p.count).toFixed(2)}`).join(' ');
-  const m = mark ? series.find((p) => p.date === mark) : undefined;
-  const end = series[series.length - 1];
-  return (
-    <button className="cf-spark" onClick={onOpen} disabled={!onOpen}
-      aria-label={`Headcount from ${fmtDate(series[0].date, true)} to ${fmtDate(end.date, true)}, ${series.length} dated points. Open the source.`}>
-      <span className="cf-spark-plot">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          {m && <line x1={x(m.date)} x2={x(m.date)} y1="0" y2="100" className="cf-spark-m" vectorEffect="non-scaling-stroke" />}
-          <polyline points={pts} vectorEffect="non-scaling-stroke" />
-        </svg>
-        {m && <span className="cf-spark-ml" style={{ left: `${x(m.date)}%` }}>{fmtDate(m.date)} · {fmtInt(m.count)}</span>}
-        {series.map((p) => <i key={p.date} className={`cf-dot ${p === end ? 'end' : ''}`} style={{ left: `${x(p.date)}%`, top: `${y(p.count)}%` }} title={`${fmtInt(p.count)} on ${fmtDate(p.date, true)}`} />)}
-      </span>
-      <span className="cf-spark-ax"><span>{fmtDate(series[0].date, true)}</span><span>{plural(series.length, 'dated point')}</span><span>{fmtDate(end.date, true)}</span></span>
-    </button>
   );
 }
 
@@ -173,10 +152,7 @@ function Funding({ d }: { d?: CompanyDossier | null }) {
       ) : lf?.date ? (
         <ul className="cf-rows"><li className="cf-row"><span>{lf.round ?? 'Funding round'}</span><span className="mono cf-date">{fmtDate(lf.date, true)}</span></li></ul>
       ) : (
-        <div className="cf-empty">
-          <b>No dated funding record in this {d ? 'file' : 'view'}.</b>
-          {d?.source === 'openings_scan' && <span>The openings scan reads departures, headcount and replacement searches. A company analysis run reads funding.</span>}
-        </div>
+        <p className="cf-empty sm">No dated funding record in this {d ? 'file' : 'view'}{d?.source === 'openings_scan' ? '; the openings scan does not read funding, a company analysis run does.' : '.'}</p>
       )}
     </section>
   );
@@ -325,12 +301,24 @@ function Flows({ d, desk, ev }: { d?: CompanyDossier | null; desk: CompanyDesk; 
   const ins = rows.length - outs;
 
   const ql = query.trim().toLowerCase();
-  const shownRows = rows.filter((r) => (dirF === 'all' || r.dir === dirF) && (!ql || `${r.role} ${r.other ?? ''}`.toLowerCase().includes(ql)));
+  const [monthF, setMonthF] = useState<string | null>(null);
+  const byMonth = new Map<string, FlowPoint>();
+  for (const r of rows) {
+    if (!r.date) continue;
+    const m = r.date.slice(0, 7);
+    const p = byMonth.get(m) ?? { month: m, out: 0, in: 0 };
+    p[r.dir] += 1;
+    byMonth.set(m, p);
+  }
+  const points = [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+  const shownRows = rows.filter((r) => (dirF === 'all' || r.dir === dirF) && (!monthF || r.date?.slice(0, 7) === monthF) && (!ql || `${r.role} ${r.other ?? ''}`.toLowerCase().includes(ql)));
   return (
     <section className="panel cf-p cf-wide" data-testid="file-flows">
       <header><h2>Talent flows, last 90 days <span className="cf-count-pill num">{rows.length}</span></h2><span className="faint">{outs} out · {ins} in · Crustdata person search</span></header>
+      {points.length > 0 && <FlowsBar points={points} active={monthF} onPick={setMonthF} />}
       {rows.length > 0 && (
         <div className="cf-tools">
+          {monthF && <button className="cf-chip on" onClick={() => setMonthF(null)} aria-label="Clear month filter">{fmtDate(monthF, true)} ×</button>}
           <input className="cf-search" type="search" placeholder="Search role or company" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search talent flows" />
           {ins > 0 && (['all', 'out', 'in'] as const).map((k) => (
             <button key={k} className={`cf-chip ${dirF === k ? 'on' : ''}`} onClick={() => setDirF(k)}>{k === 'all' ? 'All' : k === 'out' ? `Left · ${outs}` : `Joined · ${ins}`}</button>
