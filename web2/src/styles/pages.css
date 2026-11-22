@@ -79,3 +79,6 @@
 .side-candidate .fit-list li { flex-wrap: nowrap; }
 .side-candidate .fit-list li .fit-text { min-width: 0; }
 .side-candidate .fit-list li.cant { border: 0; padding: 0; background: none; border-radius: 0; font-size: var(--fs-body); color: var(--ink-2); display: flex; }
+/* candidate clause chips own their layout (the shell .clauses li grid is for company clause rows) */
+.side-candidate ol.clauses li { display: block; padding: 0; grid-template-columns: none; cursor: default; }
+.side-candidate ol.clauses li:hover { background: none; }
