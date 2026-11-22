@@ -27,7 +27,11 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function sanitize(value: unknown, stripContactFields = false): unknown {
-  if (typeof value === 'string') return redactSecrets(value);
+  if (typeof value === 'string') {
+    const clean = redactSecrets(value);
+    return stripContactFields ? clean.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[contact redacted]')
+      .replace(/\+(?:\d[ .()-]?){8,14}\d\b/g, '[contact redacted]') : clean;
+  }
   if (Array.isArray(value)) return value.map(child => sanitize(child, stripContactFields));
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value)
@@ -72,9 +76,9 @@ const zeroCost: Cost = { credits: 0, usd: 0, inputTokens: 0, outputTokens: 0 };
 const timeoutError = new ToolError('Tool call timed out', 'timeout', 'timeout');
 const garbage = { rows: '<<garbage>>' };
 
-export function exhaust(store: Store, runId: string, reason: Exhausted, updateRun = true) {
+export function exhaust(store: Store, runId: string, reason: Exhausted) {
   const budget = { ...store.budget(runId), exhausted: reason };
-  if (updateRun && store.requireRun(runId).status !== 'budget_exhausted') {
+  if (store.requireRun(runId).status !== 'budget_exhausted') {
     store.recordEvent(runId, { type: 'run.status', status: 'budget_exhausted', note: new BudgetError(reason).message });
   }
   store.recordEvent(runId, { type: 'budget.update', budget });
@@ -126,6 +130,7 @@ export class ToolContext {
     this.signal?.throwIfAborted();
     if (this.recheck) return;
     const budget = this.store.budget(this.runId);
+    if (budget.exhausted) throw new BudgetError(budget.exhausted);
     if (budget.used.seconds >= budget.limits.maxSeconds) throw new BudgetError('seconds');
   }
 
@@ -150,10 +155,11 @@ export class ToolContext {
       attempt: { mode, run: attempt, inject: raw => parse(raw, mode), estimate, timeoutMs: 15_000 },
     }, callId);
 
-    if (this.mode === 'live') {
+    if (this.mode === 'live' && !process.env.CRUSTDATA_API_KEY) {
+      this.fallback(callId, spec.name, 'live', 'cache', 'Crustdata key unavailable');
+    } else if (this.mode === 'live') {
       try {
         return await run('live', async (signal, report) => {
-          if (!process.env.CRUSTDATA_API_KEY) throw new ToolError('Crustdata key unavailable');
           const url = new URL(spec.path, 'https://api.crustdata.com');
           if (url.origin !== 'https://api.crustdata.com') throw new ToolError('Invalid Crustdata endpoint');
           if (spec.method === 'GET' && body && typeof body === 'object') {
@@ -231,7 +237,9 @@ export class ToolContext {
       let blocked: Exhausted | undefined;
       const entry = this.store.transaction(() => {
         const budget = this.store.budget(this.runId);
-        if (!this.recheck && (this.signal?.aborted || budget.used.seconds >= budget.limits.maxSeconds)) blocked = 'seconds';
+        if (!this.recheck) {
+          blocked = budget.exhausted ?? (this.signal?.aborted || budget.used.seconds >= budget.limits.maxSeconds ? 'seconds' : undefined);
+        }
         if (!blocked && mode === 'live' && (budget.used.credits >= budget.limits.maxCredits
           || budget.used.credits + (estimate?.credits ?? 0) > budget.limits.maxCredits + 1e-9)) blocked = 'credits';
         if (!blocked && mode === 'model' && (budget.used.modelUsd >= budget.limits.maxModelUsd
@@ -243,8 +251,8 @@ export class ToolContext {
         }, requestHash);
         if (blocked) {
           this.store.finishLedger(row);
-          const run = this.store.requireRun(this.runId);
-          exhaust(this.store, this.runId, blocked, !this.recheck || run.engine_pid !== null);
+          if (!this.recheck) exhaust(this.store, this.runId, blocked);
+          else this.store.recordEvent(this.runId, { type: 'budget.update', budget });
         } else {
           this.store.recordEvent(this.runId, { type: 'tool.call', callId, provider: call.provider, endpoint: call.endpoint, mode, attempt });
         }
@@ -278,7 +286,7 @@ export class ToolContext {
         const budget = this.store.budget(this.runId);
         const reason = budgetFailure?.reason ?? (mode === 'live' && budget.used.credits > budget.limits.maxCredits + 1e-9 ? 'credits'
           : mode === 'model' && budget.used.modelUsd > budget.limits.maxModelUsd + 1e-12 ? 'model_usd' : undefined);
-        if (reason) exhaust(this.store, this.runId, reason, !this.recheck || this.store.requireRun(this.runId).engine_pid !== null);
+        if (reason && !this.recheck) exhaust(this.store, this.runId, reason);
         else this.store.recordEvent(this.runId, { type: 'budget.update', budget });
         return reason;
       });

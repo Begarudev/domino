@@ -7,16 +7,9 @@ import type { EndpointSpec } from '../crustdata/spec.ts';
 import type { Claim, CompanyMention, OutcomeFact, ParseMeta, PersonMention, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { NonsenseError } from '../domain/types.ts';
 
-export const fixtureSeller: SellerProfile = {
-  company: 'Cirrus Kiln', offering: 'managed GPU inference', oneLiner: 'We help teams scale inference workloads.',
-  senderName: 'Ira', team: [], customers: [],
-  meeting: { title: 'Managed inference discussion', durationMin: 20, slots: [] },
-  displacementEvents: [],
-};
-
 const aiTitles = ['CTO', 'VP Engineering', 'Head of ML Platform'];
 const signals = ['inference', 'ML infrastructure', 'GPU', 'LLM serving'];
-export function shiftDays(date: string, days: number): string {
+function shiftDays(date: string, days: number): string {
   return new Date(Date.parse(date) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
@@ -52,7 +45,7 @@ type CompanyInput = { name: string; domain?: string | null; crustdataId?: number
 type Search = { intent: Intent; companies?: CompanyInput[] };
 type Enrich = { companies: CompanyInput[] };
 type DeciderSearch = { intent: Intent; company: Company };
-type OutcomeSearch = { intent: Intent; companies: Company[] };
+type OutcomeSearch = { intent: Intent; companies: (CompanyInput & { key: string })[] };
 const companySchema = z.object({ key: z.string(), name: z.string(), domain: z.string() });
 const rowSchema = z.object({
   id: z.string(), company: companySchema, related: companySchema.optional(), date: z.string(),
@@ -81,8 +74,8 @@ export const personSearchRecentMoves = endpoint<Search>('person_recent_moves', '
 export const companySearchGrowth = endpoint<{ intent: Intent }>('company_growth', '/company/search', 'growth', 0.03);
 export const companyEnrich = endpoint<Enrich>('company_enrich', '/company/enrich', 'enrich', 2);
 export const personSearchDeciders = endpoint<DeciderSearch>('person_deciders', '/person/search', 'deciders', 0.03);
-export const jobSearchOutcomes = endpoint<OutcomeSearch>('job_search_outcomes', '/job/search', 'outcome_jobs', 0.03);
-export const personSearchOutcomes = endpoint<OutcomeSearch>('person_hire_outcomes', '/person/search', 'outcome_hires', 0.03);
+export const jobSearchOutcomes = endpoint<OutcomeSearch>('outcome_check', '/job/search', 'outcome_jobs', 0.03);
+export const personSearchOutcomes = endpoint<OutcomeSearch>('outcome_check', '/person/search', 'outcome_hires', 0.03);
 
 export function fixtureFor(_path: string, body: unknown): unknown {
   const input = body as Search & Enrich & DeciderSearch & { fixturePart: string };

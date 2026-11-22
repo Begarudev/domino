@@ -43,6 +43,13 @@ type StepResult<K extends StepName> = { output: Outputs[K]; summary: string; eve
 type Runner<K extends StepName> = (ctx: ToolContext, checkpoints: Checkpoints) => Promise<StepResult<K>> | StepResult<K>;
 const unique = <T>(items: T[]) => [...new Set(items)];
 const byId = <T extends { id: string }>(rows: T[]) => [...new Map(rows.map(row => [row.id, row])).values()];
+function publishTriggers(ctx: ToolContext, triggers: Trigger[]) {
+  const seen = ctx.store.sql.prepare(`SELECT 1 FROM events WHERE run_id = ? AND type = 'trigger.found'
+    AND json_extract(payload_json, '$.trigger.id') = ? LIMIT 1`);
+  for (const trigger of triggers) {
+    if (!seen.get(ctx.runId, trigger.id)) ctx.store.recordEvent(ctx.runId, { type: 'trigger.found', trigger });
+  }
+}
 const emptyBatch = (): TriggerBatch => ({ mentions: [], people: [], triggers: [], evidence: [] });
 
 const refinements = z.object({
@@ -78,7 +85,8 @@ async function parseRequest(ctx: ToolContext): Promise<StepResult<'parse_request
   if (ctx.store.requireRun(ctx.runId).status === 'awaiting_input') {
     ctx.store.appendEvent(ctx.runId, { type: 'run.status', status: 'running' });
   }
-  const intent = { ...rules, offering: rules.offering ?? answer ?? seller.offering };
+  const amended = !rules.offering && answer ? deps.parseIntentRules(`We sell ${answer}. ${run.request}`, today) : rules;
+  const intent = { ...amended, offering: rules.offering ?? answer ?? seller.offering };
   const completion = await modelClient(ctx).complete({
     purpose: 'parse', json: true, maxTokens: 1100,
     system: 'Refine an outbound search intent from the request and confirmed offering. Return only buyerProfile, geography, deciderTitles and signalKeywords. Omit any field you cannot infer.',
@@ -114,8 +122,12 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
       ...mention, evidenceIds,
       headcount: supports(/headcount|employee_count/i) ? mention.headcount : undefined,
       headcountGrowthPct: supports(/growth|headcount|employee_count/i) ? mention.headcountGrowthPct : undefined,
-      lastFunding: mention.lastFunding?.date && mention.lastFunding.date <= intent.asOf ? mention.lastFunding : undefined,
-      competitorNames: supports(/competitor|peer/i) ? mention.competitorNames : undefined,
+      lastFunding: mention.lastFunding?.date && mention.lastFunding.date <= intent.asOf && supports(/funding/i)
+        ? mention.lastFunding : undefined,
+      industry: supports(/taxonomy|industry|categories/i) ? mention.industry : undefined,
+      hq: supports(/locations|headquarters/i) ? mention.hq : undefined,
+      foundedYear: supports(/founded/i) ? mention.foundedYear : undefined,
+      ...(supports(/competitor|peer/i) ? {} : { competitorNames: undefined, competitorDomains: undefined }),
     }];
   });
   const people = batch.people.flatMap(person => {
@@ -132,7 +144,8 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
     evidence, mentions, people, triggers: batch.triggers.flatMap(trigger => {
       const evidenceIds = ids(trigger);
       if (trigger.date <= cutoff || trigger.date > intent.asOf || !companyKeys.has(trigger.companyId)) return [];
-      if (replay && (!evidenceIds.length || (trigger.relatedCompanyId && !companyKeys.has(trigger.relatedCompanyId)))) return [];
+      if (replay && (!evidenceIds.length || evidenceIds.length !== trigger.evidenceIds.length ||
+        (trigger.relatedCompanyId && !companyKeys.has(trigger.relatedCompanyId)))) return [];
       return [{ ...trigger, evidenceIds }];
     }),
   };
@@ -146,11 +159,7 @@ async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpo
     const kept = guardBatch(batch, intent!);
     ctx.store.transaction(() => {
       publishEvidence(ctx, kept.evidence, batch.sources);
-      for (const trigger of kept.triggers) {
-        const seen = ctx.store.sql.prepare(`SELECT 1 FROM events WHERE run_id = ? AND type = 'trigger.found'
-          AND json_extract(payload_json, '$.trigger.id') = ? LIMIT 1`).get(ctx.runId, trigger.id);
-        if (!seen) ctx.store.recordEvent(ctx.runId, { type: 'trigger.found', trigger });
-      }
+      publishTriggers(ctx, kept.triggers);
     });
     output.mentions.push(...kept.mentions);
     output.people.push(...kept.people);
@@ -203,13 +212,16 @@ async function enrichCompanies(ctx: ToolContext, c: Checkpoints): Promise<StepRe
   if (!companies.length) return { output: resolved, summary: 'No companies to enrich' };
   const result = await readSource(ctx, deps.companyEnrich, { companies }, intent);
   const kept = guardBatch(result, intent);
-  ctx.store.transaction(() => publishEvidence(ctx, kept.evidence, result.sources));
+  ctx.store.transaction(() => {
+    publishEvidence(ctx, kept.evidence, result.sources);
+    publishTriggers(ctx, kept.triggers);
+  });
   if (!kept.mentions.length) return { output: { ...resolved, evidence: byId([...resolved.evidence, ...kept.evidence]) },
     summary: `${companies.length} companies checked for dated enrichment` };
   const raw = c.pull_triggers!;
   const output = resolveBatch({
     ...raw, mentions: [...raw.mentions, ...kept.mentions], people: [...raw.people, ...kept.people],
-    evidence: [...raw.evidence, ...kept.evidence],
+    evidence: [...raw.evidence, ...kept.evidence], triggers: byId([...raw.triggers, ...kept.triggers]),
   });
   return { output, summary: `Enriched ${kept.mentions.length} company records` };
 }
@@ -300,7 +312,8 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
   const drafts: Draft[] = [];
   const targets: Target[] = [];
   const events: RunEvent[] = [];
-  const profile = { ...seller, meeting: { ...seller.meeting, slots: futureSlots(seller, ctx.store.requireRun(ctx.runId).created_at) } };
+  const profile = { ...seller, offering: c.parse_request!.offering ?? seller.offering,
+    meeting: { ...seller.meeting, slots: futureSlots(seller, ctx.store.requireRun(ctx.runId).created_at) } };
   for (const target of c.warm_paths!) {
     const company = companies.find(row => row.id === target.companyId);
     if (!company) {
@@ -310,12 +323,31 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
     const claims = deps.buildClaims(target, company, triggers, evidence, c.cascade!);
     const template = deps.templateDraft(target, target.decider, claims, profile);
     const prompt = deps.llmDraftPrompt(target, target.decider, claims.filter(claim => claim.verifiable), profile);
-    const completion = await modelClient(ctx).complete({ purpose: 'draft', ...prompt, json: true, maxTokens: 2400 });
+    const completion = await modelClient(ctx).complete({
+      purpose: 'draft', user: prompt.user, system: prompt.system +
+        '\nUse the exact text of each numbered claim you include. Add a greeting, seller introduction, meeting invitation, and signoff.',
+      json: true, maxTokens: 2400,
+    });
     const parsed = completion ? messageShape.safeParse(JSON.parse(completion.text)) : null;
     const candidate = parsed?.success ? { ...template, ...parsed.data, generator: completion!.model } : template;
     const checked = deps.verifyDraft(candidate, claims, evidence);
-    // Use the template subject because verifier results cover the message body.
-    const draft = { ...candidate, ...checked, subject: template.subject };
+    const removed = checked.checks.filter(check => check.status === 'removed'
+      && !checked.unverifiable.some(item => item.claim === check.sentence))
+      .map(check => ({ claim: check.sentence, reason: check.note ?? 'Missing support in the cited evidence' }));
+    const unverifiable = [...checked.unverifiable, ...removed];
+    const normalized = (text: string) => text.toLowerCase().replace(/\[\d+\]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const verifiedCopy = checked.checks.every(check => {
+      if (check.status !== 'cited') return true;
+      const markers = Array.from(check.sentence.matchAll(/\[(\d+)\]/g), match => Number(match[1]));
+      return markers.length === 1 && claims.some(claim => claim.n === markers[0] && normalized(claim.text) === normalized(check.sentence));
+    });
+    // Reuse the template subject. The verifier checks the message body.
+    const draft = candidate !== template && (!checked.verified || !checked.body.trim() || !verifiedCopy)
+      ? { ...template, ...deps.verifyDraft(template, claims, evidence),
+        unverifiable: [...unverifiable, ...(!verifiedCopy ? [{
+          claim: 'The model changed the wording of a cited fact', reason: 'The draft used the verified template instead',
+        }] : [])] }
+      : { ...candidate, ...checked, unverifiable, subject: template.subject };
     drafts.push(draft);
     targets.push({ ...target, draftId: draft.id });
     events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: company.id, ...item })),
@@ -341,15 +373,6 @@ function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_ga
       ...(output.length ? [{ type: 'run.status' as const, status: 'awaiting_approval' as const }] : [])] };
 }
 
-function matchCompany(input: Company | TriggerBatch['mentions'][number], companies: Company[]) {
-  const candidates = companies.filter(company => {
-    if (input.crustdataId != null && company.crustdataId != null) return String(input.crustdataId) === String(company.crustdataId);
-    if (input.domain && company.domain) return input.domain.toLowerCase() === company.domain.toLowerCase();
-    return company.aliases.some(alias => alias.toLowerCase() === input.name.toLowerCase());
-  });
-  return candidates.length === 1 ? candidates[0] : undefined;
-}
-
 async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'score_replay'>> {
   const intent = c.parse_request!;
   const { companies, evidence, triggers } = c.enrich_companies!;
@@ -357,7 +380,15 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
   const firstOrder = c.rank_targets!.baseline.hiringFilterCompanyIds;
   const headcount = unique(triggers.filter(trigger => {
     if (trigger.kind !== 'headcount_jump') return false;
-    return evidence.some(row => trigger.evidenceIds.includes(row.id) && row.verifiable && typeof row.value === 'number' && row.value >= 30);
+    const rows = evidence.filter(row => trigger.evidenceIds.includes(row.id) && row.verifiable && typeof row.value === 'number');
+    const growth = rows.find(row => /growth|headcount_jump/i.test(row.source.field ?? ''));
+    if (growth) return Number(growth.value) >= 30;
+    const points = rows.filter(row => /employee_count|headcount\.total/i.test(row.source.field ?? '') && row.observedAt)
+      .sort((a, b) => a.observedAt!.localeCompare(b.observedAt!));
+    const first = points[0];
+    const last = points.at(-1);
+    return !!first && !!last && first.observedAt !== last.observedAt && Number(first.value) > 0 &&
+      Number(last.value) / Number(first.value) >= 1.3;
   }).map(trigger => trigger.companyId));
   const predicted = new Set([...targets.map(target => target.companyId), ...firstOrder, ...headcount]);
   const picked = companies.filter(company => predicted.has(company.id));
@@ -365,13 +396,15 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
   const inHorizon = (date: string | null) => Boolean(date && date > intent.asOf && date <= intent.horizonEnd!);
   if (picked.length && intent.horizonEnd) {
     const time = { asOf: intent.horizonEnd, windowDays: Math.round((Date.parse(intent.horizonEnd) - Date.parse(intent.asOf)) / 86_400_000) };
+    const input = { intent, companies: picked.map(company => ({ ...company, key: company.id })) };
     for (const spec of [deps.jobSearchOutcomes, deps.personSearchOutcomes]) {
-      const result = await readSource(ctx, spec, { intent, companies: picked }, time);
+      const result = await readSource(ctx, spec, input, time);
       const dated = result.evidence.filter(row => row.verifiable && inHorizon(row.observedAt));
       const ids = new Set(dated.map(row => row.id));
       for (const trigger of result.triggers) {
         const mention = result.mentions.find(row => row.key === trigger.companyId);
-        const company = mention && matchCompany(mention, picked);
+        const company = mention && picked.find(row => row.id === mention.key ||
+          (row.domain && mention.domain && row.domain.toLowerCase() === mention.domain.toLowerCase()));
         const evidenceIds = trigger.evidenceIds.filter(id => ids.has(id));
         if (company && inHorizon(trigger.date) && evidenceIds.length && (trigger.kind === 'job_post' || trigger.kind === 'hire')) {
           outcomes.push({ companyKey: company.id, date: trigger.date, kind: trigger.kind, evidenceIds, summary: trigger.summary });

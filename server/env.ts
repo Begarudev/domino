@@ -19,7 +19,7 @@ const { DOMINO_DATA, DOMINO_PORT, DOMINO_DB, DOMINO_OUTBOX } = process.env;
 const crustdataKey = Boolean(process.env.CRUSTDATA_API_KEY);
 const anthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
 const openaiKey = Boolean(process.env.OPENAI_API_KEY);
-const llm: 'anthropic' | 'openai' | 'template' = anthropicKey ? 'anthropic' : openaiKey ? 'openai' : 'template';
+const llm: 'anthropic' | 'openai' | 'template' = openaiKey ? 'openai' : anthropicKey ? 'anthropic' : 'template';
 export const ANTHROPIC_MODEL = redactSecrets(process.env.ANTHROPIC_MODEL || 'claude-opus-5-5');
 const openaiModel = redactSecrets(process.env.OPENAI_MODEL || 'gpt-5-mini');
 const dataMode: DataMode = DOMINO_DATA === 'live' || DOMINO_DATA === 'cache' || DOMINO_DATA === 'fixture'

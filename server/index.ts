@@ -124,7 +124,8 @@ export function createApp(store: Store) {
 
   app.get('/api/runs/:id', c => {
     const id = c.req.param('id');
-    return store.getRun(id) ? c.json(snapshot(store, id)) : c.json({ error: 'Run not found' }, 404);
+    const result = store.transaction(() => store.getRun(id) && snapshot(store, id), 'read');
+    return result ? c.json(result) : c.json({ error: 'Run not found' }, 404);
   });
 
   app.get('/api/runs/:id/stream', c => {

@@ -39,7 +39,7 @@ export interface RunRow {
 type StepRow = StepState & { output_json: string | null };
 type LedgerInput = Omit<LedgerEntry, 'id' | 'ts'>;
 type EventRow = { seq: number; run_id: string; ts: string; payload_json: string };
-export type EvidenceSource = { endpoint: string; input: unknown; rawId: string };
+export type EvidenceSource = { endpoint: string; path?: string; input: unknown; rawId: string; time: Pick<Intent, 'asOf' | 'windowDays'> };
 
 export class Store {
   readonly sql: DatabaseSync;
@@ -88,8 +88,8 @@ export class Store {
     `);
   }
 
-  transaction<T>(fn: () => T): T {
-    this.sql.exec('BEGIN IMMEDIATE');
+  transaction<T>(fn: () => T, mode: 'read' | 'write' = 'write'): T {
+    this.sql.exec(mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE');
     try {
       const result = fn();
       this.sql.exec('COMMIT');

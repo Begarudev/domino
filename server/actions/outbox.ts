@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import type { Approval, Company, Draft, OutboxAction, Target } from '../../shared/types.ts';
 import { decode, now, Store } from '../db.ts';
 import type { Outputs } from '../engine/steps.ts';
@@ -116,13 +116,21 @@ function executeReservation(store: Store, action: OutboxAction): boolean {
     const { draft, company, target } = context(store, approval);
     const content = fileContents(action, draft, company, target);
     const filename = isAbsolute(action.sink) ? action.sink : join(root, action.sink);
-    mkdirSync(config.outboxPath, { recursive: true, mode: 0o700 });
-    const temp = `${filename}.${randomUUID()}.tmp`;
+    let existing: string | undefined;
     try {
-      writeFileSync(temp, content, { mode: 0o600, flag: 'wx', flush: true });
-      renameSync(temp, filename);
-    } finally {
-      rmSync(temp, { force: true });
+      existing = readFileSync(filename, 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    if (existing !== content) {
+      mkdirSync(dirname(filename), { recursive: true, mode: 0o700 });
+      const temp = `${filename}.${randomUUID()}.tmp`;
+      try {
+        writeFileSync(temp, content, { mode: 0o600, flag: 'wx', flush: true });
+        renameSync(temp, filename);
+      } finally {
+        rmSync(temp, { force: true });
+      }
     }
     store.sql.prepare('UPDATE outbox SET executed_at = ? WHERE idempotency_key = ?').run(action.executedAt, action.idempotencyKey);
     store.recordEvent(action.runId, { type: 'approval.decided', approvalId: action.approvalId, status: 'approved' });

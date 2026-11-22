@@ -5,7 +5,7 @@ import { ANTHROPIC_MODEL, config, redactSecrets } from '../env.ts';
 import { BudgetError, httpError, providerFetch, responseJson, sanitize, ToolError } from '../runtime/tool.ts';
 import type { ToolContext } from '../runtime/tool.ts';
 
-// USD per million tokens, cached 2026-11-03. Check provider rate cards before changing models.
+// USD per million tokens, cached 2026-11-03. check current pricing before changing models.
 const prices: Record<string, readonly [number, number]> = {
   'claude-opus-5-5': [4, 20],
   'claude-opus-5': [4, 20],
@@ -14,13 +14,14 @@ const prices: Record<string, readonly [number, number]> = {
   'claude-sonnet-5': [1, 5],
   'claude-haiku-5-5': [0.1, 0.5],
   'gpt-5-mini': [0.25, 2],
-  'gpt-5.4-mini': [0.75, 4.5],
-  'gpt-5.4-nano': [0.2, 1.25],
 };
+
+const baseModel = (model: string) => model.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, '');
+const openaiPrice = (model: string) => baseModel(model) === 'gpt-5-mini' ? prices['gpt-5-mini'] : undefined;
 
 function price(model: string, input: number, output: number) {
   const [inRate, outRate] = model.startsWith('claude-haiku-5-5') && input > 100_000
-    ? [0.5, 2.5] : prices[model] ?? prices[model.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, '')] ?? [10, 50];
+    ? [0.5, 2.5] : prices[baseModel(model)] ?? [10, 50];
   return (input * inRate + output * outRate) / 1_000_000;
 }
 
@@ -48,6 +49,14 @@ interface CompletionRequest {
 
 export interface Completion { text: string; model: string }
 let anthropic: Anthropic | undefined;
+class ModelNotFound extends ToolError {}
+const openaiDisabled = 'OpenAI model unavailable. Using deterministic output for the rest of this run.';
+const missingOpenAIModel = z.object({ error: z.object({ code: z.literal('model_not_found').optional(), type: z.string().optional() }) });
+
+function openaiDisabledForRun(ctx: ToolContext) {
+  return Boolean(ctx.store.sql.prepare(`SELECT 1 FROM events WHERE run_id = ? AND type = 'log'
+    AND json_extract(payload_json, '$.message') = ? LIMIT 1`).get(ctx.runId, openaiDisabled));
+}
 
 function textResult(text: string, model: string, json?: boolean): Completion {
   const cleaned = redactSecrets(text.trim()).replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, '$1');
@@ -67,16 +76,18 @@ export function modelClient(ctx: ToolContext) {
   return {
     async complete({ purpose, system, user, maxTokens, json }: CompletionRequest): Promise<Completion | null> {
       const provider = config.llm;
-      if (provider === 'template') return null;
+      if (provider === 'template' || openaiDisabledForRun(ctx)) return null;
       const model = provider === 'anthropic' ? ANTHROPIC_MODEL : config.openaiModel;
+      const estimated = provider === 'openai' && !openaiPrice(model);
+      const billingModel = estimated ? 'gpt-5-mini' : model;
       system = redactSecrets(json ? system + '\nReply with a single JSON object.' : system);
       user = redactSecrets(user);
       const estimateInput = Buffer.byteLength(system + user) + 128;
-      const estimateUsd = price(model, estimateInput, maxTokens)
+      const estimateUsd = price(billingModel, estimateInput, maxTokens)
         + (provider === 'anthropic' ? price('claude-opus-4-8', estimateInput, maxTokens) : 0);
       try {
         return await ctx.tool<Completion | null>({
-          provider, endpoint: model, body: { purpose, system, user, maxTokens, json },
+          provider, endpoint: estimated ? `${model} (estimated)` : model, path: model, body: { purpose, system, user, maxTokens, json },
           attempt: {
             mode: 'model', estimate: { usd: estimateUsd },
             inject: () => { throw new NonsenseError('Expected a message object'); },
@@ -132,18 +143,27 @@ export function modelClient(ctx: ToolContext) {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
                 body: JSON.stringify({
                   model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-                  max_completion_tokens: maxTokens, ...(json ? { response_format: { type: 'json_object' } } : {}),
+                  max_completion_tokens: maxTokens,
+                  ...(openaiPrice(model) ? { reasoning_effort: 'minimal' } : {}),
+                  ...(json ? { response_format: { type: 'json_object' } } : {}),
                 }),
               });
               if (!response.ok) {
-                void response.body?.cancel().catch(() => {});
+                if (response.status === 404 || response.status === 400) {
+                  const result = missingOpenAIModel.safeParse(await response.json().catch(() => null));
+                  if (result.success && (result.data.error.code === 'model_not_found' || result.data.error.type === 'model_not_found')) {
+                    throw new ModelNotFound('OpenAI model not found');
+                  }
+                } else {
+                  void response.body?.cancel().catch(() => {});
+                }
                 throw httpError(response.status);
               }
               const raw = sanitize(await responseJson(response));
               const usage = z.object({ usage: openaiUsage }).safeParse(raw);
               if (!usage.success) throw new NonsenseError('Missing model usage');
               const { prompt_tokens: input, completion_tokens: output } = usage.data.usage;
-              report({ inputTokens: input, outputTokens: output, usd: price(model, input, output) });
+              report({ inputTokens: input, outputTokens: output, usd: price(billingModel, input, output) });
               const message = openaiChoice.safeParse(raw);
               if (!message.success) throw new NonsenseError('Missing model completion');
               const choice = message.data.choices[0];
@@ -155,6 +175,14 @@ export function modelClient(ctx: ToolContext) {
       } catch (error) {
         if (error instanceof BudgetError) throw error;
         if (!(error instanceof ToolError)) throw error;
+        if (error instanceof ModelNotFound) {
+          ctx.store.transaction(() => {
+            if (openaiDisabledForRun(ctx)) return;
+            ctx.store.sql.prepare("UPDATE runs SET llm = 'template' WHERE id = ?").run(ctx.runId);
+            ctx.store.recordEvent(ctx.runId, { type: 'log', level: 'warn', message: openaiDisabled });
+          });
+          return null;
+        }
         ctx.store.appendEvent(ctx.runId, { type: 'log', level: 'warn', message: 'Model unavailable. Using deterministic output.' });
         return null;
       }
