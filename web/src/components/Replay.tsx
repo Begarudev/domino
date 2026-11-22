@@ -57,7 +57,8 @@ function Scoreboard({ score, snap, reducedMotion }: { score: ReplayScore; snap: 
       <div className="replay-clock">
         <p className="replay-asof">As of</p>
         <p className="replay-date num">{fmtDate(now, { year: true })}</p>
-        <p className="replay-guard">Facts after {fmtDate(score.asOf)} used: <b className={score.factsAfterAsOfUsed === 0 ? 'ok' : 'miss'}>{score.factsAfterAsOfUsed}</b></p>
+        <p className="replay-guard"><b className={score.factsAfterAsOfUsed === 0 ? 'ok' : 'miss'}>{score.factsAfterAsOfUsed}</b> facts dated after {fmtDate(score.asOf)} used to predict</p>
+        <p className="replay-label">{score.snapshotLabel ?? `Not point-in-time: today's data, filtered to facts dated on or before ${fmtDate(score.asOf)}`}</p>
         <button type="button" className="btn btn-primary btn-sm" onClick={play} disabled={playing}>{done ? `Play to ${fmtDate(score.horizonEnd)} again` : `Play to ${fmtDate(score.horizonEnd)}`}</button>
         <div className="scrub" aria-hidden="true">
           <span className="scrub-fill" style={{ width: `${(day / total) * 100}%` }} />
@@ -84,15 +85,16 @@ function Scoreboard({ score, snap, reducedMotion }: { score: ReplayScore; snap: 
       <div className="board">
         <table>
           <thead>
-            <tr><th scope="col">Method</th><th scope="col">Picked</th><th scope="col">Hits so far</th><th scope="col">Precision</th><th scope="col">Median lead</th></tr>
+            <tr><th scope="col">Method</th><th scope="col" className="r">Predicted</th><th scope="col" className="r">Showed the need</th><th scope="col" className="r">Didn't</th><th scope="col" className="r">Median lead</th></tr>
           </thead>
           <tbody>
             <Row label="DOMINO" s={score.domino} live={counted(['domino', 'both'])} done={done} strong />
-            <Row label="First-order hiring filter" s={score.baselineFirstOrder} live={counted(['baseline_first_order', 'both'])} done={done} />
             <Row label="Headcount +30% filter" s={score.baselineHeadcount} live={counted(['baseline_headcount'])} done={done} />
+            <Row label="First-order hiring filter" s={score.baselineFirstOrder} live={counted(['baseline_first_order', 'both'])} done={done} />
           </tbody>
         </table>
         <p className="board-note">{score.note}</p>
+        {score.outcomeDefinition && <p className="board-def"><span>What counts as showing the need</span>{score.outcomeDefinition}</p>}
       </div>
     </div>
   );
@@ -102,10 +104,10 @@ function Row({ label, s, live, done, strong }: { label: string; s: ReplayScore['
   return (
     <tr className={strong ? 'is-strong' : ''}>
       <th scope="row">{label}</th>
-      <td className="num">{s.predicted}</td>
-      <td className="num">{done ? s.hits : live}</td>
-      <td className="num">{done ? `${Math.round(s.precision * 100)}%` : ''}</td>
-      <td className="num">{done ? (s.medianLeadDays == null ? 'none' : `${s.medianLeadDays} days`) : ''}</td>
+      <td className="num r">{s.predicted}</td>
+      <td className="num r is-hit">{done ? s.hits : live}</td>
+      <td className="num r is-miss">{done ? s.predicted - s.hits : ''}</td>
+      <td className="num r">{done ? (s.medianLeadDays == null ? 'none' : `${s.medianLeadDays} days`) : ''}</td>
     </tr>
   );
 }

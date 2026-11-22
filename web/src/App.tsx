@@ -28,7 +28,10 @@ export function App() {
   const [hover, setHover] = useState<string | null>(null);
   const [hiringFilterView, setHiringFilterView] = useState(false);
   const [replayToken, setReplayToken] = useState(0);
-  const [tab, setTab] = useState<Tab | null>(null);
+  // ?tab=drafts|replay|ledger|entities opens a tab on load; ?tab=none keeps the dock collapsed (handy for screenshots).
+  const tabParam = new URLSearchParams(location.search).get('tab');
+  const [tab, setTab] = useState<Tab | null>(tabParam && tabParam !== 'none' ? (tabParam as Tab) : null);
+  const autoTabs = tabParam === null;
   const [draftCompany, setDraftCompany] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [slotRef, slot] = useSize<HTMLDivElement>();
@@ -57,8 +60,8 @@ export function App() {
 
   // Open the drafts tab when approvals arrive, the replay tab when a replay is scored.
   const pending = pendingApprovals(snap);
-  useEffect(() => { if (snap.status === 'awaiting_approval' && tab === null) setTab('drafts'); }, [snap.status]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (snap.replay) setTab('replay'); }, [!!snap.replay]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (autoTabs && snap.status === 'awaiting_approval' && tab === null) setTab('drafts'); }, [snap.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (autoTabs && snap.replay) setTab('replay'); }, [!!snap.replay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = useCallback(async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -103,7 +106,7 @@ export function App() {
           <span className="brand-sub">Outbound desk</span>
         </div>
         <RequestBar initial={requestText} busy={busy === 'run'} onRun={onRun} />
-        <StatusLine snap={snap} mock={!!backend?.mock} connected={connected} hasRun={hasRun} onLower={onLower} />
+        <StatusLine snap={snap} mock={!!backend?.mock} connected={connected} hasRun={hasRun} fallbacks={state.fallbacks} onLower={onLower} />
       </header>
 
       {error && (
@@ -119,19 +122,19 @@ export function App() {
           onResume={() => backend && runId && act('resume', () => backend.resume(runId))} />
 
         <div className="centre">
-          <div className="centre-bar">
-            <h2 className="sr-only">Cascade</h2>
-            <p className="centre-legend">
-              {snap.graph.nodes.length ? <>Top half: the dated change, pips count dated rows. Bottom half: the predicted need, pips show confidence.</> : null}
-            </p>
-            <label className="toggle">
-              <input type="checkbox" checked={hiringFilterView} onChange={(e) => setHiringFilterView(e.target.checked)} disabled={!snap.targets.length} />
-              <span className="toggle-track" aria-hidden="true" />
-              Hiring-filter view
-            </label>
-            <button type="button" className="btn btn-quiet btn-sm" disabled={!snap.graph.edges.length} onClick={() => setReplayToken((t) => t + 1)}>Replay cascade</button>
-          </div>
           <div className="slot" ref={slotRef}>
+          <div className="centre-bar">
+              <h2 className="sr-only">Cascade</h2>
+              <label className="toggle">
+                <input type="checkbox" checked={hiringFilterView} onChange={(e) => setHiringFilterView(e.target.checked)} disabled={!snap.targets.length} />
+                <span className="toggle-track" aria-hidden="true" />
+                Hiring-filter view
+              </label>
+              <button type="button" className="btn btn-quiet btn-sm" disabled={!snap.graph.edges.length} onClick={() => setReplayToken((t) => t + 1)}>Replay cascade</button>
+            </div>
+            {snap.graph.nodes.length > 0 && (
+              <p className="centre-legend">Top half: the dated change; pips count dated sources. Bottom half: the predicted need; pips show confidence out of 6.</p>
+            )}
             {ask && backend && runId && (
               <AskCard ask={ask} onAnswer={(a) => act('ask', () => backend.answer(runId, ask.id, a))} busy={busy === 'ask'} />
             )}

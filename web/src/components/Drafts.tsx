@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Approval, Draft, RunSnapshot, Target } from '../../../shared/types.ts';
+import type { Approval, DeliveryReceipt, Draft, RunSnapshot, Target } from '../../../shared/types.ts';
 import { fmtDate } from '../dates.ts';
 import type { UIState } from '../state.ts';
 import { shortKey } from '../state.ts';
@@ -31,7 +31,7 @@ function Body(props: { text: string; draft: Draft; onHover: (id: string | null) 
   );
 }
 
-function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][string]; onDecide: (id: string, d: 'approve' | 'reject') => void; busy: boolean }) {
+function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][string]; receipt?: DeliveryReceipt; onDecide: (id: string, d: 'approve' | 'reject') => void; busy: boolean }) {
   const { ap, note } = props;
   const isMsg = ap.kind === 'send_message';
   const label = isMsg ? 'Approve and send to test inbox' : 'Approve meeting hold (test mode)';
@@ -49,6 +49,8 @@ function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][s
         <div className="approval-done">
           {note?.kind === 'duplicate' ? (
             <p className="approval-note is-dup">Already sent, key <code>{shortKey(note.key)}</code>, not sent again</p>
+          ) : props.receipt?.status === 'already_delivered' ? (
+            <p className="approval-note is-already">Already delivered, skipped, key <code>{shortKey(props.receipt.idempotencyKey)}</code></p>
           ) : (
             <p className="approval-note is-sent">{isMsg ? 'Sent once to test inbox' : 'Meeting hold booked once (test mode)'}, key <code>{shortKey(ap.idempotencyKey)}</code></p>
           )}
@@ -66,6 +68,7 @@ function Decider({ t }: { t: Target }) {
     <div className="decider">
       <p className="decider-name">{d.name}<span>{d.title}{d.tenureSince ? `, since ${fmtDate(d.tenureSince, { year: true })}` : ''}</span></p>
       <p className="decider-reason">{d.reason}</p>
+      {t.testedClaim && <p className="tested">Replay tests for <b>{t.testedClaim}</b></p>}
       {t.path && (
         <p className={`path path-${t.path.strength}`}>
           <span className="path-strength">{t.path.strength === 'warm' ? 'Warm path' : t.path.strength === 'lukewarm' ? 'Lukewarm path' : 'Cold'}</span>
@@ -147,7 +150,7 @@ export function DraftsTab(props: {
           <div className="approvals">
             {approvals.length === 0 && <p className="muted">Approvals are created at the approval gate.</p>}
             {approvals.map((ap) => (
-              <ApprovalControls key={ap.id} ap={ap} note={actionNotes[ap.id]} onDecide={props.onDecide} busy={props.busy === ap.id} />
+              <ApprovalControls key={ap.id} ap={ap} note={actionNotes[ap.id]} receipt={props.state.receipts[ap.id]} onDecide={props.onDecide} busy={props.busy === ap.id} />
             ))}
           </div>
         </aside>

@@ -96,6 +96,10 @@ export function EvidenceDrawer(props: {
         </p>
         <h3>{c?.title ?? name(selection.id)}</h3>
         {(t?.need ?? c?.need) && <p className="drawer-text">{t?.need ?? c?.need}{c?.conf != null && <>, <b className="num">{Math.round((t?.confidence ?? c.conf) * 100)}%</b> confidence</>}</p>}
+        {t?.hold && (
+          <div className="drawer-hold"><span>On hold, never drafted or sent</span><ul>{t.hold.reasons.map((r) => <li key={r}>{r}</li>)}</ul></div>
+        )}
+        {t?.testedClaim && <p className="drawer-formula">Replay tests for {t.testedClaim}</p>}
         {t?.whyNow && <p className="drawer-text">Why now: {t.whyNow}{t.whyNowDate ? `, ${fmtDate(t.whyNowDate)}` : ''}</p>}
         {incoming.map((e) => (
           <button key={e.id} type="button" className="drawer-link" onClick={() => props.onSelect({ kind: 'edge', id: e.id })}>

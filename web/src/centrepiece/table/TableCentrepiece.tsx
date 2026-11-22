@@ -8,8 +8,8 @@ import type { CentrepieceModule, CentrepieceProps } from '../contract.ts';
 import { fmtRange } from '../../dates.ts';
 import './table.css';
 
-const W = 150;            // tile width (viewBox units)
-const H = 260;            // tile height
+const W = 156;            // tile width (viewBox units)
+const H = 296;            // tile height (a real domino is 1:2)
 const HALF = H / 2;
 const COL_GAP = 210;      // room for the edge label between columns
 const ROW_GAP = 40;
@@ -59,11 +59,11 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
   cols.forEach((col, ci) =>
     col.forEach((n) => {
       const row = rowOf.get(n.id)!;
-      placed.set(n.id, { node: n, col: ci, row, x: PAD + ci * (W + COL_GAP), y: PAD + 40 + row * (H + LABEL + ROW_GAP) });
+      placed.set(n.id, { node: n, col: ci, row, x: PAD + ci * (W + COL_GAP), y: PAD + row * (H + LABEL + ROW_GAP) });
     }),
   );
   const vw = PAD * 2 + Math.max(1, cols.length) * W + Math.max(0, cols.length - 1) * COL_GAP + 70;
-  const vh = PAD * 2 + 40 + rows * (H + LABEL) + (rows - 1) * ROW_GAP;
+  const vh = PAD * 2 + rows * (H + LABEL) + (rows - 1) * ROW_GAP;
   return { placed, vw, vh };
 }
 
@@ -91,13 +91,15 @@ function pips(count: number, cy: number) {
 }
 
 function nodeChange(n: GraphNode, snap: RunSnapshot, evById: Map<string, Evidence>) {
-  const trigs = snap.triggers.filter((t) => n.triggerIds.includes(t.id)).sort((a, b) => a.date.localeCompare(b.date));
+  // The primary change is the trigger with the most evidence (a talent move spans several dated hires).
+  const trigs = snap.triggers.filter((t) => n.triggerIds.includes(t.id))
+    .sort((a, b) => b.evidenceIds.length - a.evidenceIds.length || a.date.localeCompare(b.date));
   const dated = n.evidenceIds.map((id) => evById.get(id)).filter((e): e is Evidence => !!e && !!e.observedAt && e.verifiable);
-  const text = trigs[0]?.summary ?? dated[0]?.claim ?? 'Change recorded';
-  const dates = trigs.length ? trigs.flatMap((t) => [t.date]) : dated.map((e) => e.observedAt);
-  // A talent move spans several dated hires: show their range.
-  const rangeDates = trigs.length === 1 ? dated.filter((e) => trigs[0].evidenceIds.includes(e.id)).map((e) => e.observedAt) : dates;
-  return { text, date: fmtRange(rangeDates.length ? rangeDates : dates), datedCount: dated.length };
+  const primary = trigs[0];
+  const text = primary?.summary ?? dated[0]?.claim ?? 'Change recorded';
+  const primaryDates = primary ? primary.evidenceIds.map((id) => evById.get(id)?.observedAt).filter(Boolean) : [];
+  const date = fmtRange(primaryDates.length ? primaryDates : primary ? [primary.date] : dated.map((e) => e.observedAt));
+  return { text, date, datedCount: dated.length };
 }
 
 function Tile(props: {
@@ -131,7 +133,7 @@ function Tile(props: {
         <rect className="tile-bevel" x={p.x + 3} y={p.y + 3} width={W - 6} height={H - 6} rx={11} />
         <rect className="tile-ring" x={p.x - 5} y={p.y - 5} width={W + 10} height={H + 10} rx={18} />
         <g transform={`translate(${p.x} ${p.y})`}>
-          <foreignObject x={12} y={12} width={W - 24} height={HALF - 34}>
+          <foreignObject x={12} y={14} width={W - 24} height={HALF - 38}>
             <div className="tile-top">
               <div className="tile-name">{n.name}</div>
               <div className="tile-change">{change.text}</div>
@@ -142,7 +144,7 @@ function Tile(props: {
           <rect className="tile-divider" x={14} y={HALF - 2} width={W - 28} height={4} rx={2} />
           <circle className="tile-spinner" cx={W / 2} cy={HALF} r={4.5} />
           {pips(confPips, HALF + 15)}
-          <foreignObject x={12} y={HALF + 28} width={W - 24} height={HALF - 38}>
+          <foreignObject x={12} y={HALF + 30} width={W - 24} height={HALF - 42}>
             <div className="tile-bottom">
               {conf == null ? (
                 <div className="tile-need tile-blank">Trigger only, not a target</div>

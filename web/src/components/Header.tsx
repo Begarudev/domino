@@ -112,7 +112,7 @@ function Meter(props: { label: string; used: string; limit: string; frac: number
 }
 
 export function StatusLine(props: {
-  snap: RunSnapshot; mock: boolean; connected: boolean; hasRun: boolean; onLower: (l: Partial<RunLimits>) => void;
+  snap: RunSnapshot; mock: boolean; connected: boolean; hasRun: boolean; fallbacks: number; onLower: (l: Partial<RunLimits>) => void;
 }) {
   const { snap, mock } = props;
   const b = snap.budget;
@@ -124,6 +124,11 @@ export function StatusLine(props: {
     <div className="status">
       {mock && <span className="badge badge-mock" title="Recorded mock stream; the server is not connected">Mock data</span>}
       <span className={`badge badge-${snap.dataMode}`}>{dataModeText(snap)}</span>
+      {snap.dataMode === 'live' && props.fallbacks > 0 && (
+        <span className="badge badge-cache" title="Live calls that failed after retries were answered from the response cache">
+          Cached live responses for {props.fallbacks} call{props.fallbacks > 1 ? 's' : ''}
+        </span>
+      )}
       <span className="status-llm">{llmText(snap.llm)}</span>
       {!props.connected && <span className="badge badge-warn">Reconnecting to the event stream</span>}
       <div className="meters">

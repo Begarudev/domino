@@ -179,21 +179,22 @@ function world(kind: ScenarioKind) {
   };
 
   const targets: Target[] = [
-    { companyId: CO.orbital, rank: 1, score: 0.84, confidence: 0.81, need: 'Managed inference: buy, since the serving team is gone', mechanisms: ['TALENT_DRAIN', 'CAPITAL'], netNew: true, whyNow: '3 serving engineers left in three weeks; no open serving roles', whyNowDate: D.moves[2], decider: null, path: null, draftId: null },
-    { companyId: CO.tessera, rank: 2, score: 0.77, confidence: 0.74, need: 'Migrate off Lumen Serve before 31 Jan', mechanisms: ['DISPLACEMENT', 'CAPITAL'], netNew: true, whyNow: 'Its provider was acquired and sunsets new workloads', whyNowDate: D.lumenAcq, decider: null, path: null, draftId: null },
-    { companyId: CO.nimbus, rank: 3, score: 0.6, confidence: 0.58, need: 'Managed inference instead of a GPU hire', mechanisms: ['CONTAGION'], netNew: true, whyNow: 'Peer lost its serving team; closed its own GPU post', whyNowDate: D.nimbusClosed, decider: null, path: null, draftId: null },
-    { companyId: CO.kestrel, rank: 4, score: 0.52, confidence: 0.55, need: 'Inference platform, already hiring for it', mechanisms: ['DIRECT'], netNew: false, whyNow: "Posted 'Inference Platform Engineer'", whyNowDate: D.kestrelPost, decider: null, path: null, draftId: null },
+    { testedClaim: 'serving staffing activity at Orbital Voice within 60 days', companyId: CO.orbital, rank: 1, score: 0.84, confidence: 0.81, need: 'Managed inference: buy, since the serving team is gone', mechanisms: ['TALENT_DRAIN', 'CAPITAL'], netNew: true, whyNow: '3 serving engineers left in three weeks; no open serving roles', whyNowDate: D.moves[2], decider: null, path: null, draftId: null },
+    { testedClaim: 'an inference provider change or migration hire at Tessera Health AI within 60 days', companyId: CO.tessera, rank: 2, score: 0.77, confidence: 0.74, need: 'Migrate off Lumen Serve before 31 Jan', mechanisms: ['DISPLACEMENT', 'CAPITAL'], netNew: true, whyNow: 'Its provider was acquired and sunsets new workloads', whyNowDate: D.lumenAcq, decider: null, path: null, draftId: null },
+    { testedClaim: 'inference or ML serving hiring at Nimbus Docs within 60 days', companyId: CO.nimbus, rank: 3, score: 0.6, confidence: 0.58, need: 'Managed inference instead of a GPU hire', mechanisms: ['CONTAGION'], netNew: true, whyNow: 'Peer lost its serving team; closed its own GPU post', whyNowDate: D.nimbusClosed, decider: null, path: null, draftId: null },
+    { companyId: CO.quill, rank: 5, score: 0.31, confidence: 0.34, need: 'Possibly the same migration as its peer', mechanisms: ['CONTAGION'], netNew: true, whyNow: 'Headcount up 12% in three months', whyNowDate: D.quillHeadcount, decider: null, path: null, draftId: null, hold: { reasons: ['Ambiguous company id: two companies named Quill', 'Peer link dated by month only, cannot settle the 30-day window'] }, testedClaim: 'inference hiring or provider change at Quill Legal AI within 60 days' },
+    { testedClaim: 'more inference platform hiring at Kestrel Labs within 60 days', companyId: CO.kestrel, rank: 4, score: 0.52, confidence: 0.55, need: 'Inference platform, already hiring for it', mechanisms: ['DIRECT'], netNew: false, whyNow: "Posted 'Inference Platform Engineer'", whyNowDate: D.kestrelPost, decider: null, path: null, draftId: null },
   ];
 
   const drafts: Draft[] = [
     {
       id: 'dr_orbital', companyId: CO.orbital, personId: 'pe_anika', generator: 'llm:claude-sonnet-5-5', verified: true,
       subject: 'Serving capacity after the Series A',
-      body: `Hi Anika, congratulations on the $22M Series A in ${fmtDate(D.orbitalFunding, { year: false })} [1]. I noticed Orbital Voice has no open inference or serving roles right now [2], while engineering headcount moved 6% in a month [3]. We run managed GPU inference for voice models, so your team ships features instead of operating clusters. Worth 20 minutes next week?`,
+      body: `Hi Anika, congratulations on closing the $22M Series A on ${fmtDate(D.orbitalFunding)} [1]. I noticed Orbital Voice has no open inference or serving roles right now [2], while engineering headcount moved 6% in a month [3]. We run managed GPU inference for voice models, so your team ships features instead of operating clusters. Worth 20 minutes next week?`,
       citations: [{ marker: 1, evidenceId: 'ev_o4' }, { marker: 2, evidenceId: 'ev_o2' }, { marker: 3, evidenceId: 'ev_o1' }],
       unverifiable: [{ claim: "Orbital Voice's current GPU provider", reason: 'Only an undated forum post names it; no dated source.' }],
       checks: [
-        { sentence: 'Hi Anika, congratulations on the $22M Series A [1].', status: 'cited', evidenceIds: ['ev_o4'] },
+        { sentence: `Hi Anika, congratulations on closing the $22M Series A on ${fmtDate(D.orbitalFunding)} [1].`, status: 'cited', evidenceIds: ['ev_o4'] },
         { sentence: 'I noticed Orbital Voice has no open inference or serving roles right now [2], while engineering headcount moved 6% in a month [3].', status: 'cited', evidenceIds: ['ev_o2', 'ev_o1'] },
         { sentence: 'Your current GPU provider has been raising prices this quarter.', status: 'removed', evidenceIds: [], note: 'No evidence row supports a price change or names the provider.' },
         { sentence: 'We run managed GPU inference for voice models, so your team ships features instead of operating clusters.', status: 'no_claim', evidenceIds: [] },
@@ -361,8 +362,10 @@ export function buildScenario(kind: ScenarioKind, request: string, runId: string
 
   // ---- rank_targets ----
   begin('rank_targets');
-  push(300, { type: 'targets.ranked', targets: w.targets, baseline: { hiringFilterCompanyIds: [CO.kestrel] } });
-  end('4 targets; 3 of them a hiring filter would miss', 210);
+  push(300, { type: 'targets.ranked', targets: [...w.targets].sort((a, b) => a.rank - b.rank).map((t) => ({ ...t, hold: null })), baseline: { hiringFilterCompanyIds: [CO.kestrel] } });
+  const held = w.targets.find((t) => t.hold)!;
+  push(260, { type: 'target.held', companyId: held.companyId, reasons: held.hold!.reasons });
+  end('5 targets, 1 on hold; 4 of them a hiring filter would miss', 210);
 
   // ---- find_deciders / warm_paths / drafts ----
   if (!replay) {
@@ -452,6 +455,8 @@ function replayScore(outcomes: ReplayOutcome[]): ReplayScore {
     baselineFirstOrder: { predicted: 1, hits: 1, precision: 1, medianLeadDays: 13 },
     baselineHeadcount: { predicted: 3, hits: 1, precision: 0.33, medianLeadDays: 13 },
     outcomes,
+    snapshotLabel: "Not point-in-time: today's Crustdata index, filtered to facts dated on or before 1 Sep",
+    outcomeDefinition: 'A hit is a dated inference, serving or ML platform job post or hire at the company between 2 Sep and 22 Nov. Fixed before any outcome was looked at.',
     note: 'The hiring filter was right on its only pick, which was already hiring. DOMINO found two accounts the filter never returned, a median 25 days before they posted. Nimbus Docs has not moved yet. Three predictions is a small sample.',
   };
 }
