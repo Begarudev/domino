@@ -30,8 +30,8 @@ export function useRun(backend: Backend | null) {
     history.replaceState(null, '', url);
     unsub.current = backend.subscribe(id, 0, (events: StoredEvent[]) => {
       dispatch({ type: 'events', events });
-      // The server snapshot stays authoritative: re-fetch it whenever the run changes status.
-      if (!backend.mock && events.some((e) => e.event.type === 'run.status' || e.event.type === 'step.completed')) {
+      // The server snapshot stays authoritative: re-fetch it whenever the run changes status or the test inbox answers.
+      if (!backend.mock && events.some((e) => ['run.status', 'step.completed', 'delivery.receipt'].includes(e.event.type))) {
         if (refetch.current) clearTimeout(refetch.current);
         refetch.current = setTimeout(() => {
           backend.loadRun(id).then((s) => dispatch({ type: 'snapshot', snap: s })).catch(() => {});

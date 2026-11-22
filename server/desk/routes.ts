@@ -20,10 +20,15 @@ import {
 } from './store.ts';
 import type { IntroRow, OpeningsSnapshot } from './store.ts';
 
+// The send-once proof's fault injection (scripts/send-once-proof.ts); /api/runs accepts the same flag.
+type InjectedChaos = { crashAfterDeliver?: boolean };
+
 export interface DeskDeps {
   store: Store;
   // Creates a run of the given pipeline and forks its engine worker; returns the run id.
-  launch(pipeline: Pipeline, request: string, options?: { limits?: Partial<RunLimits>; dataMode?: 'live' | 'cache' | 'fixture' }): string;
+  launch(pipeline: Pipeline, request: string, options?: {
+    limits?: Partial<RunLimits>; dataMode?: 'live' | 'cache' | 'fixture'; chaos?: InjectedChaos;
+  }): string;
 }
 
 const consentSchema = z.object({
@@ -77,7 +82,8 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     };
   };
 
-  const startIntro = (direction: IntroRow['direction'], candidate: Candidate, opening: Opening, snapshot: OpeningsSnapshot) => {
+  const startIntro = (direction: IntroRow['direction'], candidate: Candidate, opening: Opening, snapshot: OpeningsSnapshot,
+    chaos?: InjectedChaos) => {
     // One intro per direction, candidate and opening: a repeated request returns the existing one.
     const existing = listIntroRows(store, { candidateId: candidate.id })
       .find(row => row.direction === direction && row.openingId === opening.id && row.runId);
@@ -85,7 +91,7 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const id = shortId('in');
     insertIntro(store, { id, direction, candidateId: candidate.id, companyId: opening.companyId, openingId: opening.id,
       openingsRunId: snapshot.runId });
-    setIntroRun(store, id, launch('intro', `intro:${id}`));
+    setIntroRun(store, id, launch('intro', `intro:${id}`, { chaos }));
     return { intro: introView(listIntroRows(store, { candidateId: candidate.id }).find(row => row.id === id)!), created: true };
   };
 
@@ -203,13 +209,14 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const candidate = loadCandidate(c.req.param('id'));
     if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
     if (candidate.status !== 'ready' || !candidate.confirmedAt) return c.json({ error: 'Confirm your profile before requesting an intro' }, 409);
-    const body = z.object({ openingId: z.string().min(1) }).safeParse(await c.req.json().catch(() => null));
+    const body = z.object({ openingId: z.string().min(1), chaos: z.object({ crashAfterDeliver: z.boolean().optional() }).strict().optional() })
+      .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: 'Expected openingId' }, 400);
     const snapshot = openingsSnapshot(store);
     const opening = snapshot?.openings.find(item => item.id === body.data.openingId);
     if (!snapshot || !opening) return c.json({ error: 'Opening not found in the latest scan' }, 404);
     if (opening.status === 'held') return c.json({ error: 'Held: not an opening' }, 409);
-    const { intro, created } = startIntro('candidate_to_company', candidate, opening, snapshot);
+    const { intro, created } = startIntro('candidate_to_company', candidate, opening, snapshot, body.data.chaos);
     return c.json(intro, created ? 201 : 200);
   });
 

@@ -7,7 +7,7 @@ const base = (over: Partial<RunSnapshot>): RunSnapshot => ({
   id: 'run_x', request: '', status: 'awaiting_approval', dataMode: 'fixture', llm: 'template', createdAt: '', updatedAt: '',
   intent: null, steps: [], budget: { limits: { maxCredits: 1, maxModelUsd: 1, maxSeconds: 1 }, used: { credits: 0, modelUsd: 0, seconds: 0 }, exhausted: null },
   companies: [], people: [], triggers: [], merges: [], keptApart: [], graph: { nodes: [], edges: [] }, targets: [], drafts: [],
-  evidence: [], approvals: [], outbox: [], ledger: [], asks: [], baseline: { hiringFilterCompanyIds: [] },
+  evidence: [], approvals: [], outbox: [], receipts: [], ledger: [], asks: [], baseline: { hiringFilterCompanyIds: [] },
   engine: { pid: null, alive: false, crashes: 0, resumes: 0 }, replay: null, ...over,
 } as RunSnapshot);
 

@@ -322,7 +322,8 @@ a { color: var(--cobalt-text); }
 .approval { display: grid; gap: 6px; padding: 10px; border-radius: 8px; background: var(--walnut-deep); border: 1px solid var(--hair-soft); }
 .approval-kind { font-size: 12.5px; color: var(--text-2); font-weight: 600; }
 .approval-btns { display: flex; gap: 8px; }
-.approval-done { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.approval-done { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; justify-content: space-between; }
+.approval-note.is-receipt { flex-basis: 100%; order: 1; color: var(--text-2); }
 .approval-note { font-size: 13px; }
 .approval-note.is-sent { color: var(--verified-text); }
 .approval-note.is-dup { color: var(--amber); }
