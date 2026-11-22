@@ -55,6 +55,8 @@ export interface Opening {
   holdReasons?: string[];           // status 'held': acqui-hire, shared parent, >40% moving, ambiguous id, month-only dates,
                                     // unrecognised titles, possible restructure (headcount down >10% / layoff news)
   watch?: { have: number; need: number; reason?: string }; // status 'watch' (e.g. stale job data: can't verify no replacement)
+  provisional?: boolean;            // open, but the 30-day no-replacement leg is not settled yet (month-level dates)
+  windowClosesBy?: IsoDate | null;  // provisional: the date by which the replacement window closes ("closes by 30 Nov")
   evidenceIds: string[];
   runId: string;                    // the openings scan run that produced it
 }
