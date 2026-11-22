@@ -119,9 +119,7 @@ Other scripts: `bun run dev` (hot-reload UI and server), `bun run probe` (checks
 
 ## Architecture, data, state and hosting
 
-![DOMINO architecture](docs/architecture.png)
-
-Same diagram as Mermaid (GitHub renders it; source in [`docs/architecture.mmd`](docs/architecture.mmd)):
+Rendered by GitHub from [`docs/architecture.mmd`](docs/architecture.mmd):
 
 ```mermaid
 flowchart LR
