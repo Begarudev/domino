@@ -76,7 +76,7 @@ function read<T>(query: (db: DatabaseSync) => T) {
   }
 }
 
-const normalize = (value: unknown) => JSON.parse(JSON.stringify(value).replace(/ev_[0-9a-f]{24}/g, 'ev_fixture'));
+const normalize = (value: unknown) => JSON.parse(JSON.stringify(value).replace(/ev_[0-9a-f]{24,32}\b/g, 'ev_fixture'));
 let uninterrupted: RunSnapshot;
 
 test('concurrent approve writes one test-mode message, records the duplicate, and completes all decisions', async () => {
@@ -231,4 +231,47 @@ test('health exposes the cache count and newest fetch time', async () => {
   const expected = read(db => db.prepare('SELECT count(*) AS cacheRows, max(fetched_at) AS cacheFetchedAt FROM tool_cache').get());
   assert.equal(health.cacheRows, expected?.cacheRows);
   assert.equal(health.cacheFetchedAt, expected?.cacheFetchedAt);
+});
+
+test('receiver commits before dispatcher SIGKILL and run resume reconciles only one delivery', async () => {
+  const { id } = await create({ chaos: { crashAfterDeliver: true } });
+  const ready = await state(id, waiting);
+  const send = ready.approvals.find(approval => approval.kind === 'send_message')!;
+  const actionUrl = `/api/approvals/${send.id}`;
+  const interrupted = await fetch(base + actionUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"decision":"approve"}',
+  });
+  assert.equal(interrupted.status, 202);
+  assert.equal((await interrupted.json()).pending, true);
+  const key = send.idempotencyKey;
+  const inbox = () => read(db => db.prepare('SELECT * FROM inbox_received WHERE idempotency_key = ?').all(key));
+  const receiverRows = inbox();
+  assert.equal(receiverRows.length, 1);
+  assert.match(receiverRows[0].payload_json as string, /domino\.invalid/);
+  const sender = () => read(db => db.prepare('SELECT status, executed_at FROM outbox WHERE idempotency_key = ?').get(key));
+  assert.equal(sender()?.status, 'pending');
+  assert.equal(sender()?.executed_at, null);
+  assert.equal((await get(id)).outbox.length, 0);
+  assert.equal((await get(id)).approvals.find(row => row.id === send.id)?.status, 'pending');
+
+  const resume = await http<{ pid: number }>(`/api/runs/${id}/resume`, {});
+  assert(resume.pid > 0);
+  const recovered = await state(id, snap => snap.outbox.length === 1);
+  assert.equal(recovered.approvals.find(row => row.id === send.id)?.status, 'approved');
+  assert.equal(sender()?.status, 'delivered');
+  assert.deepEqual(inbox(), receiverRows);
+  const rows = read(db => db.prepare(`SELECT payload_json FROM events WHERE run_id = ? AND type = 'delivery.receipt'`).all(id));
+  assert.equal(rows.length, 1);
+  const receipt = JSON.parse(rows[0].payload_json as string);
+  assert.equal(receipt.receipt.status, 'already_delivered');
+  assert.equal(receipt.receipt.receivedAt, receiverRows[0].received_at);
+  assert.deepEqual(await http(actionUrl, { decision: 'approve' }), { duplicate: true });
+});
+
+test('zero seconds stops the worker before its first step or tool call', async () => {
+  const { id } = await create({ limits: { maxSeconds: 0 } });
+  const limited = await state(id, snap => snap.status === 'budget_exhausted' && !snap.engine.alive);
+  assert.equal(limited.budget.exhausted, 'seconds');
+  assert(limited.steps.every(step => step.status === 'pending'));
+  assert.equal(limited.ledger.length, 0);
 });

@@ -23,7 +23,18 @@ const specs = [
 
 export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, SourceResult>, input: I, time: SourceTime) {
   const raw = await ctx.crust(spec, input, time, deps.fixtureFor);
-  const ids = new Map(raw.evidence.map(row => [row.id, `ev_${hash(`${ctx.runId}|${spec.name}|${spec.path}|${row.mode}|${row.id}`).slice(0, 24)}`]));
+  const previous = ctx.store.sql.prepare(`SELECT evidence.id, json_extract(evidence.json, '$.mode') AS mode,
+    json_extract(evidence_sources.json, '$.rawId') AS rawId FROM evidence JOIN evidence_sources USING (id)
+    WHERE evidence.run_id = ? AND json_extract(evidence_sources.json, '$.endpoint') = ?
+      AND coalesce(json_extract(evidence_sources.json, '$.path'), ?) = ?`)
+    .all(ctx.runId, spec.name, spec.path, spec.path);
+  const existing = new Map(previous.map(row => [`${row.mode}|${row.rawId}`, row.id as string]));
+  const suffix = hash(ctx.runId).slice(0, 16);
+  const ids = new Map(raw.evidence.map(row => {
+    const identity = `${row.mode}|${row.id}`;
+    // Keep ordering stable across runs for domain tie-breaks while scoping each row to one run.
+    return [row.id, existing.get(identity) ?? `ev_${hash(`${spec.name}|${spec.path}|${identity}`).slice(0, 16)}${suffix}`];
+  }));
   const sources = new Map<string, EvidenceSource>();
   const evidence = raw.evidence.map(item => {
     const id = ids.get(item.id)!;
