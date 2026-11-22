@@ -17,9 +17,12 @@ export const jobCompanyFields = {
 const displacementEvents = (sellerJson as SellerProfile).displacementEvents;
 /** A provider event stays actionable for this many days; the naming job post must be dated on or after the event. */
 export const DISPLACEMENT_EVENT_DAYS = 90;
-export const DISPLACEMENT_LIMIT = 100;
-// A product named only as an employer background, an investor or a sponsor is not an integration.
-const notAnIntegration = /\b(?:background (?:at|in)|experience at|worked at|alumni of|invest(?:ed|ment|or)s?|led by|backed by|powered by|partner(?:ship)? with|acquired by)\b[^.;\n]{0,80}$/i;
+export const DISPLACEMENT_LIMIT = 300;
+// A product counts as the employer's own stack only when its sentence reads as usage. Sentences that name it as a
+// background, a prospect, a partner, an investor or a sponsor do not, and neither do sales or recruiting postings.
+const usageCue = /\b(?:we use|we run|our (?:stack|infrastructure|clusters?|platform|gpus?)|work(?:ing)? with|using|use of|deploy(?:ing|ment)?|run(?:ning)? (?:on|across)|across providers|hands-on|experience (?:with|in|using)|familiar(?:ity)? with|manag(?:e|ing)|maintain(?:ing)?|operat(?:e|ing)|integrat(?:e|ion|ing)|serving|inference engines?)\b|d[ée]ploi|inf[ée]rence/i;
+const notUsage = /\b(?:background (?:at|in)|experience at|worked at|alumni|sell(?:ing)?|sales|customers?|clients? such as|partners?(?:hip)?|win(?:ning)?|invest(?:ed|ment|ors?)|led by|backed by|powered by|academy|on behalf of|acquired by)\b/i;
+const nonTechnicalTitle = /\b(?:sales|account (?:executive|manager)|business development|partnerships?|recruit(?:er|ing)?|marketing|guard|security officer|accountant|accounting)\b/i;
 const staffingIndustry = /\b(?:staffing|recruit|employment|human resources)/i;
 
 const jobResponse = z.object({
@@ -46,14 +49,21 @@ export function activeEvents(asOf: IsoDate, fixture = false) {
     (!event.fixtureOnly || fixture));
 }
 
-/** The first mention of the product that reads as the employer's own stack, or null. */
-export function productMention(description: string, product: string): string | null {
+/** The sentence naming the product when it reads as the employer's own stack, or null. */
+export function productMention(description: string, product: string, title = ''): string | null {
+  if (nonTechnicalTitle.test(title)) return null;
   const lower = description.toLowerCase();
   const needle = product.toLowerCase();
   for (let at = lower.indexOf(needle); at >= 0; at = lower.indexOf(needle, at + needle.length)) {
     if (!containsPhrase(description.slice(Math.max(0, at - 1), at + needle.length + 1), product)) continue;
-    if (notAnIntegration.test(description.slice(Math.max(0, at - 120), at))) continue;
-    return description.slice(Math.max(0, at - 90), at + needle.length + 60).replace(/\s+/g, ' ').trim();
+    const before = description.slice(0, at);
+    const start = Math.max(before.lastIndexOf('. '), before.lastIndexOf('\n'), before.lastIndexOf('•'), before.lastIndexOf(';'), at - 240) + 1;
+    const tail = description.slice(at + needle.length);
+    const stop = tail.search(/\.\s|\n|•|;/);
+    const sentence = description.slice(start, at + needle.length + (stop < 0 ? Math.min(tail.length, 160) : Math.min(stop, 160)))
+      .replace(/\s+/g, ' ').trim();
+    if (notUsage.test(sentence) || !usageCue.test(sentence)) continue;
+    return sentence.length > 220 ? sentence.slice(Math.max(0, sentence.toLowerCase().indexOf(needle) - 110)).slice(0, 220) : sentence;
   }
   return null;
 }
@@ -110,7 +120,7 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
     const infra = matchesSignal(title, intent.signalKeywords) || matchesSignal(description, intent.signalKeywords);
     const staffing = (row.company?.basic_info?.industries ?? []).some(industry => staffingIndustry.test(industry ?? ''));
     const products = staffing ? [] : events.flatMap(event => {
-      const excerpt = day ? productMention(description, event.product) : null;
+      const excerpt = day ? productMention(description, event.product, title) : null;
       return excerpt ? [{ event, excerpt }] : [];
     });
     if (!infra && !products.length) continue;

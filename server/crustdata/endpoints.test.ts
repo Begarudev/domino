@@ -58,6 +58,10 @@ test('a product named only as employer background or an investor is not an integ
   assert.equal(productMention('We secured strategic investment led by Nebius Group.', 'Nebius'), null);
   assert.match(productMention('You will work with cloud compute clusters (Lambda, Nebius, AWS).', 'Nebius')!, /Nebius/);
   assert.equal(productMention('Chromatic aberration', 'Chroma'), null);
+  assert.equal(productMention('Nebius Academy (powered by TripleTen) provides assessments.', 'Nebius'), null);
+  assert.equal(productMention('Track record selling to neoclouds (e.g., Vultr, Nebius, Crusoe).', 'Nebius', 'Senior NeoCloud Sales Director'), null);
+  assert.equal(productMention('360talent werft een Office Guard voor Nebius in Amsterdam.', 'Nebius', 'Office Guard Nebius'), null);
+  assert.match(productMention('Experience with vLLM, Text Generation Inference (TGI) or SGLang.', 'Text Generation Inference')!, /TGI/);
 });
 
 test('person_recent_moves pairs current starts with the nearest prior end and keeps no contact fields', () => {
