@@ -28,7 +28,7 @@
 .funnel > div:hover { background: var(--row-hover); }
 .funnel > div.on { background: var(--hover); }
 .funnel > div:last-child { border-right: 0; }
-.funnel b { display: block; font-family: var(--sans); font-weight: 600; font-size: 24px; line-height: 32px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.funnel b { display: block; font-family: var(--sans); font-weight: 600; font-size: 24px; line-height: 32px; letter-spacing: -.02em; font-variant-numeric: normal; }
 .funnel span { color: var(--ink-2); font-size: 13px; line-height: 16px; display: block; min-height: 32px; }
 .funnel .rd-bar { height: 3px; background: var(--rule-2); margin-top: 8px; border-radius: 2px; overflow: hidden; }
 .funnel .rd-bar i { display: block; height: 100%; width: 100%; background: var(--ink-2); transform-origin: left center; transition: transform 250ms var(--ease); }
@@ -65,7 +65,7 @@
 .rd-table { table-layout: fixed; font-size: 13.5px; }
 .rd-table td { padding-top: 8px; padding-bottom: 8px; line-height: 18px; }
 .rd-date, .rd-dom { font-family: var(--mono); font-size: 12px; letter-spacing: -.01em; }
-.rd-table .c-src { width: 128px; }
+.rd-table .c-src { width: 116px; }
 .rd-table .c-date { width: 110px; }
 .rd-table .c-dom { width: 140px; }
 .rd-table .c-dec { width: 132px; }

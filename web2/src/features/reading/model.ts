@@ -44,17 +44,17 @@ export const shortLabel = (s: FunnelStage) => (SHORT[s.id] ? SHORT[s.id][s.count
 
 /** Why a person row present in the previous stage is absent from this one: the stage's own rule clause. */
 const DROP_REASON: Record<string, string> = {
-  departures: 'not a direct move out of a tracked engineering family',
-  window: 'departure month outside the 90-day window',
-  icp: 'company outside 20–5,000 staff, or size unknown',
-  groups: 'fewer than 2 departures in this company and family',
+  departures: 'not a direct move out of a tracked family',
+  window: 'month outside the 90-day window',
+  icp: 'company size outside 20–5,000, or unknown',
+  groups: 'only 1 departure in this company and family',
 };
 /** Why a person row passed: the same clause, met. */
 const KEEP_REASON: Record<string, string> = {
-  departures: 'direct move out of a tracked engineering family',
-  window: 'departure month inside the 90-day window',
+  departures: 'direct move out of a tracked family',
+  window: 'month inside the 90-day window',
   icp: 'company has 20–5,000 staff',
-  groups: '2 or more departures in this company and family',
+  groups: '2+ departures, same company and family',
 };
 
 /** "22 Nov 2026 14:08 IST (month-interval …), before …" -> "22 Nov 2026, 14:08 IST" */
