@@ -2,34 +2,34 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
+
+import { Store } from '../db.ts';
+import { ToolContext } from '../runtime/tool.ts';
+import { modelClient } from './client.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'domino-llm-test-'));
-process.env.DOMINO_DB = join(dir, 'test.db');
-process.env.OPENAI_API_KEY = 'mock-openai-credential';
-process.env.ANTHROPIC_API_KEY = 'mock-anthropic-credential';
-process.env.OPENAI_MODEL = 'configured-openai-model';
-const { Store } = await import('../db.ts');
-const { config } = await import('../env.ts');
-const { ToolContext } = await import('../runtime/tool.ts');
-const { modelClient } = await import('./client.ts');
-const store = new Store();
+const store = new Store(join(dir, 'test.db'));
+const llm = 'openai:configured-openai-model';
+const previousKey = process.env.OPENAI_API_KEY;
+before(() => { process.env.OPENAI_API_KEY = 'mock-openai-credential'; });
 const completion = {
   purpose: 'parse' as const, system: 'Return JSON', user: 'Testing model calls', maxTokens: 1024, json: true,
 };
 
 function create(id: string) {
-  store.createRun(id, 'Fixture test', 'fixture', config.llmLabel, { maxCredits: 10, maxModelUsd: 1, maxSeconds: 30 }, {});
+  store.createRun(id, 'Fixture test', 'fixture', llm, { maxCredits: 10, maxModelUsd: 1, maxSeconds: 30 }, {});
   return modelClient(new ToolContext(store, id, 'parse_request'));
 }
 
 after(() => {
+  if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = previousKey;
   store.sql.close();
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('OpenAI takes precedence and uses Chat Completions with estimated pricing for a custom model', async t => {
-  assert.equal(config.llm, 'openai');
+test('OpenAI uses Chat Completions with estimated pricing for a custom model', async t => {
   const fetch = t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
     assert.equal(url, 'https://api.openai.com/v1/chat/completions');
     assert.equal(new Headers(init.headers).get('authorization'), 'Bearer mock-openai-credential');
@@ -63,7 +63,7 @@ for (const status of [400, 404]) {
     const id = `missing-${status}`;
     assert.equal(await create(id).complete(completion), null);
     assert.equal(store.requireRun(id).llm_hard_failures, 1);
-    assert.equal(store.requireRun(id).llm, config.llmLabel);
+    assert.equal(store.requireRun(id).llm, llm);
     const later = modelClient(new ToolContext(store, id, 'draft_messages'));
     assert.equal(await later.complete({ ...completion, purpose: 'draft' }), null);
     assert.equal(await later.complete({ ...completion, purpose: 'draft' }), null);
@@ -95,5 +95,5 @@ test('a successful OpenAI response resets the persisted hard failure streak', as
   assert.equal(store.requireRun('reset').llm_hard_failures, 0);
   assert.equal(await client.complete(completion), null);
   assert.equal(store.requireRun('reset').llm_hard_failures, 1);
-  assert.equal(store.requireRun('reset').llm, config.llmLabel);
+  assert.equal(store.requireRun('reset').llm, llm);
 });

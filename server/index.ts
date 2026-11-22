@@ -35,7 +35,7 @@ const runSchema = z.object({
   limits: limitsSchema.optional(), chaos: chaosSchema.optional(),
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
 });
-const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>run npm run build:web</p></html>';
+const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>run bun run build:web</p></html>';
 
 export function createApp(store: Store) {
   const app = new Hono();

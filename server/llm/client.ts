@@ -86,9 +86,12 @@ function textResult(text: string, model: string, json?: boolean): Completion {
 export function modelClient(ctx: ToolContext) {
   return {
     async complete({ purpose, system, user, maxTokens, json }: CompletionRequest): Promise<Completion | null> {
-      const provider = config.llm;
-      if (provider === 'template' || ctx.store.requireRun(ctx.runId).llm === 'template') return null;
-      const model = provider === 'anthropic' ? ANTHROPIC_MODEL : config.openaiModel;
+      const { llm } = ctx.store.requireRun(ctx.runId);
+      const [provider, ...modelParts] = llm.split(':');
+      if (provider !== 'openai' && provider !== 'anthropic') return null;
+      const key = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY;
+      if (!key) return null;
+      const model = modelParts.join(':') || (provider === 'anthropic' ? ANTHROPIC_MODEL : config.openaiModel);
       const estimated = provider === 'openai' && !openaiPrice(model);
       const billingModel = estimated ? 'gpt-5-mini' : model;
       system = redactSecrets(json ? system + '\nReply with a single JSON object.' : system);
@@ -153,7 +156,7 @@ export function modelClient(ctx: ToolContext) {
 
               const response = await providerFetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST', signal, redirect: 'error',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
                 body: JSON.stringify({
                   model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
                   max_completion_tokens: maxTokens,

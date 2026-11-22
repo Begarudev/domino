@@ -15,6 +15,7 @@ import { root } from './env.ts';
 const dir = mkdtempSync(join(tmpdir(), 'domino-api-test-'));
 const dbPath = join(dir, 'test.db');
 const outboxPath = join(dir, 'outbox');
+const httpTimeout = { timeout: 20_000 };
 const requestText = 'We sell managed GPU inference. Find AI companies with changes in the last 30 days.';
 let server: ChildProcess;
 let base: string;
@@ -79,7 +80,7 @@ function read<T>(query: (db: DatabaseSync) => T) {
 const normalize = (value: unknown) => JSON.parse(JSON.stringify(value).replace(/ev_[0-9a-f]{24,32}\b/g, 'ev_fixture'));
 let uninterrupted: RunSnapshot;
 
-test('concurrent approve writes one test-mode message, records the duplicate, and completes all decisions', async () => {
+test('concurrent approve writes one test-mode message, records the duplicate, and completes all decisions', httpTimeout, async () => {
   const { id } = await create();
   uninterrupted = await state(id, waiting);
   assert(uninterrupted.targets.length > 0);
@@ -109,7 +110,7 @@ test('concurrent approve writes one test-mode message, records the duplicate, an
   assert.equal(count?.n, 1);
 });
 
-test('SIGKILL and resume reuse exact completed checkpoints and preserve the final output', async () => {
+test('SIGKILL and resume reuse exact completed checkpoints and preserve the final output', httpTimeout, async () => {
   const { id } = await create({ chaos: { timeoutOnce: ['company_enrich'] } });
   await state(id, snap => snap.steps.some(step => step.step === 'enrich_companies' && step.status === 'running'));
   const checkpoints = () => read(db => db.prepare(`SELECT step, attempt, output_json FROM steps WHERE run_id = ?
@@ -135,7 +136,7 @@ test('SIGKILL and resume reuse exact completed checkpoints and preserve the fina
   assert.equal(JSON.parse(rows.find(row => row.type === 'engine.crashed')!.payload_json as string).signal, 'SIGKILL');
 });
 
-test('SSE honors both after and Last-Event-ID and streams stored events in order', async () => {
+test('SSE honors both after and Last-Event-ID and streams stored events in order', httpTimeout, async () => {
   const rows = read(db => db.prepare('SELECT seq FROM events WHERE run_id = ? ORDER BY seq LIMIT 5').all(uninterrupted.id));
   const cursor = rows[1].seq as number;
   const response = await fetch(`${base}/api/runs/${uninterrupted.id}/stream?after=${rows[0].seq}`, {
@@ -164,7 +165,7 @@ test('SSE honors both after and Last-Event-ID and streams stored events in order
   assert.deepEqual(stored, rows.slice(2, 4).map(row => row.seq));
 });
 
-test('asks survive a whole server restart and reuse the same question and answer', async () => {
+test('asks survive a whole server restart and reuse the same question and answer', httpTimeout, async () => {
   const { id } = await create({ request: 'Find AI companies.' });
   const initial = await state(id, snap => snap.status === 'awaiting_input');
   assert.equal(initial.asks.length, 1);
@@ -184,7 +185,7 @@ test('asks survive a whole server restart and reuse the same question and answer
   assert.equal(final.engine.crashes, 1);
 });
 
-test('lowering the time ceiling aborts a worker waiting for input', async () => {
+test('lowering the time ceiling aborts a worker waiting for input', httpTimeout, async () => {
   const { id } = await create({ request: 'Find AI companies.' });
   await state(id, snap => snap.status === 'awaiting_input');
   await http(`/api/runs/${id}/limits`, { maxSeconds: 0 });
@@ -194,7 +195,7 @@ test('lowering the time ceiling aborts a worker waiting for input', async () => 
   assert.equal(limited.asks.length, 1);
 });
 
-test('replay uses only cutoff evidence for prediction and scores both baselines in the horizon', async () => {
+test('replay uses only cutoff evidence for prediction and scores both baselines in the horizon', httpTimeout, async () => {
   const { id } = await create({
     request: 'We sell managed GPU inference. Replay as of 2026-09-01 through 2026-10-01.',
   });
@@ -213,7 +214,7 @@ test('replay uses only cutoff evidence for prediction and scores both baselines 
   assert(scored.evidence.some(row => row.observedAt && row.observedAt > replay.asOf));
 });
 
-test('evidence recheck replays the source and adds a fixture ledger entry', async () => {
+test('evidence recheck replays the source and adds a fixture ledger entry', httpTimeout, async () => {
   const original = uninterrupted.evidence.find(row => row.source.endpoint === '/job/search')!;
   const result = await http<Evidence>(`/api/evidence/${original.id}/recheck`, {});
   assert.equal(result.id, original.id);
@@ -226,14 +227,14 @@ test('evidence recheck replays the source and adds a fixture ledger entry', asyn
   assert.equal(checked.status, 'completed');
 });
 
-test('health exposes the cache count and newest fetch time', async () => {
+test('health exposes the cache count and newest fetch time', httpTimeout, async () => {
   const health = await http<{ cacheRows: number; cacheFetchedAt: string | null }>('/api/health');
   const expected = read(db => db.prepare('SELECT count(*) AS cacheRows, max(fetched_at) AS cacheFetchedAt FROM tool_cache').get());
   assert.equal(health.cacheRows, expected?.cacheRows);
   assert.equal(health.cacheFetchedAt, expected?.cacheFetchedAt);
 });
 
-test('receiver commits before dispatcher SIGKILL and run resume reconciles only one delivery', async () => {
+test('receiver commits before dispatcher SIGKILL and run resume reconciles only one delivery', httpTimeout, async () => {
   const { id } = await create({ chaos: { crashAfterDeliver: true } });
   const ready = await state(id, waiting);
   const send = ready.approvals.find(approval => approval.kind === 'send_message')!;
@@ -268,7 +269,7 @@ test('receiver commits before dispatcher SIGKILL and run resume reconciles only 
   assert.deepEqual(await http(actionUrl, { decision: 'approve' }), { duplicate: true });
 });
 
-test('zero seconds stops the worker before its first step or tool call', async () => {
+test('zero seconds stops the worker before its first step or tool call', httpTimeout, async () => {
   const { id } = await create({ limits: { maxSeconds: 0 } });
   const limited = await state(id, snap => snap.status === 'budget_exhausted' && !snap.engine.alive);
   assert.equal(limited.budget.exhausted, 'seconds');
@@ -276,7 +277,7 @@ test('zero seconds stops the worker before its first step or tool call', async (
   assert.equal(limited.ledger.length, 0);
 });
 
-test('live runs with unavailable sources finish without any fixture evidence or approvals', async () => {
+test('live runs with unavailable sources finish without any fixture evidence or approvals', httpTimeout, async () => {
   const { id } = await create({ dataMode: 'live' });
   const snap = await state(id, row => row.status === 'completed');
   assert.equal(snap.dataMode, 'live');

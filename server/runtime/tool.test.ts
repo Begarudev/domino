@@ -3,21 +3,27 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
 import { z } from 'zod';
 import type { DataMode, ChaosConfig } from '../../shared/types.ts';
 import type { EndpointSpec } from '../crustdata/spec.ts';
 import { NonsenseError } from '../domain/types.ts';
 
+import { Store } from '../db.ts';
+import { BudgetError, canonicalJson, hash, ToolContext } from './tool.ts';
+import { cacheStats, exportCache, importCache } from './cache-snapshot.ts';
+
 const dir = mkdtempSync(join(tmpdir(), 'domino-tool-test-'));
-process.env.DOMINO_DB = join(dir, 'test.db');
-process.env.CRUSTDATA_API_KEY = 'mock-crustdata-credential';
-process.env.DOMINO_CRUST_SPACING_MS = '0';
-const { Store } = await import('../db.ts');
-const { BudgetError, canonicalJson, hash, ToolContext } = await import('./tool.ts');
-const { cacheStats, exportCache, importCache } = await import('./cache-snapshot.ts');
-const store = new Store();
+const dbPath = join(dir, 'test.db');
+const store = new Store(dbPath);
+const mocked = { CRUSTDATA_API_KEY: 'mock-crustdata-credential', DOMINO_CRUST_SPACING_MS: '0' };
+const previous = Object.entries(mocked).map(([name]) => [name, process.env[name]] as const);
+before(() => Object.assign(process.env, mocked));
 after(() => {
+  for (const [name, value] of previous) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   store.sql.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -183,7 +189,7 @@ test('endpoint leases serialize live calls and enforce spacing across database c
     inFlight--;
     return Response.json({ rows: ['live'] });
   });
-  const another = new Store();
+  const another = new Store(dbPath);
   try {
     const first = create('pace-one', 'live');
     create('pace-two', 'live');
