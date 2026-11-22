@@ -33,7 +33,7 @@ const SELL_RUN = 'run_1a165a3d-5c87-43dc-aedb-9307e98f9973';
 /** Where each step looks. Selectors are existing data-testids, ordered so the spotlight follows the screen's state. */
 const DIRECTION: Record<string, { route?: string; focus: string; cue?: string }[]> = {
   hook: [{ focus: '.rec-op' }],
-  opening: [{ focus: '[data-testid="funnel"]' }, { focus: '[data-testid="departures"]' }],
+  opening: [{ focus: '.rec-op' }, { focus: '[data-testid="funnel"]' }, { focus: '[data-testid="hire-panel"]' }],
   approve: [{
     focus: '[data-testid="approve"], [data-testid="resume"], [data-testid="approve-retry"], [data-testid="deliveries"], [data-testid="outreach-draft"]',
     cue: 'Presenter: click Approve, then Resume from checkpoint. It delivers once; the overlay never clicks.',

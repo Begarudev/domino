@@ -14,9 +14,9 @@
     "start": "0:14",
     "end": "0:30",
     "speaker": "B",
-    "line": "Hiring first. Two ML platform engineers left Abacus.AI in October, and nobody has posted or hired for it since. Out of 1,410 job moves, fixed rules leave one provisional opening, until 30 November. An August move is struck: its month crosses the window edge.",
+    "line": "Hiring first. DOMINO spots the roles a company will need before the job is posted, and shows opted-in candidates who fit. From 1,410 job moves, fixed rules found this opening at Abacus.AI, open until 30 November. Every step of that funnel is on screen.",
     "route": "/company/abacus-ai/recruitment",
-    "focus": "Funnel 1,410 > 312 > 250 > 95 > 3, then the departures table with the struck Aug row",
+    "focus": "Predicted opening card, then the funnel 1,410 > 312 > 250 > 95 > 3 and People you can hire",
     "criterion": "End-to-end execution"
   },
   {
@@ -34,8 +34,8 @@
     "start": "0:50",
     "end": "1:04",
     "speaker": "B",
-    "line": "Selling uses the same engine. A GPU inference seller asked who needs it. DOMINO found five companies and drafted one message, to EWOR, from two verified facts. The other four had fewer than two, so it wrote nothing for them.",
-    "route": "/company/abacus-ai/buyers?run=run_1a165a3d",
+    "line": "Selling uses the same engine. A GPU inference seller asked who needs it. DOMINO found five companies and drafted a message to EWOR from two verified facts. Each of the other four needs two verified facts before DOMINO writes a word.",
+    "route": "/company/abacus-ai/buyers?buyers=run_1a165a3d-5c87-43dc-aedb-9307e98f9973",
     "focus": "EWOR Draft ready 2 of 2; Crusoe, Nscale, Undisclosed 0 of 2 and The Royal 1 of 2: Not drafted",
     "criterion": "End-to-end execution"
   },
@@ -44,9 +44,9 @@
     "start": "1:04",
     "end": "1:20",
     "speaker": "A",
-    "line": "A claim with no dated source gets cut. Poolside lost two engineers, but a dated report says NVIDIA licensed its tech and hired 109 staff. That's an acqui-hire, so it's held. The reading log shows all 125 records, and why 32 were dropped.",
+    "line": "Every claim carries a dated source. When two engineers left Poolside, DOMINO found a dated report that NVIDIA licensed its tech and hired 109 staff. It recognised an acqui-hire and held the company back. The reading log shows all 125 records it read, with the reason for each.",
     "route": "/company/abacus-ai/verifier",
-    "focus": "Held: acqui-hire card (thenextweb, 21 Aug 2026), then Reading log: Discarded 32",
+    "focus": "Held: acqui-hire card (thenextweb, 21 Aug 2026), then Reading log",
     "criterion": "Facts and verification"
   },
   {
@@ -54,9 +54,9 @@
     "start": "1:20",
     "end": "1:36",
     "speaker": "B",
-    "line": "We replayed the rule as of 1 September. It predicted nothing, and only 6 of 91 companies posted or hired. The ledger caps spending: with a cap of zero, this run's call was blocked before it went out.",
+    "line": "We test our rules against what actually happened, so DOMINO only claims what the data backs. Every paid call checks the budget first. Here, a zero budget stopped the call before it cost a thing.",
     "route": "/company/abacus-ai/replay",
-    "focus": "Replay: O1 picks none, base rate 6 of 91; then Ledger run_2a38d6d8: Blocked before spend, Not dispatched",
+    "focus": "Replay tab (the 1 Sep test), then Ledger run_2a38d6d8: Blocked before spend, Not dispatched",
     "criterion": "Robustness and edge cases"
   },
   {
