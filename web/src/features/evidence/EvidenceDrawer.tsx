@@ -73,13 +73,14 @@ function Card(props: {
             <dl className="evc-facts">
               {card.signal && <><dt>DOMINO took</dt><dd className="evc-signal">{card.signal}</dd></>}
               {ev.source.url && <><dt>Source</dt><dd><a href={ev.source.url} target="_blank" rel="noreferrer noopener">{host(ev.source.url)}</a></dd></>}
+              {ev.source.field && <><dt>Field</dt><dd className="evc-mono">{ev.source.endpoint} {ev.source.field}</dd></>}
               {ev.source.recordId && <><dt>Record</dt><dd className="evc-mono">{ev.source.recordId}</dd></>}
               <dt>Retrieved</dt><dd className="evc-mono">{clock(ev.retrievedAt, true)}</dd>
               {card.read && <><dt>From the read</dt><dd>{card.read.query}{card.read.total != null ? `, ${card.read.count} of ${card.read.total} shown` : ''}</dd></>}
               {card.fallback && <><dt>Fallback</dt><dd>{card.fallback.from} to {card.fallback.to}: {card.fallback.reason}</dd></>}
             </dl>
             <div className="evc-actions">
-              <button type="button" className="btn btn-quiet btn-xs" disabled={checking}
+              <button type="button" className="btn btn-quiet btn-sm" disabled={checking}
                 onClick={async () => { setChecking(true); await props.onRecheck(ev).finally(() => setChecking(false)); setChecked(true); }}>
                 {checking ? 'Checking' : checked ? 'Checked again' : 'Check again'}
               </button>
@@ -167,6 +168,7 @@ export function EvidenceDrawer(props: {
       <section className="evd" aria-label="Evidence">
         <div className="evd-bar">
           <h2 className="evd-label">Evidence{barName && <span>, {barName}</span>}</h2>
+          {mode.mode !== 'none' && <span className={`evd-chip is-${mode.mode}`} title={mode.text}>{mode.mode === 'fixture' ? 'Fixture data' : mode.mode === 'cache' ? 'Cached data' : mode.mode === 'live' ? 'Live data' : 'Mixed data'}</span>}
           {selection && <button type="button" className="btn btn-quiet btn-xs" onClick={() => props.onSelect(null)}>All sources</button>}
           <button type="button" className="btn btn-quiet btn-xs" onClick={props.onClose}>Close</button>
         </div>
@@ -181,7 +183,7 @@ export function EvidenceDrawer(props: {
               {model.excluded.length > 0 && (
                 <a className="evd-jump" href="#evd-out"
                   onClick={(e) => { e.preventDefault(); document.getElementById('evd-out')?.scrollIntoView({ block: 'start', behavior: props.reducedMotion ? 'auto' : 'smooth' }); }}>
-                  <span className="evd-n is-warn">{model.excluded.length}</span> I can't verify
+                  <span className="evd-n is-warn">{model.excluded.length}</span> left out, can't verify
                 </a>
               )}
             </p>

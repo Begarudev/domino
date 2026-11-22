@@ -95,8 +95,10 @@
 
 .evc-claim { font-size: 17px; line-height: 1.38; color: var(--paper); font-weight: 480; }
 .evc-source { font-size: 16px; line-height: 1.35; color: var(--paper-2); font-weight: 450; }
+.evc-path span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.evc-path span:first-child { flex: none; }
 .evc-when { white-space: nowrap; }
-.evc-path { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: var(--fs-cap); color: var(--paper-3); font-variation-settings: 'wdth' var(--w-condensed); }
+.evc-path { display: flex; gap: 12px; min-width: 0; white-space: nowrap; font-size: var(--fs-cap); color: var(--paper-3); font-variation-settings: 'wdth' var(--w-condensed); }
 
 /* Unverifiable: the claim is struck and dimmed, the reason stays readable. */
 .is-unverifiable .evc-date { color: var(--warn); font-variation-settings: 'wdth' var(--w-normal); font-weight: 700; }
@@ -119,3 +121,8 @@
 .evc-signal { font-weight: 700; color: var(--paper); }
 .evc-mono { font-variant-numeric: tabular-nums; font-variation-settings: 'wdth' var(--w-condensed); color: var(--paper-2) !important; }
 .evc-actions { display: flex; justify-content: flex-end; padding: var(--s2) var(--s4) var(--s3); }
+
+.evd-chip { font-size: var(--fs-cap); font-weight: 650; padding: 2px 8px; border-radius: var(--r-sm); white-space: nowrap; color: var(--paper-2); border: 1px solid var(--line); }
+.evd-chip.is-fixture, .evd-chip.is-mixed { color: var(--warn); border-color: rgba(232, 168, 58, 0.5); }
+.evd-chip.is-live { color: var(--ok-text); border-color: rgba(93, 178, 122, 0.45); }
+.evd-chip.is-cache { color: var(--live-text); border-color: rgba(142, 170, 255, 0.45); }
