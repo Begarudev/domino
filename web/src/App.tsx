@@ -14,6 +14,7 @@ import { EntitiesTab, LedgerTab } from './components/LedgerEntities.tsx';
 import { AskCard } from './components/AskCard.tsx';
 import { MAIN_REQUEST, MESSY_REQUEST, REPLAY_REQUEST } from './mock/events.ts';
 import { useReducedMotion, useRun, useSize } from './useRun.ts';
+import { Landing, landingWanted } from './features/landing/Landing.tsx';
 
 type Tab = 'drafts' | 'replay' | 'ledger' | 'entities';
 
@@ -36,10 +37,11 @@ export function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [slotRef, slot] = useSize<HTMLDivElement>();
   const [requestText, setRequestText] = useState('');
+  const [landing, setLanding] = useState(landingWanted);
 
   // First load: reattach to ?run=ID, else the newest run; in mock mode, start the recorded run.
   useEffect(() => {
-    if (!backend) return;
+    if (!backend || landing) return;
     const params = new URLSearchParams(location.search);
     const id = params.get('run');
     if (backend.mock) {
@@ -99,7 +101,12 @@ export function App() {
   };
 
   return (
-    <div className={`app${tab ? ' has-tab' : ''}`}>
+    <>
+    {landing && (
+      <Landing snap={snap} runId={runId} error={error} dataMode={backend?.health?.dataMode ?? null} reducedMotion={reducedMotion}
+        onStart={onRun} onDone={() => setLanding(false)} />
+    )}
+    <div className={`app${tab ? ' has-tab' : ''}`} aria-hidden={landing || undefined}>
       <header className="top">
         <div className="brand">
           <span className="wordmark">DOMINO</span>
@@ -176,5 +183,6 @@ export function App() {
         )}
       </section>
     </div>
+    </>
   );
 }
