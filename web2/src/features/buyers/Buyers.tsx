@@ -62,6 +62,8 @@ export function Buyers({ desk }: { desk: CompanyDesk }) {
     // is never the default, even if it says "live" (runs before 13:18 could mix them in); it stays pickable and labelled.
     const allLive = (r: Loaded) => {
       const mode = new Map(r.snap.evidence.map((e) => [e.id, e.mode]));
+      // Skips the blocked-before-spend demo run (0 targets, 0 drafts) and integrity-check snapshots.
+      if ((r.snap as { integrity?: unknown }).integrity || !r.snap.targets?.length) return false;
       return r.snap.drafts.length > 0 && r.snap.drafts.every((d) => d.citations.every((c) => mode.get(c.evidenceId) !== 'fixture'));
     };
     return runs.find((r) => r.row.id === pick || (pick && r.row.id.startsWith(pick)))
