@@ -47,6 +47,20 @@ interface CompletionRequest {
 }
 
 export interface Completion { text: string; model: string }
+
+// gpt-5 models reason before answering, and reasoning tokens count against max_completion_tokens.
+// At the default (medium) effort a short draft spent 448 of 531 tokens reasoning and took 7.4s; the app's
+// drafts ran past the 12s call timeout every time. Parsing and drafting need no deliberation.
+export function openaiReasoning(model: string): { reasoning_effort?: string } {
+  const override = process.env.OPENAI_REASONING_EFFORT?.trim();
+  if (override) return override === 'off' ? {} : { reasoning_effort: override };
+  if (/^gpt-5(?:-|$)/.test(model)) return { reasoning_effort: 'minimal' };
+  if (/^(?:gpt-5\.|o\d)/.test(model)) return { reasoning_effort: 'low' };
+  return {};
+}
+
+// One retry. With minimal effort a parse returns in about 2s; the limits leave room for a slow draft.
+const modelTimeoutMs = { parse: 20_000, draft: 30_000 } as const;
 let anthropic: Anthropic | undefined;
 
 function textResult(text: string, model: string, json?: boolean): Completion {
@@ -78,7 +92,7 @@ export function modelClient(ctx: ToolContext) {
         return await ctx.tool<Completion | null>({
           provider, endpoint: model, body: { purpose, system, user, maxTokens, json },
           attempt: {
-            mode: 'model', estimate: { usd: estimateUsd },
+            mode: 'model', estimate: { usd: estimateUsd }, timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || modelTimeoutMs[purpose], maxAttempts: 2,
             inject: () => { throw new NonsenseError('Expected a message object'); },
             async run(signal, report) {
               if (provider === 'anthropic') {
@@ -132,7 +146,8 @@ export function modelClient(ctx: ToolContext) {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
                 body: JSON.stringify({
                   model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-                  max_completion_tokens: maxTokens, ...(json ? { response_format: { type: 'json_object' } } : {}),
+                  max_completion_tokens: maxTokens, ...openaiReasoning(model),
+                  ...(json ? { response_format: { type: 'json_object' } } : {}),
                 }),
               });
               if (!response.ok) {
