@@ -14,12 +14,13 @@ ContextCon 05 (Crustdata x BITS Pilani), theme "Services, Replaced". Primary pro
 with **9.1 The Outbound Desk** for the company-analysis part (the handbook allows combining themes). Team DOMINO.
 Built on 22 Nov 2026 between 10:15 and 18:00 IST; the commit history starts at 12:16 IST.
 
-> **Status, 16:15 IST.** Both parts run end to end and are tested.
+> **Status, code freeze 16:45 IST (tag `freeze-1645`).** Both parts run end to end and are tested.
 > - The company-analysis engine: rules, verifier, approvals, send-once, ledger, replay and the Crustdata adapters.
 > - The hiring side: candidate onboarding with consent, predicted openings, intros approved and delivered once.
 >
 > Rule O1 has run on live data and on the 1 Sep replay (numbers below, details in [`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)).
-> A fresh clone with no keys runs on a labelled fixture world.
+> A fresh clone with no keys runs on a labelled fixture world. The demo walkthrough, screen by screen, is
+> [`docs/RUN-OF-SHOW.md`](docs/RUN-OF-SHOW.md).
 
 - [The customer and the service](#the-customer-and-the-service)
 - [What you can do with it](#what-you-can-do-with-it)
