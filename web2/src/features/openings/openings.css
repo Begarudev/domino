@@ -189,7 +189,16 @@
 .rec-hire td { vertical-align: top; }
 .rec-fit li + li { margin-top: 4px; }
 .rec-foot { padding: 10px 16px 12px; }
+/* Attio direction: 10px hairline cards, state as a small rounded pill with a teal dot (meaning only), 36-40px rows. */
+.rec .panel { border-radius: 10px; }
+.rec-pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px;
+  font-size: 12px; font-weight: 500; color: var(--ink); background: var(--surface); white-space: nowrap;
+}
+.rec-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--acc); }
+.rec-dep table.t td { padding-top: 9px; padding-bottom: 9px; vertical-align: middle; }
 @media (min-width: 1800px) {
+  .rec-pill { font-size: 13px; height: 24px; }
   .rec .panel > header > span:not(.st) { font-size: 14px; }
   .rec table.t th { font-size: 13px; }
 }
