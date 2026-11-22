@@ -146,6 +146,16 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
       <CallStream rows={stream} settledSeq={settledSeq} total={total} />
 
       <main className="mc-stage" key={stageKey}>
+        {(() => {
+          const ch = chapterFor(view, current, snap.status, !!crashed, !!gate?.sent, rows.length > 0);
+          return (
+            <div className="mc-chapter" key={ch.title}>
+              {ch.n && <span className="mc-chapter__n">{ch.n}</span>}
+              <span className="mc-chapter__t">{ch.title}</span>
+              <span className="mc-chapter__s">{ch.sub}</span>
+            </div>
+          );
+        })()}
         {view === 'replay' && replay ? (
           <Scoreboard view={replay} animate={scoredSeq > settledSeq || stageKey > 0} nameOf={nameOf} onSelect={onSelect} fixture={snap.dataMode === 'fixture'} reducedMotion={reducedMotion} />
         ) : (
@@ -217,6 +227,18 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
       )}
     </div>
   );
+}
+
+// Plain-language chapters so a first-time viewer always knows which part of the job this is.
+function chapterFor(view: 'run' | 'replay', step: StepName | null, status: string, crashed: boolean, gateSent: boolean, hasRows: boolean) {
+  if (crashed) return { n: null, title: 'Robustness test', sub: 'The engine was killed mid-run. Watch it come back from its last checkpoint without repeating work.' };
+  if (view === 'replay') return { n: 5, title: 'Were we right?', sub: 'Clock frozen at 1 Sep with no later facts. Each prediction drops when a dated event proves it.' };
+  if (status === 'awaiting_approval' || step === 'approval_gate') return gateSent
+    ? { n: 4, title: 'Sent once', sub: 'One approval, one message in the team test inbox. Approving again is refused by the same key.' }
+    : { n: 4, title: 'Your call', sub: 'Nothing leaves until a person approves. Every claim in the message links to a dated source.' };
+  if (step === 'find_deciders' || step === 'warm_paths' || step === 'draft_messages') return { n: 3, title: 'Finding who decides and writing to them', sub: 'One person per account. The message may only say what a dated source says.' };
+  if (hasRows || step === 'cascade' || step === 'rank_targets') return { n: 2, title: 'Connecting the dots', sub: 'A change at one company creates a need at another. A link needs two dated sources, or it breaks.' };
+  return { n: 1, title: 'Reading the market', sub: 'Every card is a source pulled from Crustdata just now, with the date it happened.' };
 }
 
 function Dominoes() {

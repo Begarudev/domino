@@ -18,7 +18,7 @@ function Card({ card, live, onSelect }: { card: SourceCard; live: boolean; onSel
   return (
     <button
       type="button"
-      className={`mc-src mc-src--${card.kind}${card.dated ? '' : ' is-undated'}${live ? ' is-live' : ''}`}
+      className={`mc-src mc-src--${card.kind}${card.dated ? '' : ' is-undated'}${card.matched === false ? ' is-discarded' : ''}${live ? ' is-live' : ''}`}
       onClick={() => onSelect({ kind: 'evidence', id: card.id })}
     >
       <span className="mc-src__top">
@@ -26,14 +26,17 @@ function Card({ card, live, onSelect }: { card: SourceCard; live: boolean; onSel
         <span className="mc-src__ep">{card.endpoint}</span>
         <span className="mc-src__mode">{card.mode}</span>
       </span>
-      <span className="mc-src__claim"><Highlighted card={card} /></span>
+      <span className="mc-src__claim">{card.matched === undefined ? <Highlighted card={card} /> : card.claim}</span>
+      {card.matched !== undefined && (
+        <span className={`mc-src__signal${card.matched ? '' : ' is-off'}`}>{card.matched ? `Signal: ${card.value ?? 'matched'}` : 'Read, not relevant'}</span>
+      )}
       <span className={`mc-src__date${card.dated ? '' : ' is-none'}`}>{card.dated ? day(card.observedAt, true) : 'Undated: I can\'t verify this'}</span>
     </button>
   );
 }
 
 export function Desk({ desk, settledSeq, onSelect }: { desk: DeskView; settledSeq: number; onSelect: (s: Selection) => void }) {
-  const cards = desk.cards.slice(-5).reverse();
+  const cards = desk.cards.slice(-8).reverse();
   return (
     <div className="mc-desk">
       <section className="mc-desk__read" aria-label="Sources read">

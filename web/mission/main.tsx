@@ -11,11 +11,13 @@ import type { MissionControls } from '../src/centrepiece/mission/index.ts';
 import { MAIN_REQUEST, REPLAY_REQUEST, buildScenario } from '../src/mock/events.ts';
 import { emptySnapshot, initialState, uiReducer } from '../src/state.ts';
 import { MockRun } from '../src/mock/player.ts';
+import { SampleRun } from './sampleRun.ts';
 
 const params = new URLSearchParams(location.search);
 const SPEED = Number(params.get('speed') ?? '1') || 1;
 const SLOT = params.has('slot');
 const AUTOPLAY = params.has('autoplay');
+const SAMPLE = params.has('sample'); // play docs/sample-run-events.json, a recorded real run
 const HEADER = 52;
 
 type Kind = 'live' | 'replay';
@@ -35,7 +37,7 @@ function Harness() {
   const [runNo, setRunNo] = useState(0);
   const runId = `run_mission_${kind}_${runNo}`;
   const request = kind === 'replay' ? REPLAY_REQUEST : MAIN_REQUEST;
-  const mock = useMemo(() => new MockRun(buildScenario(kind, request, runId), { speed: SPEED, autoCrash: false, instant: false }), [runId]);
+  const mock = useMemo(() => (SAMPLE ? new SampleRun(SPEED) : new MockRun(buildScenario(kind, request, runId), { speed: SPEED, autoCrash: false, instant: false })) as MockRun, [runId]);
   const [state, dispatch] = useReducer(uiReducer, undefined, () => initialState(emptySnapshot(runId, request)));
   const [selection, setSelection] = useState<Selection | null>(null);
   const [hiringFilterView, setHiringFilterView] = useState(false);
@@ -53,7 +55,8 @@ function Harness() {
   const newRun = (k: Kind) => { setKind(k); setRunNo((n) => n + 1); setStarted(false); setSelection(null); };
 
   // The mock reports dataMode 'live'; every company in it is fictional, so label it what it is.
-  const snapshot = useMemo(() => ({ ...state.snap, dataMode: 'fixture' as const }), [state.snap]);
+  // A recorded real run is cached live data; the mock is fictional and labelled a fixture.
+  const snapshot = useMemo(() => ({ ...state.snap, dataMode: SAMPLE ? 'cache' as const : 'fixture' as const }), [state.snap]);
 
   const controls: MissionControls = useMemo(() => ({
     kill: () => mock.kill(),
@@ -113,7 +116,7 @@ function Harness() {
       <style>{HARNESS_CSS}</style>
       <header className="hx-bar" style={{ height: HEADER }}>
         <span className="hx-mark">DOMINO</span>
-        <span className="hx-req">{request}</span>
+        <span className="hx-req">{SAMPLE ? `Recorded real run, names redacted: ${(mock as unknown as SampleRun).request}` : request}</span>
         {!started ? (
           <button type="button" className="hx-go" onClick={start}>Run</button>
         ) : (

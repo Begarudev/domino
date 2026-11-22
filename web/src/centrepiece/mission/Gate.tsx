@@ -92,10 +92,10 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
         <div className="mc-gate__strip">
           <span className="mc-env" aria-hidden="true"><i /><b>1</b></span>
           <span className="mc-gate__striptext">
-            <strong>Sent once to {gate.decider ? `${gate.decider.name}, ${gate.decider.company}` : 'the team test inbox'}</strong>
-            <span>Team test inbox · {clockTime(gate.sent.action.executedAt)} · key <code>{shortKey(gate.sent.action.idempotencyKey)}</code></span>
+            <strong>One message sent to the team test inbox</strong>
+            <span>{gate.decider ? `Draft for ${gate.decider.name} · ${gate.decider.company} · ` : ''}{clockTime(gate.sent.action.executedAt)} · key <code>{shortKey(gate.sent.action.idempotencyKey)}</code></span>
           </span>
-          {onApprove && gate.approval && <button type="button" className="mc-again" onClick={() => onApprove(gate.approval!.id)}>Approve again</button>}
+          {onApprove && gate.approval && <button type="button" className="mc-again" onClick={() => onApprove(gate.approval!.id)}>Try approving twice</button>}
           <span className={`mc-gate__dup${dupFlash ? ' is-flash' : ''}`}>
             {gate.duplicates.length ? `Already sent, skipped${gate.duplicates.length > 1 ? ` ×${gate.duplicates.length}` : ''}` : 'One key, one send'}
           </span>

@@ -169,15 +169,18 @@ function datedRows(ids: string[], ev: Map<string, Evidence>): Evidence[] {
 function tileFor(node: GraphNode | undefined, nodeId: string, other: string, snap: RunSnapshot, ev: Map<string, Evidence>, fallback: string): ChainTile {
   const triggers = snap.triggers.filter((t) => t.companyId === nodeId);
   const trig: Trigger | undefined = triggers.find((t) => t.relatedCompanyId === other) ?? triggers[0];
-  const ids = trig ? trig.evidenceIds : node?.evidenceIds ?? [];
-  const rows = datedRows(ids, ev);
+  // No trigger at this company: fall back to its own most recent dated evidence row, never to the edge label.
+  const ownRows = datedRows(node?.evidenceIds ?? [], ev).sort((a, b) => (b.observedAt ?? '').localeCompare(a.observedAt ?? ''));
+  const rows = trig ? datedRows(trig.evidenceIds, ev) : ownRows.slice(0, 1);
   const first = rows[0] ?? null;
+  const name = node?.name ?? snap.companies.find((c) => c.id === nodeId)?.name ?? nodeId;
+  const fact = trig?.summary ?? (first ? first.claim.replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`), '') : fallback);
   return {
     nodeId,
-    name: node?.name ?? snap.companies.find((c) => c.id === nodeId)?.name ?? nodeId,
-    fact: trig?.summary ?? fallback,
+    name,
+    fact: fact.charAt(0).toUpperCase() + fact.slice(1),
     dates: rows.length ? dayRange(rows.map((r) => r.observedAt)) : trig ? day(trig.date, true) : 'undated',
-    pips: rows.length,
+    pips: trig ? rows.length : ownRows.length,
     stampEndpoint: first?.source.endpoint ?? null,
     stampEvidenceId: first?.id ?? null,
     netNew: node?.netNew ?? false,
@@ -310,7 +313,14 @@ export function companyName(snap: RunSnapshot, id: string): string {
 export interface SourceCard {
   id: string; seq: number; claim: string; value: string | null; endpoint: string; kind: string; kindLabel: string;
   observedAt: string | null; dated: boolean; mode: string;
+  matched?: boolean; url?: string | null; query?: string; total?: number | null;
 }
+
+const ITEM_KIND: Record<string, [string, string]> = {
+  job_post: ['job', 'Job post'], person_move: ['person', 'People move'], company: ['company', 'Company profile'],
+  funding: ['company', 'Funding'], headcount: ['company', 'Headcount'], post: ['post', 'LinkedIn post'], news: ['news', 'News'],
+  decider: ['person', 'Decision-maker'],
+};
 
 export interface DeskView {
   pending: { endpoint: string; attempt: number; seq: number } | null;
@@ -347,21 +357,38 @@ export function deskView(events: StoredEvent[], snap: RunSnapshot): DeskView {
   for (const { event } of events) if (event.type === 'evidence.added') for (const e of event.evidence) claims.set(e.id, e.claim);
   // Before enrichment the snapshot may not know the display name yet; the evidence claim that produced the
   // trigger starts with it ("Kestrel Labs hired ..."), so read the leading capitalised words.
+  const bound = new Map<string, string>(); // display name -> company id it already belongs to
   const nameFromTrigger = (id: string, evIds: string[]) => {
     const known = nameOf(id);
     if (known !== id.replace(/^co_/, '')) return known;
     for (const ev of evIds) {
       const m = claims.get(ev)?.match(/^((?:[A-Z0-9][\w.&'-]*\s?)+)/);
-      if (m) return m[1].trim().replace(/'s$/, '');
+      const cand = m?.[1].trim().replace(/'s$/, '');
+      if (cand && (!bound.has(cand) || bound.get(cand) === id)) { bound.set(cand, id); return cand; }
     }
-    return known;
+    return known.charAt(0).toUpperCase() + known.slice(1);
   };
+  const sawSourceRead = events.some((e) => e.event.type === 'source.read');
   const open = new Map<string, { endpoint: string; attempt: number; seq: number }>();
   for (const { seq, event } of events) {
     if (event.type === 'tool.call') open.set(event.callId, { endpoint: event.endpoint, attempt: event.attempt, seq });
     if (event.type === 'tool.result' || event.type === 'tool.fallback') open.delete(event.callId);
     if (event.type === 'engine.crashed') open.clear();
-    if (event.type === 'evidence.added') {
+    if (event.type === 'source.read') {
+      // Preferred: the engine reports every item it read, matched or discarded, with the signal it extracted.
+      event.items.forEach((it, i) => {
+        const id = `${event.callId}#${i}`;
+        if (seen.has(id)) return;
+        seen.add(id);
+        const [kind, kindLabel] = ITEM_KIND[it.kind] ?? ['other', 'Source'];
+        cards.push({
+          id, seq, claim: it.company && !it.title.includes(it.company) ? `${it.company}: ${it.title}` : it.title, value: it.signal,
+          endpoint: event.endpoint, kind, kindLabel, observedAt: it.date, dated: !!it.date, mode: event.mode,
+          matched: it.matched, url: it.url, query: event.query, total: event.totalAvailable,
+        });
+      });
+    }
+    if (event.type === 'evidence.added' && !sawSourceRead) {
       for (const e of event.evidence) {
         if (seen.has(e.id)) continue;
         seen.add(e.id);
@@ -375,7 +402,11 @@ export function deskView(events: StoredEvent[], snap: RunSnapshot): DeskView {
     if (event.type === 'trigger.found') {
       const t = event.trigger;
       let co = cos.get(t.companyId);
-      if (!co) { co = { id: t.companyId, name: nameFromTrigger(t.companyId, t.evidenceIds), alias: null, seq, signals: [] }; cos.set(t.companyId, co); }
+      if (!co) {
+        const name = nameFromTrigger(t.companyId, t.evidenceIds);
+        co = [...cos.values()].find((c) => c.name === name) ?? { id: t.companyId, name, alias: null, seq, signals: [] };
+        cos.set(t.companyId, co);
+      }
       if (!co.signals.some((s) => s.id === t.id)) {
         co.signals.push({ id: t.id, seq, kind: t.kind, kindLabel: TRIGGER_LABEL[t.kind] ?? t.kind, summary: t.summary, date: t.date });
         signalCount++;
@@ -389,14 +420,15 @@ export function deskView(events: StoredEvent[], snap: RunSnapshot): DeskView {
     if (event.type === 'entity.kept_apart' && event.decision.kind === 'company') keptApart.push(`${event.decision.names.join(' and ')} (${event.decision.reason})`);
   }
   const pending = [...open.values()].at(-1) ?? null;
-  return { pending, cards, dated: cards.filter((c) => c.dated).length, signalCount, companies: [...cos.values()], keptApart };
+  const unique = [...new Set(cos.values())];
+  return { pending, cards, dated: cards.filter((c) => c.dated).length, signalCount, companies: unique, keptApart };
 }
 
 // ---------- narration: one plain sentence about what the engine is doing right now ----------
 
 const STEP_DOING: Record<StepName, string> = {
-  parse_request: 'Reading the request and working out what you sell',
-  pull_triggers: 'Searching Crustdata for dated job posts, hires and headcount changes',
+  parse_request: 'Reading what you sell and who might buy it',
+  pull_triggers: 'Scanning job posts, hires and news for recent changes',
   resolve_entities: 'Working out which mentions are the same company',
   enrich_companies: 'Pulling company profiles: headcount, funding, peers',
   cascade: 'Looking for changes at one company that create a need at another',
@@ -414,7 +446,12 @@ export function narrate(events: StoredEvent[], snap: RunSnapshot): { seq: number
     const { seq, event: ev } = events[i];
     switch (ev.type) {
       case 'step.started': return { seq, text: STEP_DOING[ev.step], tone: 'info' };
-      case 'tool.call': return { seq, text: `Calling ${ev.endpoint}${ev.attempt > 1 ? ` again (try ${ev.attempt})` : ''}`, tone: 'info' };
+      case 'tool.call': {
+        const label = sourceKind(ev.endpoint)[1];
+        const plural = label === 'Company search' ? 'companies' : label === 'People move' ? 'people moves' : `${label.toLowerCase()}s`;
+        const what = ev.provider === 'crustdata' || ev.provider === 'web' ? `Asking Crustdata for ${plural}` : 'Asking the model to read it';
+        return { seq, text: `${what}${ev.attempt > 1 ? ` (try ${ev.attempt})` : ''}`, tone: 'info' };
+      }
       case 'tool.retry': return { seq, text: `${ev.endpoint.replace(/_/g, '/')} ${ev.reason === 'nonsense' ? 'sent back a malformed body' : ev.reason.replace('_', ' ')}${ev.injected ? ' (injected fault)' : ''}. Retrying in ${ev.backoffMs} ms`, tone: 'warn' };
       case 'tool.fallback': return { seq, text: `${ev.endpoint} failed live; using the ${ev.to} copy and labelling it`, tone: 'warn' };
       case 'evidence.added': {
@@ -422,7 +459,7 @@ export function narrate(events: StoredEvent[], snap: RunSnapshot): { seq: number
         return e ? { seq, text: `Read ${ev.evidence.length} source${ev.evidence.length === 1 ? '' : 's'}: “${e.claim}”`, tone: 'info' } : null;
       }
       case 'trigger.found': return { seq, text: `Signal at ${nameOf(ev.trigger.companyId)}: ${ev.trigger.summary}, ${day(ev.trigger.date)}`, tone: 'info' };
-      case 'entity.merged': return { seq, text: `${ev.merge.names.join(' and ')} are one company: ${ev.merge.reason}`, tone: 'info' };
+      case 'entity.merged': return { seq, text: `${ev.merge.names.join(' and ')} are the same company (${ev.merge.reason.replace(/^./, (c) => c.toLowerCase())})`, tone: 'info' };
       case 'entity.kept_apart': return { seq, text: `${ev.decision.names.join(' and ')} stay separate: ${ev.decision.reason}`, tone: 'info' };
       case 'claim.unverifiable': return { seq, text: `I can't verify “${ev.claim}”. ${ev.reason}. Leaving it out`, tone: 'fail' };
       case 'graph.node': return { seq, text: `${ev.node.name} enters the chain${ev.node.need ? `: ${ev.node.need.toLowerCase()}` : ''}`, tone: 'info' };

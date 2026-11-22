@@ -676,3 +676,28 @@
 .mc--compact .mc-stamp__date { font-size: 0.74em; }
 .mc--compact .mc-pips { grid-template-columns: repeat(3, 0.32em); grid-template-rows: repeat(3, 0.32em); gap: 0.14em; }
 .mc--compact .mc-gate__who { font-size: 0.78em; }
+
+.mc-src { grid-template-areas: 'top date' 'claim claim' 'sig sig'; }
+.mc-src__signal { grid-area: sig; justify-self: start; margin-top: 0.15em; font-size: 0.8em; font-weight: 700; padding: 0.1em 0.55em; border-radius: 0.3em; background: rgba(226, 171, 63, 0.35); }
+.mc-src__signal.is-off { background: none; color: #8a7d62; font-weight: 500; padding: 0; }
+.mc-src.is-discarded { opacity: 0.55; }
+.mc-src.is-live .mc-src__signal:not(.is-off) { animation: mc-pop 0.35s cubic-bezier(0.3, 1.5, 0.5, 1) 0.5s both; }
+
+/* chapter caption: which part of the job this is, in plain words */
+.mc-chapter { display: flex; align-items: baseline; gap: 0.7em; flex: none; min-width: 0; animation: mc-fade 0.5s ease-out both; }
+.mc-chapter__n { flex: none; display: grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--ivory); color: var(--ink); font-family: 'MC Display', sans-serif; font-weight: 900; font-size: 1.05em; align-self: center; }
+.mc-chapter__t { flex: none; font-family: 'MC Display', sans-serif; font-weight: 800; font-size: 1.6em; line-height: 1; color: var(--ivory); }
+.mc-chapter__s { min-width: 0; font-size: 0.95em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc--compact .mc-chapter__s { display: none; }
+.mc-desk__head > span:first-child { font-size: 1.15em; }
+.mc-score { position: relative; inset: auto; flex: 1; min-height: 0; padding: 0; }
+
+/* ui-council round 1: legibility and wrapping */
+.mc { grid-template-rows: 4.1em minmax(0, 1fr) var(--foot); }
+.mc-say { white-space: normal; font-size: 1.22em; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mc-call { font-size: 0.92em; }
+.mc-srow { font-size: 0.88em; }
+.mc-rail__label { font-size: 0.86em; }
+.mc-rail__step:not(.is-done):not(.is-running) .mc-rail__label { color: #a9c3bb; }
+.mc--compact .mc-rail__label { font-size: 0.7em; }
+.mc--compact .mc-say { font-size: 1em; }
