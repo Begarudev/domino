@@ -286,6 +286,7 @@ function layout(cs: FlowCompany[], moves: FlowMove[], hints?: Record<string, { x
   const missing = cs.filter((c) => !hints?.[c.id]);
   cs.forEach((c) => { const h = hints?.[c.id]; if (h) { c.x = h.x; c.y = h.y; } });
   if (!missing.length) return;
+  if (missing.length < cs.length) hints = undefined;   // partial hints: lay everything out together
   const n = cs.length;
   cs.forEach((c, i) => {
     if (hints?.[c.id]) return;
