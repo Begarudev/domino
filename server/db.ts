@@ -17,6 +17,7 @@ export const stepLabels: Record<StepName, string> = {
 
 export const now = () => new Date().toISOString();
 const encode = JSON.stringify;
+export type RunChaos = ChaosConfig & { crashAfterDeliver?: boolean };
 export function decode<T>(json: string): T {
   return JSON.parse(json) as T;
 }
@@ -75,8 +76,10 @@ export class Store {
         id TEXT PRIMARY KEY, run_id TEXT, json TEXT, status TEXT, idempotency_key TEXT UNIQUE
       );
       CREATE TABLE IF NOT EXISTS outbox (
-        idempotency_key TEXT PRIMARY KEY, run_id TEXT, approval_id TEXT, json TEXT, executed_at TEXT
+        idempotency_key TEXT PRIMARY KEY, run_id TEXT, approval_id TEXT, json TEXT, executed_at TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
       );
+      CREATE TABLE IF NOT EXISTS inbox_received (idempotency_key TEXT PRIMARY KEY, received_at TEXT, payload_json TEXT);
       CREATE TABLE IF NOT EXISTS asks (id TEXT PRIMARY KEY, run_id TEXT, json TEXT, answer TEXT);
       CREATE INDEX IF NOT EXISTS events_run_seq ON events(run_id, seq);
       CREATE INDEX IF NOT EXISTS events_run_type_seq ON events(run_id, type, seq);
@@ -86,6 +89,14 @@ export class Store {
       CREATE INDEX IF NOT EXISTS outbox_run ON outbox(run_id);
       CREATE INDEX IF NOT EXISTS asks_run ON asks(run_id);
     `);
+    if (!this.sql.prepare('PRAGMA table_info(outbox)').all().some(column => column.name === 'status')) {
+      this.transaction(() => {
+        // Another process can finish the migration while this connection waits for the write lock.
+        if (this.sql.prepare('PRAGMA table_info(outbox)').all().some(column => column.name === 'status')) return;
+        this.sql.exec(`ALTER TABLE outbox ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';
+          UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL;`);
+      });
+    }
   }
 
   transaction<T>(fn: () => T, mode: 'read' | 'write' = 'write'): T {
@@ -100,7 +111,7 @@ export class Store {
     }
   }
 
-  createRun(id: string, request: string, mode: DataMode, llm: string, limits: RunLimits, chaos: ChaosConfig) {
+  createRun(id: string, request: string, mode: DataMode, llm: string, limits: RunLimits, chaos: RunChaos) {
     this.transaction(() => {
       const ts = now();
       this.sql.prepare(`INSERT INTO runs (id, request, status, data_mode, llm, limits_json, chaos_json, created_at, updated_at)
@@ -243,7 +254,7 @@ export class Store {
   }
 
   getOutbox(runId: string): OutboxAction[] {
-    return this.sql.prepare('SELECT json FROM outbox WHERE run_id = ? AND executed_at IS NOT NULL ORDER BY rowid').all(runId)
+    return this.sql.prepare("SELECT json FROM outbox WHERE run_id = ? AND status = 'delivered' ORDER BY rowid").all(runId)
       .map(row => decode(row.json as string));
   }
 

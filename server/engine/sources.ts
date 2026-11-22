@@ -1,11 +1,11 @@
 import type { Evidence, Intent } from '../../shared/types.ts';
 import type { EndpointSpec } from '../crustdata/spec.ts';
 import type { EvidenceSource } from '../db.ts';
-import type { OutcomeFact, ParseMeta, TriggerBatch } from '../domain/types.ts';
+import type { ParseMeta, TriggerBatch } from '../domain/types.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 
-export type SourceResult = Pick<TriggerBatch, 'evidence'> & Partial<Omit<TriggerBatch, 'evidence'>> & { outcomes?: OutcomeFact[] };
+export type SourceResult = Pick<TriggerBatch, 'evidence'> & Partial<Omit<TriggerBatch, 'evidence'>>;
 type SourceTime = Pick<ParseMeta, 'asOf' | 'windowDays'>;
 
 export const dateShift = (date: string, days: number) =>
@@ -34,7 +34,7 @@ export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, Sour
     rows.map(row => ({ ...row, evidenceIds: row.evidenceIds.flatMap(id => ids.has(id) ? [ids.get(id)!] : []) }));
 
   return {
-    evidence, sources, mentions: withIds(raw.mentions), people: withIds(raw.people), triggers: withIds(raw.triggers), outcomes: withIds(raw.outcomes),
+    evidence, sources, mentions: withIds(raw.mentions), people: withIds(raw.people), triggers: withIds(raw.triggers),
   };
 }
 

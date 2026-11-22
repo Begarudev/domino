@@ -251,7 +251,11 @@ async function cascade(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'ca
 function rankTargets(_ctx: ToolContext, c: Checkpoints): StepResult<'rank_targets'> {
   const { companies, triggers } = c.enrich_companies!;
   const output = deps.rankTargets(c.parse_request!, c.cascade!, companies, triggers);
-  return { output, summary: `${output.targets.length} ranked accounts`, events: [{ type: 'targets.ranked', ...output }] };
+  const events: RunEvent[] = [{ type: 'targets.ranked', ...output }];
+  for (const target of output.targets) {
+    if (target.hold) events.push({ type: 'target.held', companyId: target.companyId, reasons: target.hold.reasons });
+  }
+  return { output, summary: `${output.targets.length} ranked accounts`, events };
 }
 
 async function findDeciders(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'find_deciders'>> {
@@ -259,6 +263,10 @@ async function findDeciders(ctx: ToolContext, c: Checkpoints): Promise<StepResul
   const { companies, people } = c.enrich_companies!;
   const output: Deciders = { targets: [], people: [...people], evidence: [] };
   for (const target of c.rank_targets!.targets) {
+    if (target.hold) {
+      output.targets.push(target);
+      continue;
+    }
     const company = companies.find(row => row.id === target.companyId);
     if (!company) {
       output.targets.push(target);
@@ -315,6 +323,10 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
   const profile = { ...seller, offering: c.parse_request!.offering ?? seller.offering,
     meeting: { ...seller.meeting, slots: futureSlots(seller, ctx.store.requireRun(ctx.runId).created_at) } };
   for (const target of c.warm_paths!) {
+    if (target.hold) {
+      targets.push(target);
+      continue;
+    }
     const company = companies.find(row => row.id === target.companyId);
     if (!company) {
       targets.push(target);
@@ -359,6 +371,7 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
 function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_gate'> {
   const { targets, drafts } = c.draft_messages!;
   const output = targets.flatMap(target => {
+    if (target.hold) return [];
     const draft = drafts.find(row => row.id === target.draftId);
     return !draft ? [] : (['send_message', 'book_meeting'] as const).map((kind): Approval => {
       const idempotencyKey = hash([ctx.runId, target.companyId, draft.personId ?? '', draft.body, kind].join('|')).slice(0, 16);
@@ -396,7 +409,7 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
   const inHorizon = (date: string | null) => Boolean(date && date > intent.asOf && date <= intent.horizonEnd!);
   if (picked.length && intent.horizonEnd) {
     const time = { asOf: intent.horizonEnd, windowDays: Math.round((Date.parse(intent.horizonEnd) - Date.parse(intent.asOf)) / 86_400_000) };
-    const input = { intent, companies: picked.map(company => ({ ...company, key: company.id })) };
+    const input = { intent, companies: picked };
     for (const spec of [deps.jobSearchOutcomes, deps.personSearchOutcomes]) {
       const result = await readSource(ctx, spec, input, time);
       const dated = result.evidence.filter(row => row.verifiable && inHorizon(row.observedAt));
@@ -415,7 +428,14 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
   }
   const score = deps.scoreReplay(intent, targets, { firstOrder, headcount }, outcomes);
   const usedForPrediction = byId([...evidence, ...c.find_deciders!.evidence]);
-  const output = { ...score, factsAfterAsOfUsed: usedForPrediction.filter(row => row.observedAt && row.observedAt > intent.asOf).length };
+  const output = {
+    ...score,
+    snapshotLabel: usedForPrediction.length && usedForPrediction.every(row => row.mode === 'fixture')
+      ? `Fictional fixtures filtered through ${intent.asOf}`
+      : `Current Crustdata index filtered to facts dated through ${intent.asOf}`,
+    outcomeDefinition: 'A dated infrastructure or inference job post or hire in the replay horizon.',
+    factsAfterAsOfUsed: usedForPrediction.filter(row => row.observedAt && row.observedAt > intent.asOf).length,
+  };
   return { output, summary: `${output.domino.hits}/${output.domino.predicted} DOMINO picks showed a dated outcome`,
     events: [...output.outcomes.map(outcome => ({ type: 'replay.outcome' as const, outcome })), { type: 'replay.scored', score: output }] };
 }

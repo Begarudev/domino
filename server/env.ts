@@ -1,11 +1,25 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DataMode, RunLimits } from '../shared/types.ts';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
-const envFile = resolve(root, '.env');
-if (existsSync(envFile)) {
+function findEnvFile() {
+  const local = resolve(root, '.env');
+  if (existsSync(local)) return local;
+  try {
+    const worktree = /^gitdir:\s*(.+)$/.exec(readFileSync(resolve(root, '.git'), 'utf8').trim());
+    if (!worktree) return;
+    const gitDir = resolve(root, worktree[1]);
+    const commonDir = resolve(gitDir, readFileSync(resolve(gitDir, 'commondir'), 'utf8').trim());
+    const main = resolve(dirname(commonDir), '.env');
+    if (existsSync(main)) return main;
+  } catch {
+    // A regular checkout or a source archive may have no linked-worktree metadata.
+  }
+}
+const envFile = findEnvFile();
+if (envFile) {
   for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.*)$/.exec(line);
     if (!match || process.env[match[1]] !== undefined) continue;

@@ -317,5 +317,7 @@ export function scoreReplay(intent: Intent, targets: Target[], baseline: { first
       };
     }),
     note: 'Fictional fixture replay. Precision is reported for all three prediction sets.',
+    snapshotLabel: `Fictional fixtures filtered through ${intent.asOf}`,
+    outcomeDefinition: 'A dated infrastructure or inference job post or hire in the replay horizon.',
   };
 }
