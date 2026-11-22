@@ -75,6 +75,10 @@ export class PeopleRedactor {
 
   text(value: string): string {
     this.refresh();
+    return this.redact(value);
+  }
+
+  private redact(value: string): string {
     let out = value.replace(PROFILE_URL, '$1[redacted]');
     if (this.pattern) out = out.replace(this.pattern, name => initialOf(name));
     return out;
@@ -96,20 +100,9 @@ export class PeopleRedactor {
 
   // Deep copy with every string redacted; `name` fields of person-shaped objects become initials.
   value<T>(input: T): T {
-    this.refresh();
-    this.learn(personNames(input));
-    const found: string[] = [];
-    const collect = (value: unknown): void => {
-      if (Array.isArray(value)) { for (const item of value) collect(item); return; }
-      if (!value || typeof value !== 'object') return;
-      const record = value as Record<string, unknown>;
-      if (isPerson(record)) found.push(record.name as string);
-      for (const item of Object.values(record)) collect(item);
-    };
-    collect(input);
-    this.learn(found);
+    this.observe(input);
     const walk = (value: unknown, parentKey = ''): unknown => {
-      if (typeof value === 'string') return this.text(value);
+      if (typeof value === 'string') return this.redact(value);
       if (Array.isArray(value)) return value.map(item => walk(item, parentKey));
       if (value && typeof value === 'object') {
         const record = value as Record<string, unknown>;

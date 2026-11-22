@@ -307,6 +307,9 @@ export type RunStatus =
 
 /** Longest request the server accepts; the web request field uses the same limit. */
 export const MAX_REQUEST_CHARS = 12_000;
+/** Machine-readable `code` on /api 404s, so clients never parse error prose: the route isn't built on this server, or
+ *  the route exists but has nothing to serve yet (no openings scan). Any other 404 is a real answer about that id. */
+export const API_ERROR = { routeMissing: 'route_missing', noData: 'no_data' } as const;
 
 export const STEP_ORDER = [
   'parse_request',
