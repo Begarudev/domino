@@ -165,9 +165,10 @@ DOMINO_PORT=4321           # optional
 Tests:
 
 ```bash
-bun run test         # unit, domain and engine tests (bun test server); live-adapter checks skip without a Crustdata key
+bun run test         # unit, domain and engine tests (bun test server); live-adapter checks run only with DOMINO_LIVE_TESTS=1
 bun run test:e2e     # end to end over HTTP: messy input, timeouts, kill/resume, double approve, budgets, replay
 bun run smoke        # one scripted run: approve twice, kill the engine and resume
+bun run proof:send-once   # kill between delivery and the outbox write, retry: "Already delivered · skipped · Deliveries: 1"
 bun run typecheck
 ```
 
@@ -489,14 +490,29 @@ matter.
 - **Held, acqui-hire: Poolside (302 staff), inference.** L. and A., both inference engineers, left in Sep 2026 for
   NVIDIA. A dated article found through Crustdata news search, "Nvidia pays Poolside $6bn to license its model factory
   and hire 109 staff" ([The Next Web](https://thenextweb.com/news/nvidia-poolside-6bn-model-factory-licence),
-  published 21 Aug 2026), shows this is an acqui-hire, not a drain. This hold comes from the live analysis scripts
-  (`scripts/live/`, recorded in `docs/LIVE-DATA.md`). The app's automatic news check for acqui-hires isn't merged yet;
-  in the app today, an acquisition is held when it is in the configured or enriched acquisition records.
+  published 21 Aug 2026), shows this is an acqui-hire, not a drain. The app's own O1 run detects this hold itself: its
+  acqui-hire guard reads Crustdata news for the destination company and finds the same dated article. A second guard
+  agrees: Poolside's headcount fell 13.2% over 90 days, a possible restructure.
 - **Held, dates can't settle the window: SANI (34 staff), ML platform**, because of August month-only dates.
 - Multiverse Computing's departures ended in July, outside the 90 days. Every other group with 2 or more departures
   is above 5,000 staff (Intel, Google, Meta, Microsoft, Oracle, Qualcomm, AWS, Apple, Optum, TikTok).
 
-*To fill at 16:30:* the openings matched to the demo candidate, and the same counts from the app's own live run.
+The app's own O1 run (`run_c0d62009`) produced this funnel from the same live read, served from the recorded cache at
+0 credits. `GET /api/openings/funnel` serves it, and every stage opens its rows:
+
+| O1 stage (app run) | Count |
+|---|---|
+| People who left an infra/serving title and started a new role (last 90 days) | 1,410 |
+| Direct moves out of an engineering role in a tracked family | 312 |
+| Departure month inside or straddling the 90-day window | 250 |
+| At a company with 20–5,000 staff | 95 |
+| Company and role family with 2 or more departures | 3 |
+| **Predicted openings** | **0 settled, 1 provisional** (Abacus.AI, ML platform) |
+| **Held by a false-drain guard** | **2** (Poolside: acqui-hire and restructure; SANI: month straddle) |
+| Watchlist (under 2 departures: 63 with one so far, 25 whose only month is on the window edge) | 88 |
+
+The two tables count slightly differently: the scripts count conclusive departures, while the app counts months that
+straddle the window edge and then settles them as intervals. Both reach the same decisions.
 
 ### 3. Part 2: live company-analysis run
 
