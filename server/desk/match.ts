@@ -84,7 +84,7 @@ export function fitFor(candidate: Profile, opening: Opening, evidence: Map<strin
     fit.push({ text: `Years of ${label} experience: work history was not shared`, status: 'cant_verify' });
   }
   fit.push({ text: 'Seniority, location and work authorisation fit: not in the consented profile', status: 'cant_verify' });
-  const matchScore = Math.round(Math.min(1, score * 0.75 + opening.confidence * 0.25) * 100) / 100;
+  const matchScore = Math.round(Math.min(1, score * 0.75 + (opening.confidence ?? 0) * 0.25) * 100) / 100;
   return { fit, score: matchScore };
 }
 

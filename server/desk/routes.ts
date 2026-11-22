@@ -185,7 +185,7 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const departures = snapshot.departures.filter(departure => departure.companyId === id);
     const candidates = listCandidateRows(store).map(row => candidateView(store, row))
       .filter(candidate => candidate.status === 'ready' && candidate.consent.discoverable);
-    const matches = candidates.flatMap(candidate => matchesFor(candidate, openings, snapshot.evidence)).sort((a, b) => b.score - a.score);
+    const matches = candidates.flatMap(candidate => matchesFor(candidate, openings, snapshot.evidence)).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     const intros = listIntroRows(store, { companyId: id }).map(introView);
     const replayRun = latestOpeningsRunId(store, true);
     const replay = replayRun ? openingsSnapshot(store, replayRun)?.replay ?? null : null;

@@ -38,6 +38,28 @@ export interface Candidate {
   fixture?: boolean;                // labelled fictional demo candidate
 }
 
+// A rule decision is shown as its clauses, never as a bare probability (anti-wrapper rule 4).
+export interface RuleClause {
+  id: string;                       // e.g. 'o1.departures', 'o1.no_replacement.jobs', 'o1.window', 'guard.acquihire'
+  text: string;                     // "2 conclusive ML-platform departures (Oct, Oct)"
+  state: 'met' | 'open' | 'failed' | 'cant_verify';
+  detail?: string;                  // the date math / search scope: "job search 1 Oct–22 Nov, 0 records, checked 22 Nov"
+  evidenceIds: string[];
+}
+
+// Funnel with drill-down: every count opens its rows (role + initial + month for people).
+export interface FunnelStage { id: string; label: string; count: number; rows?: { label: string; detail?: string; evidenceId?: string }[] }
+export interface OpeningsFunnel { runId: string; rule: 'O1'; lockedAt: string; snapshot: string; stages: FunnelStage[] }
+
+// Rules registry: id, thresholds, lock time and today's live fire counts.
+export interface RuleCard {
+  id: 'O1' | 'R1' | 'CONTAGION' | 'DISPLACEMENT' | 'DIRECT' | string;
+  name: string; statement: string; thresholds: string[]; guards: string[];
+  lockedAt: string;                 // "22 Nov 2026 14:08 IST (after live counts, before replay outcomes)"
+  counts: { label: string; value: number }[]; // e.g. fired 0 · watchlist 2 · held 1
+  sourceRunId: string | null;
+}
+
 export type OpeningReasonKind = 'talent_drain' | 'no_replacement' | 'funding' | 'news' | 'headcount';
 export interface OpeningReason { kind: OpeningReasonKind; label: string; date: IsoDate | null; evidenceId: string | null }
 
@@ -48,7 +70,8 @@ export interface Opening {
   roleFamily: RoleFamily;
   roleTitle: string;                // e.g. "ML Platform Engineer"
   status: 'open' | 'watch' | 'held';
-  confidence: number;               // 0..1
+  confidence?: number;              // internal only; NOT shown (anti-wrapper rule 4). The UI shows `clauses`.
+  clauses?: RuleClause[];           // set by the engine for every opening; O1 clauses with state + sources, e.g. ✓ 2 conclusive departures · ⏳ window open
   predictedAt: IsoDate;             // the as-of date of the scan
   rule: 'O1';
   reasons: OpeningReason[];
@@ -75,7 +98,7 @@ export interface Departure {
 }
 
 export interface FitReason { text: string; status: 'verified' | 'cant_verify'; profileField?: string; evidenceId?: string }
-export interface Match { candidateId: string; candidateLabel: string; openingId: string; score: number; fit: FitReason[] }
+export interface Match { candidateId: string; candidateLabel: string; openingId: string; score?: number; fit: FitReason[] } // score internal, not shown
 
 export interface IntroRequest {
   id: string;
@@ -106,7 +129,7 @@ export interface CompanyView {
   evidence: Evidence[];
 }
 
-export interface OpeningForCandidate extends Opening { fit: FitReason[]; matchScore: number }
+export interface OpeningForCandidate extends Opening { fit: FitReason[]; matchScore?: number } // matchScore internal, not shown
 
 // ---------- company dossier (full company analysis; GET /api/companies/:id/dossier) ----------
 // A per-company view of the latest analysis run (outbound pipeline: triggers, entities, cascade rules, targets,
