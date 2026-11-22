@@ -171,3 +171,34 @@
   .rec-count, .rec-foot, .rec-fun-l { font-size: 15px; }
   .rec-fun b { font-size: 26px; line-height: 32px; }
 }
+
+/* polish pass: data grid rhythm. Sans only, tabular figures for every count and date, muted 12px sentence-case
+   heads, 16px cell gutters, a quiet row hover, and the header summary never outranks its heading. */
+.rec-fun b { font-family: var(--sans); font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.rec-fun .rec-plus { font-family: var(--sans); }
+.rec-role { font-weight: 600; letter-spacing: -.01em; }
+.rec [data-num], .rec-count, .rec-ev-date, .rec-proof, .rec-role-sub { font-variant-numeric: tabular-nums; }
+.rec .panel > header > span:not(.st) { font-size: 13px; }
+.rec table.t th { font-size: 12px; font-weight: 500; color: var(--ink-3); text-transform: none; letter-spacing: 0; }
+.rec table.t th:first-child, .rec table.t td:first-child { padding-left: 16px; }
+.rec table.t th:last-child, .rec table.t td:last-child { padding-right: 16px; }
+.rec-dep table.t td { vertical-align: top; }
+.rec-dep table.t td:nth-child(3), .rec-hire td:nth-child(3) { font-variant-numeric: tabular-nums; }
+.rec-dep table.t tbody tr { transition: background 150ms var(--ease); }
+.rec-dep table.t tbody tr:hover { background: var(--row-hover); }
+.rec-hire td { vertical-align: top; }
+.rec-fit li + li { margin-top: 4px; }
+.rec-foot { padding: 10px 16px 12px; }
+/* Attio direction: 10px hairline cards, state as a small rounded pill with a teal dot (meaning only), 36-40px rows. */
+.rec .panel { border-radius: 10px; }
+.rec-pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px;
+  font-size: 12px; font-weight: 500; color: var(--ink); background: var(--surface); white-space: nowrap;
+}
+.rec-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--acc); }
+.rec-dep table.t td { padding-top: 9px; padding-bottom: 9px; vertical-align: middle; }
+@media (min-width: 1800px) {
+  .rec-pill { font-size: 13px; height: 24px; }
+  .rec .panel > header > span:not(.st) { font-size: 14px; }
+  .rec table.t th { font-size: 13px; }
+}
