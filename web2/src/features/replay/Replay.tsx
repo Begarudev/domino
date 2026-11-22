@@ -1,17 +1,18 @@
-// FEATURE 7: replay scorecard. O1 frozen at the replay date, scored against dated job posts and hires up to the
-// horizon. The result is earned: a scrubber plays the window and the summary appears only at the end. Raw counts only.
+// FEATURE 7: replay scorecard. If DOMINO had run on the replay date using only facts dated on or before it, what would
+// rule O1 have predicted, and what actually happened by the horizon, against simple baselines? Every count shows at
+// once; the timeline scrubber only filters the outcome list. Raw counts only.
 // Data: desk.replay (GET /api/companies/:id) or the page run's snapshot.replay. No replay -> an honest empty state.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Chart from 'react-apexcharts';
+import { motion } from 'motion/react';
 import type { ReplayScore } from '../../../../shared/types.ts';
 import type { CompanyDesk } from '../../data/desk.ts';
 import { useRunSel } from '../../data/store.ts';
 import { fmtDate, fmtInt, plural } from '../../lib/format.ts';
-import { reducedMotion } from '../../lib/motion.ts';
 import './replay.css';
 
 type Score = ReplayScore & { cohort?: number; lockedAt?: string };
 const DAY = 86_400_000;
-const PLAY_MS = 4200;
 const t = (iso: string) => Date.parse(iso.length === 7 ? `${iso}-01` : iso);
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
@@ -42,16 +43,6 @@ function ReplayEmpty({ locked }: { locked: string | null }) {
         <header><h2>Awaiting a scored replay</h2><span className="st plain">O1 · not replayed</span></header>
         <div className="pad">
           <p>A replay freezes the data at 1 Sep, runs rule O1 as it was locked{locked ? ` at ${locked}` : ''}, then checks each company for a dated job post or hire in the role family afterwards. Until a replay run is scored, there are no counts to show.</p>
-          <h3 className="rp-sub">What the scorecard will show</h3>
-          <p className="rp-subline">Raw counts per selector once a replay is scored. Cells stay empty until then; nothing here is estimated.</p>
-          <table className="t rp-table rp-ghost-t" aria-label="Scorecard columns, not yet scored">
-            <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
-            <tbody>
-              {['O1 (locked rule)', 'Job-post baseline', 'Whole cohort (base rate)'].map((l) => (
-                <tr key={l}><td>{l}</td><td className="num"><span className="faint">not scored</span></td><td className="num"><span className="faint">not scored</span></td><td className="num"><span className="faint">not scored</span></td></tr>
-              ))}
-            </tbody>
-          </table>
           <p className="rp-subline">Integrity check: facts dated after 1 Sep used by O1 must be 0.</p>
         </div>
       </section>
@@ -59,126 +50,141 @@ function ReplayEmpty({ locked }: { locked: string | null }) {
   );
 }
 
+const BY: Record<ReplayScore['outcomes'][number]['predictedBy'], string> = {
+  domino: 'O1', both: 'O1 + job-post', baseline_first_order: 'Job-post baseline', baseline_headcount: 'Headcount baseline',
+};
+
+function How({ children }: { children: React.ReactNode }) {
+  return (
+    <details className="rp-how"><summary>How this is computed</summary><div className="rp-how-b">{children}</div></details>
+  );
+}
+
 function ReplayCard({ score, locked }: { score: Score; locked: string | null }) {
   const start = t(score.asOf);
   const end = t(score.horizonEnd);
   const span = Math.max(DAY, end - start);
-  const events = useMemo(() => score.outcomes.filter((o) => o.hit && o.outcomeDate).map((o) => ({ ...o, at: t(o.outcomeDate!) })).sort((a, b) => a.at - b.at), [score]);
-  const [pos, setPos] = useState(0); // 0..1
-  const [playing, setPlaying] = useState(false);
-  const [drawer, setDrawer] = useState(false);
-  const raf = useRef(0);
-  const done = pos >= 1;
-  const cursor = start + pos * span;
-  const seen = events.filter((e) => e.at <= cursor);
+  const events = useMemo(() => score.outcomes.filter((o) => o.hit && o.outcomeDate)
+    .map((o) => ({ ...o, at: t(o.outcomeDate!) })).sort((a, b) => a.at - b.at), [score]);
+  const [cut, setCut] = useState(1000); // scrubber 0..1000, default: whole window, all results visible
+  const [focus, setFocus] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [only, setOnly] = useState<'all' | 'hit' | 'miss'>('all');
+  const cursor = start + (cut / 1000) * span;
 
-  const play = () => {
-    if (reducedMotion()) { setPos(1); return; }
-    cancelAnimationFrame(raf.current);
-    const from = pos >= 1 ? 0 : pos;
-    const t0 = performance.now() - from * PLAY_MS;
-    setPlaying(true);
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - t0) / PLAY_MS);
-      setPos(p);
-      if (p < 1) raf.current = requestAnimationFrame(tick); else setPlaying(false);
-    };
-    raf.current = requestAnimationFrame(tick);
-  };
-  const pause = () => { cancelAnimationFrame(raf.current); setPlaying(false); };
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
-
-  // The server lists outcomes only for companies some selector picked; the whole-cohort base rate lives in its note
-  // ("Base rate: 6 of 91 cohort companies"). Prefer an explicit field, then that sentence, then the scored list (labelled as such).
   const noteRate = score.note?.match(/Base rate:\s*([\d,]+)\s+of\s+([\d,]+)/i);
   const num = (s: string) => Number(s.replace(/,/g, ''));
   const N = score.cohort ?? (noteRate ? num(noteRate[2]) : score.outcomes.length);
   const cohortHits = noteRate && score.cohort == null ? num(noteRate[1]) : score.outcomes.filter((o) => o.hit).length;
-  const cohortLabel = score.cohort != null || noteRate ? 'Whole cohort (base rate)' : 'Companies scored (any selector)';
-  const d = score.domino, base = score.baselineFirstOrder;
-  const hc = (score as Score & { baselineHeadcount?: ReplayScore['baselineFirstOrder'] }).baselineHeadcount;
-  const lead = (n: number | null) => (n != null ? `${fmtInt(n)} days` : <span className="faint">–</span>);
-  const hitCell = (s: { predicted: number; hits: number }) => (s.predicted ? `${fmtInt(s.hits)} of ${fmtInt(s.predicted)}` : <span className="faint">–</span>);
+  const d = score.domino, base = score.baselineFirstOrder, hc = score.baselineHeadcount;
+
+  const rows = score.outcomes
+    .map((o, i) => ({ ...o, key: `${o.companyId}-${i}`, at: o.outcomeDate ? t(o.outcomeDate) : null }))
+    .filter((o) => (only === 'all' ? true : only === 'hit' ? o.hit : !o.hit))
+    .filter((o) => !q || `${o.companyId} ${o.outcome} ${BY[o.predictedBy]}`.toLowerCase().includes(q.toLowerCase()))
+    .filter((o) => cut >= 1000 || (o.at != null && o.at <= cursor));
+  const seen = events.filter((e) => e.at <= cursor).length;
+
+  const series = [
+    { name: 'Companies picked', data: [d.predicted, base.predicted, hc.predicted, N] },
+    { name: 'Had the outcome by ' + fmtDate(score.horizonEnd), data: [d.hits, base.hits, hc.hits, cohortHits] },
+  ];
+  const cats = ['O1 (locked rule)', 'Job-post baseline', 'Headcount +30%', 'Whole cohort (base rate)'];
   const ticks = monthTicks(start, end);
 
   return (
     <div className="replay">
-      <section className="panel">
+      <motion.section className="panel rp-hero" data-testid="replay-summary" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
         <header>
           <h2>{fmtDate(score.asOf, true)} replay · outcomes through {fmtDate(score.horizonEnd, true)}</h2>
-          <span className={`ctag ${score.factsAfterAsOfUsed === 0 ? 'tone-verified' : 'tone-held'}`}>O1 inputs · {fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)}</span>
+          <span className={`ctag ${score.factsAfterAsOfUsed === 0 ? 'tone-verified' : 'tone-held'}`}>{fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)} used</span>
         </header>
-        {score.snapshotLabel && <p className="rp-src">Snapshot: {score.snapshotLabel}</p>}
-        <div className="pad rp-play">
-          <button className="btn pri" data-testid="replay-play" onClick={playing ? pause : play}>{playing ? 'Pause' : done ? 'Play again' : pos > 0 ? 'Resume' : 'Play the replay'}</button>
+        <p className="rp-q pad">If DOMINO had run on {fmtDate(score.asOf, true)} using only facts dated on or before then, which companies would rule O1 have picked, and which actually posted or hired in the role family by {fmtDate(score.horizonEnd, true)}, compared with simple baselines?</p>
+        <div className="rp-kpis">
+          <Kpi big={fmtInt(d.predicted)} label="O1 picks" sub={d.predicted ? `${fmtInt(d.hits)} had the outcome` : 'no company met O1 at this cutoff'} />
+          <Kpi big={`${fmtInt(base.hits)} / ${fmtInt(base.predicted)}`} label="Job-post baseline" sub="hits / picks · any post in last 30 days" />
+          <Kpi big={`${fmtInt(hc.hits)} / ${fmtInt(hc.predicted)}`} label="Headcount baseline" sub="hits / picks · headcount +30%" />
+          <Kpi big={`${fmtInt(cohortHits)} of ${fmtInt(N)}`} label="Base rate" sub="whole cohort with the outcome" />
+        </div>
+        <p className="rp-why pad">{score.note}</p>
+        <div className="pad"><How>
+          <p>Reads <code>GET /api/companies/:id</code> (field <code>replay</code>), written by the run’s replay step (<code>replay.scored</code> event).</p>
+          <p><b>Rule O1</b>: 2+ conclusive dated departures in one role family within 90 days, no dated replacement post or hire within 30 days. Locked{locked ? ` at ${locked}` : ''}, before outcomes were looked at.</p>
+          <p><b>Outcome</b>: {score.outcomeDefinition ?? 'a dated job post or hire in the role family after the cutoff'}.</p>
+          <p><b>Data</b>: Crustdata person search and job search (cached), filtered to facts dated on or before {fmtDate(score.asOf, true)}. {score.snapshotLabel}</p>
+        </How></div>
+      </motion.section>
+
+      <section className="panel">
+        <header><h2>Selectors compared</h2><span className="faint">picks vs companies that had the outcome</span></header>
+        <div className="pad rp-chart">
+          <Chart type="bar" height={260} series={series} options={{
+            chart: { toolbar: { show: false }, fontFamily: 'inherit', animations: { enabled: true, speed: 400 } },
+            plotOptions: { bar: { horizontal: true, barHeight: '70%', borderRadius: 3 } },
+            colors: ['#c9ced6', '#0f766e'], dataLabels: { enabled: true, style: { colors: ['#1f2328'] } },
+            xaxis: { categories: cats }, grid: { borderColor: '#eceef1' }, legend: { position: 'top', horizontalAlign: 'left' },
+            tooltip: { y: { formatter: (v: number) => plural(v, 'company', 'companies') } },
+          }} />
+        </div>
+      </section>
+
+      <section className="panel">
+        <header><h2>Outcome timeline</h2><span className="faint">{plural(seen, 'dated outcome', 'dated outcomes')} by {fmtDate(iso(cursor), true)}</span></header>
+        <div className="pad">
           <div className="rp-track-wrap">
-            <div className="rp-track" aria-hidden="true">
-              <i className="rp-fill" style={{ transform: `scaleX(${pos})` }} /><i className="rp-head" style={{ left: `${pos * 100}%` }} />
-              {events.filter((e) => e.at <= cursor).map((e, i) => (
-                <span key={`${e.companyId}-${i}`} className="rp-ev on" style={{ left: `${((e.at - start) / span) * 100}%` }} title={`${fmtDate(e.outcomeDate)} · ${e.outcome}`} />
-              ))}
-            </div>
-            <input className="rp-range" type="range" min={0} max={1000} value={Math.round(pos * 1000)} data-testid="replay-scrubber"
-              aria-label="Replay date" aria-valuetext={fmtDate(iso(cursor), true)}
-              onChange={(e) => { pause(); setPos(Number(e.target.value) / 1000); }} />
+            <div className="rp-track"><i className="rp-fill" style={{ transform: `scaleX(${cut / 1000})` }} /></div>
+            {events.map((e) => (
+              <button key={`${e.companyId}-${e.at}`} type="button" className={`rp-ev ${e.at <= cursor ? 'on' : ''} ${focus === e.companyId ? 'sel' : ''}`}
+                style={{ left: `${((e.at - start) / span) * 100}%` }} title={`${e.companyId} · ${fmtDate(e.outcomeDate, true)} · ${e.outcome}`}
+                aria-label={`${e.companyId}, ${fmtDate(e.outcomeDate, true)}: ${e.outcome}`}
+                onClick={() => { setFocus(e.companyId); setCut(Math.round(((e.at - start) / span) * 1000)); }} />
+            ))}
+            <input className="rp-range" type="range" min={0} max={1000} value={cut} data-testid="replay-scrubber"
+              aria-label="Show outcomes up to" aria-valuetext={fmtDate(iso(cursor), true)} onChange={(e) => setCut(Number(e.target.value))} />
             <div className="rp-ticks">{ticks.map((m) => <span key={m.label} style={{ left: `${((m.at - start) / span) * 100}%` }}>{m.label}</span>)}</div>
           </div>
-          <div className="rp-now">
-            <b>{fmtDate(iso(cursor), true)}</b>
-            <span>{plural(seen.length, 'company', 'companies')} with a dated post or hire so far</span>
+          <div className="rp-tl-foot">
+            <button className="btn sm" data-testid="replay-play" onClick={() => { setCut(1000); setFocus(null); }} disabled={cut >= 1000}>Show whole window</button>
+            <span className="faint">Drag the scrubber or click a marker: the table below shows outcomes dated up to that day.</span>
           </div>
         </div>
       </section>
 
-      {done ? (
-        <section className="panel rp-summary" data-testid="replay-summary">
-          <header><h2>Scorecard</h2><button className="btn sm" onClick={() => setDrawer((v) => !v)} aria-expanded={drawer} data-testid="replay-drawer">{drawer ? 'Hide protocol' : 'Show protocol and cohorts'}</button></header>
-          <div className="pad">
-            <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. <span className="rp-lead-2">{d.predicted === 0 ? 'It made no prediction at this cutoff.' : `${fmtInt(d.hits)} had the tracked outcome.`}</span></p>
-            <table className="t rp-table">
-              <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
-              <tbody>
-                <tr><td><b>O1</b> (locked rule)</td><td className="num">{fmtInt(d.predicted)}</td><td className="num">{hitCell(d)}</td><td className="num">{lead(d.medianLeadDays)}</td></tr>
-                <tr><td>Job-post baseline <span className="faint">(any post, last 30 days)</span></td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{hitCell(base)}</td><td className="num">{lead(base.medianLeadDays)}</td></tr>
-                {hc && <tr><td>Headcount baseline <span className="faint">(+30%)</span></td><td className="num">{fmtInt(hc.predicted)}</td><td className="num">{hitCell(hc)}</td><td className="num">{lead(hc.medianLeadDays)}</td></tr>}
-                <tr><td>{cohortLabel}</td><td className="num">{fmtInt(N)}</td><td className="num">{fmtInt(cohortHits)} of {fmtInt(N)}</td><td className="num"><span className="faint">–</span></td></tr>
-              </tbody>
-            </table>
-            <p className="rp-why">{score.note}</p>
-            <p className="rp-lock">O1 was locked{locked ? ` at ${locked}` : ''}, before scoring.</p>
+      <section className="panel">
+        <header>
+          <h2>Per-company outcomes</h2>
+          <div className="rp-toolbar">
+            <input className="rp-search" placeholder="Search company or outcome" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search outcomes" />
+            {(['all', 'hit', 'miss'] as const).map((k) => (
+              <button key={k} className={`rp-chip ${only === k ? 'on' : ''}`} onClick={() => setOnly(k)}>{k === 'all' ? 'All' : k === 'hit' ? 'Had outcome' : 'No sign yet'}</button>
+            ))}
+            <span className="faint" data-testid="replay-drawer">{plural(rows.length, 'row', 'rows')}</span>
           </div>
-          {drawer && (
-            <dl className="rp-drawer" data-testid="replay-protocol">
-              <dt>Rule</dt><dd>O1: 2+ conclusive dated departures in one role family within 90 days, no dated replacement post or hire within 30 days</dd>
-              <dt>Locked</dt><dd>{locked ?? 'lock time not reported by the server'}</dd>
-              <dt>Snapshot</dt><dd>{score.snapshotLabel ?? 'not reported'}</dd>
-              <dt>Outcome</dt><dd>{score.outcomeDefinition ?? 'not reported'}</dd>
-              <dt>Cohorts</dt><dd>
-                <ul className="rp-cohort"><li className="rp-cohort-h" aria-hidden="true"><span>Company</span><span>Selected by</span><span>Outcome</span><span>Date</span></li>{score.outcomes.map((o, i) => (
-                  <li key={`${o.companyId}-${i}`}><span className="mono">{o.companyId}</span><span className="faint">{o.predictedBy === 'domino' ? 'O1' : o.predictedBy === 'both' ? 'O1 + baseline' : 'baseline'}</span>
-                    <span>{o.hit ? <span className="tick">✓</span> : null} {o.outcome}</span><span className="rp-date faint">{o.outcomeDate ? fmtDate(o.outcomeDate, true) : 'undated'}</span></li>
-                ))}</ul>
-              </dd>
-            </dl>
-          )}
-        </section>
-      ) : (
-        <section className="panel rp-held" aria-live="polite">
-          <header><h2>Scorecard</h2><span className="faint">Counts appear when the replay reaches {fmtDate(score.horizonEnd, true)}</span></header>
-          <div className="pad">
-            <table className="t rp-table rp-ghost-t" aria-label="Scorecard, withheld until the end">
-              <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
-              <tbody>
-                {['O1 (locked rule)', 'Job-post baseline', 'Whole cohort (base rate)'].map((l) => (
-                  <tr key={l}><td>{l}</td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+        </header>
+        <table className="t rp-table" data-testid="replay-protocol">
+          <thead><tr><th>Company</th><th>Picked by</th><th>Outcome</th><th className="num">Date</th></tr></thead>
+          <tbody>
+            {rows.map((o) => (
+              <tr key={o.key} className={focus === o.companyId ? 'sel' : ''} onClick={() => setFocus(o.companyId)}>
+                <td className="mono">{o.companyId}</td>
+                <td><span className={`rp-by by-${o.predictedBy}`}><i />{BY[o.predictedBy]}</span></td>
+                <td>{o.hit ? <span className="tick">✓ </span> : null}{o.outcome}</td>
+                <td className="num faint">{o.outcomeDate ? fmtDate(o.outcomeDate, true) : 'undated'}</td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={4} className="faint">No outcome rows match this search, filter or date. Widen the scrubber to {fmtDate(score.horizonEnd, true)}.</td></tr>}
+          </tbody>
+        </table>
+        <div className="pad"><How>
+          <p>Rows come from <code>replay.outcomes</code>: every company some selector picked. An outcome is a dated job post or hire in the role family after {fmtDate(score.asOf, true)}; its evidence ids are kept on the row. "No sign yet" means none was found up to {fmtDate(score.horizonEnd, true)}.</p>
+        </How></div>
+      </section>
     </div>
   );
+}
+
+function Kpi({ big, label, sub }: { big: string; label: string; sub: string }) {
+  return <div className="rp-kpi"><b>{big}</b><span>{label}</span><small>{sub}</small></div>;
 }
 
 function monthTicks(start: number, end: number) {

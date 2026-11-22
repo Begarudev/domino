@@ -75,3 +75,28 @@
 .rp-drawer dt { font-weight: var(--w-med); color: var(--ink-3); }
 .rp-lead-2 { color: var(--ink-3); }
 .replay { max-width: none; grid-template-columns: minmax(0, 1fr); } .rp-table { max-width: none; width: 100%; }
+.rp-q { color: var(--ink-2, #444); margin: 0; max-width: 80ch; }
+.rp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule-2); border-bottom: 1px solid var(--rule-2); }
+.rp-kpi { display: grid; gap: 2px; padding: 14px 16px; border-right: 1px solid var(--rule-2); }
+.rp-kpi:last-child { border-right: 0; }
+.rp-kpi b { font-size: 28px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rp-kpi span { font-size: 12px; font-weight: 600; }
+.rp-kpi small { font-size: 12px; color: var(--ink-3, #777); }
+.rp-how summary { cursor: pointer; font-size: 12px; color: var(--ink-3, #777); }
+.rp-how-b { font-size: 12px; color: var(--ink-2, #555); display: grid; gap: 4px; padding-top: 6px; }
+.rp-how-b p { margin: 0; }
+.rp-ev { position: absolute; top: 4px; width: 12px; height: 20px; margin-left: -6px; border: 0; border-radius: 3px; background: var(--rule-2); cursor: pointer; z-index: 2; padding: 0; }
+.rp-ev.on { background: #0f766e; }
+.rp-ev.sel { outline: 2px solid #0f766e; outline-offset: 2px; }
+.rp-tl-foot { display: flex; gap: 12px; align-items: center; margin-top: 8px; font-size: 12px; }
+.rp-toolbar { display: flex; gap: 6px; align-items: center; }
+.rp-search { height: 28px; border: 1px solid var(--rule-2); border-radius: 8px; padding: 0 10px; font: inherit; font-size: 13px; width: 220px; }
+.rp-chip { height: 26px; border: 1px solid var(--rule-2); border-radius: 999px; background: #fff; padding: 0 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.rp-chip.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.rp-by { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #f3f4f6; }
+.rp-by i { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; }
+.rp-by.by-domino i, .rp-by.by-both i { background: #0f766e; }
+.rp-by.by-baseline_first_order i { background: #b45309; }
+.rp-by.by-baseline_headcount i { background: #2563eb; }
+.rp-table tr.sel td { background: #f0fdfa; }
+.rp-table tbody tr { cursor: pointer; }
