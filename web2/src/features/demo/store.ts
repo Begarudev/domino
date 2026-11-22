@@ -29,24 +29,21 @@ export interface DemoStep {
 }
 
 const RUN = 'run_2a38d6d8-217d-45e7-8c30-29a7c6d4ec46'; // full id: the short id 404s
-const SELL_RUN = 'run_1a165a3d-5c87-43dc-aedb-9307e98f9973';
+const BUYERS = '/company/abacus-ai/buyers?buyers=run_1a165a3d-5c87-43dc-aedb-9307e98f9973';
 /** Where each step looks. Selectors are existing data-testids, ordered so the spotlight follows the screen's state. */
 const DIRECTION: Record<string, { route?: string; focus: string; cue?: string }[]> = {
-  hook: [{ focus: '.rec-op' }],
-  opening: [{ focus: '.rec-op' }, { focus: '[data-testid="funnel"]' }, { focus: '[data-testid="hire-panel"]' }],
+  hook: [{ focus: 'nav.side' }],
+  opening: [{ focus: '.rec-op' }, { focus: '[data-testid="hire-panel"]' }],
   approve: [{
     focus: '[data-testid="approve"], [data-testid="resume"], [data-testid="approve-retry"], [data-testid="deliveries"], [data-testid="outreach-draft"]',
     cue: 'Presenter: click Approve, then Resume from checkpoint. It delivers once; the overlay never clicks.',
   }],
   // Buyers pins its run from ?buyers= (prefix match), not ?run=; pin the full id so the page never picks another run.
-  sell: [{ route: `/company/abacus-ai/buyers?buyers=${SELL_RUN}`, focus: '.by-t, [data-testid^="buyer-row-"]' }],
-  verifier: [{ focus: '[data-testid="guard-card"]' }, { route: '/company/abacus-ai/reading', focus: '[data-testid="reading-chart"], [data-testid="reading-row"]' }],
-  'replay-ledger': [
-    { focus: '[data-testid="replay-summary"], [data-testid="replay-protocol"]' },
-    { route: `/company/abacus-ai/ledger?run=${RUN}`, focus: '[data-testid="blocked-call"], [data-testid="cap-line"]' },
-  ],
-  architecture: [{ focus: '[data-testid="cap-line"], .lg-table' }],
-  close: [{ focus: '.rec-op' }],
+  sell: [{ route: BUYERS, focus: 'tr[aria-selected="true"], [data-testid^="buyer-row-"]' }],
+  'sell-draft': [{ route: BUYERS, focus: '[data-testid="buyer-draft"]' }],
+  verifier: [{ focus: '[data-testid="guard-card"]' }],
+  architecture: [{ route: `/company/abacus-ai/ledger?run=${RUN}`, focus: '[data-testid="cap-line"], .lg-table' }],
+  close: [{ route: BUYERS, focus: 'tr[aria-selected="true"], [data-testid^="buyer-row-"]' }],
 };
 
 const secs = (v: number | string) => {
