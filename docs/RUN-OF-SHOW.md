@@ -50,7 +50,7 @@ and a month that can't be settled."
 | Tab | Show | Say |
 |---|---|---|
 | **Read → Reading log** | Every record the scan read, kept or discarded with its reason | "Nothing is hidden: here is what it read and why it dropped the rest." |
-| **Read → Company file** | Dated facts, headcount 271 → 288 (+3.6% over 90 days), talent flows, rule rows O1 · R1 · CONTAGION · DISPLACEMENT | "No generated prose. Every line is a dated fact." |
+| **Read → Company file** | Dated facts, the headcount series (288 staff on 2 Nov; +3.6% over 90 days), talent flows, rule rows O1 · R1 · CONTAGION · DISPLACEMENT | "No generated prose. Every line is a dated fact." |
 | **Read → Chains** | The rules registry: statements, lock times, today's fire counts. R1 fired 0; its threshold stayed at 3 | "We fixed thresholds before looking, and kept them when the count was zero." |
 | **Act → Find buyers** | Live run `run_1a165a3d`: EWOR drafted from 2 verified live facts, sent to the CTO role. Crusoe, Nscale and one more are "Not drafted (0 of 2)", and The Royal is "(1 of 2)" | "Five predicted needs on real companies. Only one had enough verified evidence to write to. The rest are held back, and it says why." |
 | **Read → Verifier** | Each claim against its dated source, or "I can't verify" | "If it can't verify a sentence, the sentence doesn't go out." |
@@ -64,8 +64,8 @@ and a month that can't be settled."
 
 ## Live vs cached (say it if asked; the screens already label it)
 
-- **Openings scan:** live Crustdata read, 22 Nov 2026, 13:50–14:40 IST. The demo replays it from the recorded cache
-  for 0 credits; the run chip says so.
+- **Openings scan:** live Crustdata reads on 22 Nov 2026; the reads behind this scan were fetched 14:30–14:34 IST (the
+  wider cohort pull ran 13:50–14:40). The demo replays them from the recorded cache for 0 credits; the run chip says so.
 - **Find buyers:** a fresh live run at 16:19 IST, 142.0 credits.
 - **Replay:** today's index filtered to facts dated on or before 1 Sep. Not a point-in-time snapshot.
 - **No sends:** all messages go to the team test inbox only. Nothing is sent to a real person.
