@@ -6,10 +6,14 @@
 //   bun run demo:reset-intros --reopen    archive, then ask the running server (DOMINO_URL, default
 //                                         http://127.0.0.1:4321) to re-request each candidate → company intro, so a fresh
 //                                         draft is waiting for approval
+//   ... --reopen --crash-after-deliver    the same, and the new intro's engine crashes right after the test inbox accepts
+//                                         the approved message: Resume then shows "Already delivered · skipped",
+//                                         Deliveries: 1 (the kill-and-resume beat)
 import { Store } from '../server/db.ts';
 import { archiveFixtureIntros } from '../server/desk/store.ts';
 
 const reopen = process.argv.includes('--reopen');
+const crashAfterDeliver = process.argv.includes('--crash-after-deliver');
 const base = process.env.DOMINO_URL ?? `http://127.0.0.1:${process.env.DOMINO_PORT ?? 4321}`;
 const store = new Store();
 let pairs: { candidateId: string; openingId: string }[] = [];
@@ -30,7 +34,8 @@ if (!reopen) {
 } else {
   for (const { candidateId, openingId } of pairs) {
     const response = await fetch(`${base}/api/candidates/${candidateId}/intros`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openingId }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ openingId, ...crashAfterDeliver && { chaos: { crashAfterDeliver: true } } }),
     }).catch(error => ({ status: 0, json: async () => ({ error: String(error) }) }) as unknown as Response);
     const body = await response.json().catch(() => ({})) as { id?: string; status?: string; error?: string };
     console.log(response.status === 201 ? `Re-requested ${candidateId} → ${openingId}: new intro ${body.id} (drafting; awaiting approval in a few seconds)`
