@@ -176,3 +176,44 @@ fixtureFor(path: string, body: unknown): unknown                -> synthetic raw
 - Never commit secrets; `.env` is gitignored. `data/` is gitignored except `data/cache-snapshot/` (committed cached live responses for the demo).
 - Minimal personal data: names, titles, employers, role dates, public profile URL. No emails or phone numbers.
 - Undated or unsourced facts are never stated as fact: they go to "I can't verify".
+
+## Centrepiece slot (web)
+
+The middle of the main screen is a **slot** so rival centrepieces (3D physics table, talent-flow time-lapse, mission
+control) can mount without touching the rest of the app. The web app owns run flow, approvals, ledger, drawer and
+plumbing; a centrepiece only renders and reports selections.
+
+`web/src/centrepiece/contract.ts`:
+
+```ts
+import type { RunSnapshot, StoredEvent } from '../../../shared/types.ts';
+
+export type Selection =
+  | { kind: 'node'; id: string }        // GraphNode.id (company id)
+  | { kind: 'edge'; id: string }        // GraphEdge.id
+  | { kind: 'target'; id: string }      // Target.companyId
+  | { kind: 'evidence'; id: string };   // Evidence.id
+
+export interface CentrepieceProps {
+  snapshot: RunSnapshot;                // reduced live state (graph, targets, evidence, replay, ...)
+  events: StoredEvent[];                // every event so far, in seq order (for time-lapse / animation)
+  running: boolean;                     // engine is working right now
+  selection: Selection | null;
+  onSelect: (s: Selection | null) => void;   // opens the evidence drawer
+  hiringFilterView: boolean;            // show only what a plain hiring filter finds: dim the rest, stamp it "missed by a hiring filter"
+  reducedMotion: boolean;
+  width: number;                        // slot size in CSS px (about 780 x 540 at 1440 x 900)
+  height: number;
+  replayToken: number;                  // increments when the user presses "Replay cascade"
+}
+
+export interface CentrepieceModule {
+  id: string;                           // 'table' | 'physical' | 'flow' | 'mission'
+  label: string;
+  Component: (props: CentrepieceProps) => JSX.Element;
+}
+```
+
+`web/src/centrepiece/registry.ts` lists the modules; the app picks one with `?centre=<id>` (default `table`).
+A sample event stream that conforms to `shared/types.ts` lives at `docs/sample-run-events.json` (regenerated from a
+fixture run) and the UI's mock stream at `web/src/mock/events.ts`.
