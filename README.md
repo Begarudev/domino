@@ -357,13 +357,17 @@ The data badge in the header always says which world you are in, and every evide
 
 | Mode | When | What happens |
 |---|---|---|
-| **live** | `CRUSTDATA_API_KEY` set (default) | Every read goes to Crustdata. The raw response is cached in `tool_cache` keyed by endpoint and request |
+| **live** | `CRUSTDATA_API_KEY` set (default) | Cache-first: a request already in `tool_cache` (keyed by endpoint and request) is answered from the recorded live response at 0 credits; anything else goes to Crustdata, and the raw response is recorded |
+| **cache** | `DOMINO_DATA=cache`, or a scan sent with `dataMode: "cache"` | replays recorded live reads only, at 0 credits; a request that was never recorded is skipped, never fetched |
 | **cache** (fallback) | a live call times out, errors or returns nonsense after its retries | answered from the cached live response; the feed shows a fallback line and the evidence row says *cached*, with its retrieval time |
 | **unavailable** | no cached response either | the source is skipped with a warning; nothing is invented |
 | **fixture** | no key, or `DOMINO_DATA=fixture` | a labelled synthetic world for tests and keyless clones. A live run **never** falls back to fixtures |
 
 The live decisions are the candidate's person enrich, opening detection on the live cohort, and the company-analysis
-rules on live Crustdata reads.
+rules on live Crustdata reads. The cohort itself was read live on 22 Nov 2026 between 13:50 and 14:40 IST. Later scans,
+including the one in the demo, replay that recorded read for 0 credits, and the scan badge says so: "Live Crustdata
+read 22 Nov … · replayed from the recorded cache (0 credits)" (`GET /api/openings/funnel` → `served`). A new live scan
+must be asked for explicitly (`confirmLive: true`), because a full cohort pull costs 300–600 credits.
 
 ## Sources, consent, approvals and send-once
 
