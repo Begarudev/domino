@@ -198,9 +198,10 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.ok(expect.includes(res.status), `${path} returned HTTP ${res.status}: ${await res.clone().text()}`);
     return res.json() as Promise<T>;
   };
-  const onboard = async (consent: Candidate['consent'], samples?: string[]) => {
+  // Each test onboards its own person (one profile URL is one candidate).
+  const onboard = async (consent: Candidate['consent'], samples?: string[], handle = 'fictional-asha') => {
     const { candidateId, runId } = await call<{ candidateId: string; runId: string }>('/api/candidates',
-      { linkedinUrl: 'https://www.linkedin.com/in/fictional-asha', consent, samples });
+      { linkedinUrl: `https://www.linkedin.com/in/${handle}`, consent, samples }, [200, 201]);
     assert.match(runId, /^run_/);
     return waitFor(async () => {
       const candidate = await call<Candidate & { evidence: Evidence[] }>(`/api/candidates/${candidateId}`);
@@ -285,8 +286,20 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.deepEqual(await call(`/api/candidates/${candidate.id}/inbox`), [], 'candidate-requested intros are not inbox items');
   });
 
+  test('re-creating the same profile returns the existing candidate, with the consent just given', async () => {
+    const first = await call<{ candidateId: string; runId: string }>('/api/candidates',
+      { linkedinUrl: 'https://www.linkedin.com/in/fictional-repeat/', consent: all }, [201]);
+    const again = await call<{ candidateId: string; runId: string; existing?: boolean }>('/api/candidates',
+      { linkedinUrl: 'https://www.linkedin.com/in/fictional-repeat', consent: { ...all, discoverable: false, shareSamples: false } }, [200]);
+    assert.equal(again.candidateId, first.candidateId);
+    assert.equal(again.runId, first.runId, 'no second profile read');
+    assert.equal(again.existing, true);
+    const row = await call<Candidate>(`/api/candidates/${first.candidateId}`);
+    assert.equal(row.consent.discoverable, false, 'the newer consent wins: a re-create can only narrow or widen it explicitly');
+  });
+
   test('confirm stores the candidate\'s edits with provenance and re-runs matching on them', async () => {
-    const parsed = await onboard({ shareHistory: true, shareSkills: true, shareSamples: false, discoverable: false });
+    const parsed = await onboard({ shareHistory: true, shareSkills: true, shareSamples: false, discoverable: false }, undefined, 'fictional-asha-2');
     assert.deepEqual(parsed.provenance, { roleFamily: 'Parsed by rules', skills: 'Parsed by rules' });
     // Unchanged values sent back are not edits.
     const same = await call<Candidate>(`/api/candidates/${parsed.id}/confirm`, { roleFamily: parsed.roleFamily, skills: parsed.skills });
@@ -315,7 +328,7 @@ describe('search desk over HTTP (fixture mode)', () => {
   });
 
   test('company view: drain as role + initial, discoverable matches only, company-to-candidate intro reaches the inbox', async () => {
-    const hidden = await onboard({ shareHistory: false, shareSkills: true, shareSamples: false, discoverable: false }, ['secret sample']);
+    const hidden = await onboard({ shareHistory: false, shareSkills: true, shareSamples: false, discoverable: false }, ['secret sample'], 'fictional-asha-3');
     assert.deepEqual(hidden.history, []);
     assert.deepEqual(hidden.samples, []);
     assert.ok(hidden.evidence.every(row => !row.source.field?.startsWith('experience.')), 'no history evidence without consent');

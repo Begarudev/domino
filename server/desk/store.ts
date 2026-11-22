@@ -75,6 +75,12 @@ export function confirmCandidate(store: Store, id: string, consent: Consent | un
   store.sql.prepare('UPDATE desk_candidates SET confirmed_at = ?, consent_json = ?, samples_json = ? WHERE id = ?')
     .run(now(), JSON.stringify(next), JSON.stringify(next.shareSamples ? row.samples : []), id);
 }
+// Re-onboarding the same profile: the consent just given replaces the old one (withdrawn sample consent deletes samples).
+export function reconsentCandidate(store: Store, id: string, consent: Consent, samples: string[]) {
+  deskTables(store);
+  store.sql.prepare('UPDATE desk_candidates SET consent_json = ?, samples_json = ? WHERE id = ?')
+    .run(JSON.stringify(consent), JSON.stringify(consent.shareSamples ? samples : []), id);
+}
 export function listCandidateRows(store: Store): CandidateRow[] {
   deskTables(store);
   return store.sql.prepare('SELECT * FROM desk_candidates ORDER BY created_at').all().map(candidateRow);

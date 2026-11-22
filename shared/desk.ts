@@ -131,6 +131,10 @@ export interface IntroRequest {
   runId: string | null;             // intro pipeline run: draft, approval, outbox (send once)
   approvalId?: string | null;       // POST /api/approvals/:id with this id to approve or reject the send
   evidenceIds?: string[];           // rows the message cites
+  citations?: { marker: number; evidenceId: string }[];  // which row each footnote [n] in `message` points to
+  unverifiable?: { claim: string; reason: string }[];  // claims the verifier couldn't tie to a dated source ("I can't verify")
+  generatorLabel?: string | null;   // e.g. "Drafted by GPT-6 Luna from 4 verified claims" or the template label
+  subject?: string | null;
   receipt?: { idempotencyKey: string; receivedAt: IsoDateTime } | null; // from the test-inbox receiver (inbox_received); set once delivered
   receivedAt: IsoDateTime;
 }

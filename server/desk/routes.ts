@@ -10,6 +10,7 @@ import type {
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import type { RoleFamily } from '../../shared/desk.ts';
 import type { Store } from '../db.ts';
+import { config } from '../env.ts';
 import { linkedinProfileUrl } from '../crustdata/person-enrich.ts';
 import { introSharedFields } from '../engine/candidate-steps.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
@@ -18,10 +19,10 @@ import { matchesFor, openingsForCandidate } from './match.ts';
 import { compareOpenings, whyThisTarget } from './why.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
-  listCandidateRows, listIntroRows, openingsSnapshot, setCandidateRun, setIntroRun,
+  listCandidateRows, listIntroRows, openingsSnapshot, reconsentCandidate, setCandidateRun, setIntroRun,
   companiesOf, companySummaries,
 } from './store.ts';
-import type { CandidateEdits, IntroRow, OpeningsSnapshot } from './store.ts';
+import type { CandidateEdits, CandidateRow, IntroRow, OpeningsSnapshot } from './store.ts';
 
 // The send-once proof's fault injection (scripts/send-once-proof.ts); /api/runs accepts the same flag.
 type InjectedChaos = { crashAfterDeliver?: boolean };
@@ -85,6 +86,9 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       companyName: opening?.companyName ?? drafted?.company.name ?? row.companyId, openingId: row.openingId,
       roleTitle: opening?.roleTitle ?? drafted?.roleTitle ?? '', message: drafted?.draft?.body ?? '', status, runId: row.runId,
       approvalId: approval?.id ?? null, evidenceIds: drafted?.draft?.citations.map(item => item.evidenceId) ?? [],
+      citations: drafted?.draft?.citations.map(({ marker, evidenceId }) => ({ marker, evidenceId })) ?? [],
+      unverifiable: drafted?.draft?.unverifiable ?? [], generatorLabel: drafted?.draft?.generatorLabel ?? null,
+      subject: drafted?.draft?.subject ?? null,
       receipt, ...(blocked && { blockedReason: blocked }), receivedAt: receipt?.receivedAt ?? row.createdAt,
     };
   };
@@ -137,9 +141,19 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     }
     const linkedinUrl = linkedinProfileUrl(body.data.linkedinUrl);
     if (!linkedinUrl) return c.json({ error: 'Expected a LinkedIn profile URL like https://www.linkedin.com/in/your-name/' }, 400);
-    const candidateId = shortId('cand');
     const consent = { ...body.data.consent, recordedAt: new Date().toISOString() };
     const samples = (body.data.samples ?? []).map(sample => String(sanitize(sample.trim(), true))).filter(Boolean);
+    // One profile per data mode is one candidate: re-creating it returns the existing record (no copy, no second enrich)
+    // with the consent just given, unless that record's profile read failed.
+    const mode = body.data.dataMode ?? config.dataMode;
+    const existing = listCandidateRows(store).filter(row => row.linkedinUrl === linkedinUrl && row.runId
+      && store.getRun(row.runId)?.data_mode === mode && !['failed', 'crashed', 'budget_exhausted'].includes(store.getRun(row.runId)?.status ?? ''))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (existing) {
+      reconsentCandidate(store, existing.id, consent, samples.length ? samples : existing.samples);
+      return c.json({ candidateId: existing.id, runId: existing.runId, existing: true }, 200);
+    }
+    const candidateId = shortId('cand');
     insertCandidate(store, { id: candidateId, linkedinUrl, consent, samples });
     // The run request names only the candidate id; the profile URL stays in the candidate row.
     const runId = launch('candidate', `candidate:${candidateId}`, { limits: CANDIDATE_LIMITS, dataMode: body.data.dataMode });
@@ -254,7 +268,17 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const openings = snapshot.openings.filter(opening => opening.companyId === id).sort(compareOpenings);
     const summaries = companySummaries(snapshot);
     const departures = snapshot.departures.filter(departure => departure.companyId === id);
-    const candidates = listCandidateRows(store).map(row => candidateView(store, row))
+    // Earlier copies of the same profile (created before re-creates were deduplicated) show once: the copy with an intro
+    // at this company, else the newest.
+    const introFor = new Set(listIntroRows(store, { companyId: id }).map(row => row.candidateId));
+    const byProfile = new Map<string, CandidateRow>();
+    for (const row of listCandidateRows(store)) {
+      const kept = byProfile.get(row.linkedinUrl);
+      const better = !kept || (introFor.has(row.id) && !introFor.has(kept.id))
+        || (introFor.has(row.id) === introFor.has(kept.id) && row.createdAt > kept.createdAt);
+      if (better) byProfile.set(row.linkedinUrl, row);
+    }
+    const candidates = [...byProfile.values()].map(row => candidateView(store, row))
       .filter(candidate => candidate.status === 'ready' && candidate.consent.discoverable);
     const matches = candidates.flatMap(candidate => matchesFor(candidate, openings, snapshot.evidence)).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     const intros = listIntroRows(store, { companyId: id }).map(introView);
