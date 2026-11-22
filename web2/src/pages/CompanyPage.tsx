@@ -83,7 +83,7 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
   const current = COMPANY_TABS.find((t) => t.id === tab)!;
   const counts: Partial<Record<CompanyTab, number>> = desk ? { recruitment: desk.openings.length } : {};
   const companyName = list.data?.find((c) => c.id === id)?.name ?? route.id;
-  const go = (t: CompanyTab) => navigate({ page: 'company', id: route.id, tab: t }, true);
+  const go = (t: CompanyTab) => { if (t !== tab) navigate({ page: 'company', id: route.id, tab: t }); };
 
   return (
     <div className="co">
@@ -107,8 +107,9 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
       <div className="co-main">
         <nav className="crumbs" aria-label="Breadcrumb" data-testid="crumbs">
           <ol>
-            <li><a href={href({ page: 'companies' })} onClick={(e) => { e.preventDefault(); navigate({ page: 'companies' }); }}>Company</a></li>
-            <li><a href={href({ page: 'company', id: route.id, tab: 'recruitment' })} onClick={(e) => { e.preventDefault(); go('recruitment'); }}>{companyName}</a></li>
+            <li><a href={href({ page: 'companies' })} onClick={(e) => { e.preventDefault(); navigate({ page: 'companies' }); }}>Companies</a></li>
+            <li>{tab === 'recruitment' ? <span>{companyName}</span> : <a href={href({ page: 'company', id: route.id, tab: 'recruitment' })} onClick={(e) => { e.preventDefault(); go('recruitment'); }}>{companyName}</a>}</li>
+            <li className="crumb-grp">{current.group}</li>
             <li aria-current="page">{current.label}</li>
           </ol>
         </nav>
