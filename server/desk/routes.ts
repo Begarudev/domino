@@ -3,9 +3,9 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Company, Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
+import type { Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
 import type {
-  Candidate, CompanySummary, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
+  Candidate, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
 } from '../../shared/desk.ts';
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import type { RoleFamily } from '../../shared/desk.ts';
@@ -15,10 +15,11 @@ import { introSharedFields } from '../engine/candidate-steps.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
-import { compareCompanies, compareOpenings, whyThisTarget } from './why.ts';
+import { compareOpenings, whyThisTarget } from './why.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
   listCandidateRows, listIntroRows, openingsSnapshot, setCandidateRun, setIntroRun,
+  companiesOf, companySummaries,
 } from './store.ts';
 import type { CandidateEdits, IntroRow, OpeningsSnapshot } from './store.ts';
 
@@ -50,7 +51,6 @@ const candidateSchema = z.object({
 // One enrich call lists at 1-9 credits; cap the candidate run far below the 600 per-run ceiling.
 const CANDIDATE_LIMITS: Partial<RunLimits> = { maxCredits: 25 };
 
-const byId = <T extends { id: string }>(rows: T[]) => [...new Map(rows.map(row => [row.id, row])).values()];
 const pick = (evidence: Evidence[], ids: Iterable<string>) => {
   const wanted = new Set(ids);
   return evidence.filter(row => wanted.has(row.id));
@@ -237,17 +237,6 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   });
 
   // ---------- companies ----------
-
-  const companiesOf = (snapshot: OpeningsSnapshot): Company[] => byId([
-    ...snapshot.companies,
-    ...snapshot.openings.map(opening => ({ id: opening.companyId, name: opening.companyName, aliases: [], evidenceIds: [] })),
-  ]);
-
-  const companySummaries = (snapshot: OpeningsSnapshot): CompanySummary[] => companiesOf(snapshot).map(company => ({
-      id: company.id, name: company.name, domain: company.domain ?? null, headcount: company.headcount ?? null,
-      openings: snapshot.openings.filter(opening => opening.companyId === company.id && opening.status === 'open').length,
-      departures90d: snapshot.departures.filter(departure => departure.companyId === company.id).length,
-  })).filter(row => row.departures90d || snapshot.openings.some(opening => opening.companyId === row.id)).sort(compareCompanies);
 
   api.get('/companies', c => {
     const snapshot = openingsSnapshot(store);
