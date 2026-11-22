@@ -97,8 +97,8 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
       <div className="co-main">
         <div className="ph">
           <div>
-            <h1 data-testid="company-title">{current.label}</h1>
-            <p>{current.hint}</p>
+            <h1 data-testid="company-title">{tab === 'file' && desk ? desk.company.name : current.label}</h1>
+            <p>{tab === 'file' && desk ? `Company file${desk.company.domain ? ` · ${desk.company.domain}` : ''}. Every row has a date and a source.` : current.hint}</p>
             <SourceNote source={q.source} error={q.error} onRetry={() => invalidate(`company:${id}`)} />
           </div>
         </div>
