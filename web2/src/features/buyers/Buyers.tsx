@@ -27,7 +27,10 @@ const STATUS_TONE: Record<StatusKind, string> = {
 const RULE_TONE: Record<string, string> = { CONTAGION: 'rule-contagion', DIRECT: 'rule-direct', DISPLACEMENT: 'rule-displacement' };
 
 async function getJson<T>(url: string): Promise<T> {
-  const r = await fetch(url);
+  // Never hang on a stalled request: after 12s the page shows the error state with Try again, not endless skeletons.
+  let r: Response;
+  try { r = await fetch(url, { signal: AbortSignal.timeout(12000) }); }
+  catch (e) { throw new Error(`${url} didn’t answer (${(e as Error).name === 'TimeoutError' ? 'timed out after 12s' : (e as Error).message})`); }
   if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) throw new Error(`${url} answered ${r.status}`);
   return r.json() as Promise<T>;
 }
