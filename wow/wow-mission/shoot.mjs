@@ -61,7 +61,9 @@ if (!only || only.has('live')) {
   await shot(p, '07b-hiring-filter-view');
   await p.click('.hx-btn');
   await p.waitForSelector('.mc-hold', { timeout: 60000 });
-  await wait(900);
+  await wait(1100);
+  await shot(p, '08a-draft-assembling');
+  await wait(3200);
   await shot(p, '08-approval-gate');
   const box = await p.locator('.mc-hold').boundingBox();
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

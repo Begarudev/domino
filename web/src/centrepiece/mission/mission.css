@@ -701,3 +701,7 @@
 .mc-rail__step:not(.is-done):not(.is-running) .mc-rail__label { color: #a9c3bb; }
 .mc--compact .mc-rail__label { font-size: 0.7em; }
 .mc--compact .mc-say { font-size: 1em; }
+
+/* seat C: while the gate is up, give the chain the room; DOMINO's lane reads as the subject */
+.mc.has-gate:not(.gate-sent) .mc-tray, .mc.has-gate:not(.gate-sent) .mc-chains__more, .mc.has-gate:not(.gate-sent) .mc-from { display: none; }
+.mc-lane--domino.mc-lane .mc-lane__track { background: linear-gradient(90deg, rgba(157, 176, 255, 0.07), rgba(157, 176, 255, 0.02)); border-radius: 0.4em; }
