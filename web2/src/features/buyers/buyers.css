@@ -1,0 +1,84 @@
+/* Find buyers: request strip, accounts table, draft panel. Sans only, 8px grid, same parts as Outreach. */
+.by-ask { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+.by-ask label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.by-ask input { height: 32px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; min-width: 0; }
+.by-ask input:focus { outline: none; border-color: var(--ink-3); }
+.by-ask-note { grid-column: 2 / 4; font-size: 12px; }
+
+.by-head { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 12px 16px; margin-bottom: 12px; }
+.by-req { min-width: 0; display: grid; gap: 4px; }
+.by-req q { font-size: 15px; font-weight: 600; line-height: 22px; color: var(--ink); quotes: '“' '”'; }
+.by-req-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 12px; color: var(--ink-2); }
+.by-counts { display: flex; gap: 6px; flex: none; }
+.by-count { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+.by-count b { font-size: 16px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.by-count:hover { background: var(--hover); }
+.by-count.on { border-color: var(--ink); background: var(--sel); color: var(--ink); }
+
+.by-runs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 13px; }
+
+.by-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.by-t td { font-size: 13px; line-height: 18px; }
+.by-t tbody tr { cursor: pointer; }
+.by-t tbody tr.sel { background: var(--sel); box-shadow: inset 2px 0 0 var(--ink); }
+.by-co b { display: block; font-size: 14px; font-weight: 600; }
+.by-co .mono, .by-trig .mono { display: block; font-size: 12px; }
+.by-need span, .by-trig > span, .by-st small { display: block; }
+.by-rule { font-weight: 600; color: var(--ink); }
+.by-need > span:last-child { color: var(--ink-2); }
+.by-trig > span:not(.mono) { color: var(--ink-2); margin: 2px 0; }
+.by-trig .tag { margin-left: 6px; font-size: 11px; line-height: 16px; }
+.by-dec { color: var(--ink-2); min-width: 110px; }
+.by-st small { margin-top: 4px; color: var(--ink-3); font-size: 12px; max-width: 200px; }
+.by-none { padding: 16px; margin: 0; }
+
+.by-draft .out-body { padding: 16px 20px; }
+.by-subj { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.by-subj .faint { font-weight: 400; margin-right: 6px; }
+.by-draft .draft { font-size: 15px; line-height: 24px; }
+.by-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule-2); font-size: 12px; }
+.by-act .receipt { flex-wrap: wrap; font-size: 13px; }
+
+.by-ghost { display: grid; gap: 1px; padding: 8px 12px 12px; }
+.by-ghost i { display: block; height: 34px; border-bottom: 1px solid var(--rule-2); background: linear-gradient(90deg, var(--rule-2) 0 22%, transparent 22% 26%, var(--rule-2) 26% 58%, transparent 58%) no-repeat 0 50% / 100% 10px; opacity: .7; }
+
+@media (max-width: 1280px) { .by-grid { grid-template-columns: 1fr; } }
+@media (min-width: 1800px) { .by-draft .draft { font-size: 16px; line-height: 26px; } }
+.by-runs { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+.by-runs select { height: 30px; max-width: 640px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+/* excluded claims: claim, then its reason, then the chip (no squeezed columns) */
+.by-draft .fn:has(.cant) .fn-row { display: block; }
+.by-draft .fn:has(.cant) .fn-src { display: block; white-space: normal; margin-top: 2px; }
+.by-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.by-co .mono { white-space: nowrap; }
+.by-trig { min-width: 210px; }
+.by-trig .srclink { text-align: left; font-size: 12px; }
+.by-t td { padding: 8px 10px; }
+.by-dec { min-width: 96px; }
+.by-st { min-width: 128px; }
+.by-t td.by-st { padding-right: 14px; }
+/* council r1: recipient strip split, why-ranked line, sticky approve bar, projector contrast */
+.by-meta { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 12px; margin: 0; padding: 10px 20px; border-bottom: 1px solid var(--rule-2); font-size: 13px; line-height: 20px; }
+.by-meta dt { color: var(--ink-3); }
+.by-meta dd { margin: 0; color: var(--ink-2); }
+.by-meta b { color: var(--ink); font-weight: 600; }
+.by-sec { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.by-act { position: sticky; bottom: 0; background: var(--surface); margin: 16px -20px -16px; padding: 12px 20px; z-index: 1; font-size: 13px; }
+.by-t td { font-size: 14px; line-height: 20px; }
+.by-co .mono, .by-trig .mono { font-size: 13px; }
+.by-co .faint, .by-dec .faint { color: var(--ink-2); }
+.by-trig > span:not(.mono), .by-need > span:last-child { color: var(--ink); }
+.by-st small { color: var(--ink-2); font-size: 13px; }
+.by-trig .srclink { font-size: 13px; }
+.by-diag { font-size: 12px; margin: 4px 0 12px; }
+.by-ask { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--rule); }
+.by-trig > span.tag { display: inline-flex; margin-left: 8px; font-size: 11px; line-height: 16px; vertical-align: 1px; }
+.by-st { min-width: 112px; }
+.by-st .st { white-space: normal; }
+.by-accounts { overflow: hidden; }
+.by-t { table-layout: fixed; }
+.by-t th:nth-child(1) { width: 17%; } .by-t th:nth-child(2) { width: 18%; } .by-t th:nth-child(3) { width: 31%; } .by-t th:nth-child(4) { width: 14%; } .by-t th:nth-child(5) { width: 20%; }
+.by-st, .by-dec, .by-trig { min-width: 0; }
+.by-st .st { white-space: nowrap; }
+.by-co .mono { overflow: hidden; text-overflow: ellipsis; }
+.by-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }

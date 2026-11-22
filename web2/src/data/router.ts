@@ -4,10 +4,11 @@ import { useSyncExternalStore } from 'react';
 
 // Company navigation, from the approved design mock: Act (Recruitment, Outreach), Read (Reading log, Company file,
 // Chains, Verifier), Check (Replay, Ledger).
-export type CompanyTab = 'recruitment' | 'outreach' | 'reading' | 'file' | 'chains' | 'verifier' | 'replay' | 'ledger';
+export type CompanyTab = 'recruitment' | 'buyers' | 'outreach' | 'reading' | 'file' | 'chains' | 'verifier' | 'replay' | 'ledger';
 export type TabGroup = 'Act' | 'Read' | 'Check';
 export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hint: string }[] = [
   { id: 'recruitment', label: 'Hire', group: 'Act', hint: 'Who left, what that predicts, and who you can hire. People appear as role and initial.' },
+  { id: 'buyers', label: 'Find buyers', group: 'Act', hint: 'Companies whose moves predict they need what you sell, each with a sourced draft to the deciding role.' },
   { id: 'outreach', label: 'Outreach', group: 'Act', hint: 'A footnoted draft, your approval, then delivered once.' },
   { id: 'reading', label: 'Reading log', group: 'Read', hint: 'Every record the run read, kept or discarded, and why.' },
   { id: 'file', label: 'Company file', group: 'Read', hint: 'Dated facts, headcount, talent flows and the rules that apply. No generated prose.' },
@@ -17,7 +18,7 @@ export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hin
   { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Every paid call against the run’s caps.' },
 ];
 /** Tabs whose feature is built. Unbuilt tabs are hidden, never shown as stubs. */
-export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'outreach', 'reading', 'file']);
+export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'buyers', 'outreach', 'reading', 'file', 'chains', 'verifier']);
 
 const ALIASES: Record<string, CompanyTab> = {
   openings: 'recruitment', drain: 'recruitment', matches: 'recruitment', analysis: 'file', needs: 'verifier', rules: 'chains', rundesk: 'reading',
