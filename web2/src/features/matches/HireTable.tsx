@@ -7,7 +7,7 @@ import { useEnterOnce } from '../../lib/motion.ts';
 import { fmtDate, fmtTime } from '../../lib/format.ts';
 import { openEvidence } from '../../shell/ui.ts';
 
-const FIELD: Record<string, string> = { history: 'work history', skills: 'skills', samples: 'work samples', headline: 'headline' };
+const FIELD: Record<string, string> = { roleFamily: 'role family', history: 'work history', skills: 'skills', samples: 'work samples', headline: 'headline' };
 const initialOf = (label: string) => (label.trim()[0] ?? '?').toUpperCase() + '.';
 
 export function HireTable({ desk, opening, routeId, source, ev }: {
@@ -81,7 +81,7 @@ function HireRow({ m, ev, intro, onAsk }: { m: Match; ev: Map<string, Evidence>;
         </ul>
       </td>
       <td className="muted">
-        {cited ? <>{cited.source.endpoint.replace(/^\//, '')}, {fmtDate(cited.observedAt)}</> : 'candidate profile'}
+        {cited ? <>{cited.source.endpoint.replace(/^\//, '')}, {fmtDate(cited.observedAt, true)}</> : 'candidate profile'}
         {fields.length > 0 && <div className="faint">consented: {fields.join(', ')}</div>}
       </td>
       <td>
