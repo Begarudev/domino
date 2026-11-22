@@ -4,6 +4,9 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function fmtDate(iso: string | null | undefined, opts: { year?: boolean } = {}): string {
   if (!iso) return 'undated';
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  // Month-precision dates (live role dates often are): "Nov 2026", never a made-up day.
+  if (y && m && !d) return `${MONTHS[m - 1]} ${y}`;
+  if (y && !m) return String(y);
   if (!y || !m || !d) return iso;
   return `${d} ${MONTHS[m - 1]}${opts.year ? ` ${y}` : ''}`;
 }
@@ -13,7 +16,8 @@ export function fmtRange(dates: (string | null | undefined)[]): string {
   const ds = dates.filter((d): d is string => !!d).sort();
   if (!ds.length) return 'undated';
   const a = ds[0], b = ds[ds.length - 1];
-  return a === b ? fmtDate(a) : `${fmtDate(a)}-${fmtDate(b)}`;
+  const fa = fmtDate(a), fb = fmtDate(b);
+  return fa === fb ? fa : `${fa}-${fb}`;
 }
 
 export function fmtTime(iso: string | null | undefined): string {

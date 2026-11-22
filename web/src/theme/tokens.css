@@ -1,0 +1,122 @@
+/*
+  DOMINO visual system: "the agent's night shift, filmed".
+  A dark projection room in deep blue-graphite; warm paper type like film title cards; one electric signal
+  colour for anything that is live or has fired; light, not lines, separates things (glows, vignettes, a
+  grain that keeps big dark areas from looking flat on a projector).
+
+  Every surface in the app and every centrepiece (run theatre, table, flow) uses these tokens.
+  Import once: `import './theme/tokens.css'` (main.tsx does this). Do not hard-code colours elsewhere.
+*/
+:root {
+  /* ---- ground ---- */
+  --bg: #0E121A;            /* the room */
+  --bg-deep: #0A0D13;       /* letterbox bars, the reel */
+  --stage: #121826;         /* where the action is lit */
+  --panel: #161C28;         /* raised surfaces: drawer, dock, cards */
+  --panel-2: #1D2433;       /* hover / nested */
+  --line: #2A3243;          /* hairlines, used sparingly */
+  --line-soft: #1F2635;
+
+  /* ---- type ---- */
+  --paper: #EEE8DA;         /* primary text: warm, like a title card */
+  --paper-2: #A9A698;       /* secondary */
+  --paper-3: #7E7C74;       /* captions, meta (AA on --bg at 13px+) */
+  --tile: #F2EBDC;          /* bone, for domino tiles and paper cards */
+  --ink: #1C1915;           /* text on bone */
+
+  /* ---- signals ---- */
+  --live: #4D7CFF;          /* fired, live, focus, citations */
+  --live-text: #8EAAFF;     /* live as text on dark (AA) */
+  --live-glow: rgba(77, 124, 255, 0.42);
+  --live-wash: rgba(77, 124, 255, 0.14);
+  --ok: #5DB27A;            /* verified, sent, hit */
+  --ok-text: #7FCB98;
+  --ok-wash: rgba(93, 178, 122, 0.14);
+  --warn: #E8A83A;          /* can't verify, on hold, asks */
+  --warn-wash: rgba(232, 168, 58, 0.13);
+  --bad: #E0604A;           /* crash, miss, failure */
+  --bad-text: #F08371;
+  --bad-wash: rgba(224, 96, 74, 0.14);
+
+  /* ---- type scale (Archivo variable; width axis carries the voice) ---- */
+  --font: 'Archivo Variable', 'Archivo', system-ui, sans-serif;
+  --w-condensed: 76;        /* captions, dense labels, tiles */
+  --w-normal: 100;          /* UI */
+  --w-title: 125;           /* title cards, big numbers */
+  --fs-cap: 12.5px;
+  --fs-ui: 14px;
+  --fs-body: 15px;
+  --fs-lead: 18px;
+  --fs-h: 22px;
+  --fs-title: 44px;
+  --fs-hero: 76px;
+
+  /* ---- rhythm: 4px base, 8px steps ---- */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --r-sm: 5px; --r: 8px; --r-lg: 14px;
+
+  /* ---- motion language ----
+     establish: a panel or scene arriving (slow out, no bounce)
+     print:     a new fact appearing (fast, from slightly below, with a light flash)
+     fire:      something toggling to live (the tile tip, an edge drawing)
+     Only things that actually happened animate: every motion is triggered by a real event. */
+  --ease-establish: cubic-bezier(0.16, 0.84, 0.24, 1);
+  --ease-print: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-fire: cubic-bezier(0.3, 0.05, 0.4, 1);
+  --t-establish: 720ms;
+  --t-print: 340ms;
+  --t-fire: 620ms;
+
+  /* ---- light ---- */
+  --vignette: radial-gradient(ellipse 85% 75% at 50% 45%, transparent 55%, rgba(5, 7, 11, 0.55) 100%);
+  --spot: radial-gradient(ellipse 60% 55% at 50% 42%, rgba(120, 150, 230, 0.10), transparent 70%);
+  --shadow-lift: 0 18px 50px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+
+  /* ---- aliases for components written against the first palette (keep them compiling and on-theme) ---- */
+  --walnut: var(--bg);
+  --walnut-deep: var(--bg-deep);
+  --raised: var(--panel);
+  --raised-2: var(--panel-2);
+  --hair: var(--line);
+  --hair-soft: var(--line-soft);
+  --bone: var(--paper);
+  --text-2: var(--paper-2);
+  --text-3: var(--paper-3);
+  --cobalt: var(--live);
+  --cobalt-text: var(--live-text);
+  --cobalt-wash: var(--live-wash);
+  --verified: var(--ok);
+  --verified-text: var(--ok-text);
+  --amber: var(--warn);
+  --amber-wash: var(--warn-wash);
+  --miss: var(--bad);
+  --miss-text: var(--bad-text);
+  --miss-wash: var(--bad-wash);
+}
+
+/* ---- motion primitives (use the class, or the keyframe in your own rule) ---- */
+@keyframes establish { from { opacity: 0; transform: scale(1.015); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes print-in { 0% { opacity: 0; transform: translateY(6px); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@keyframes print-flash { 0% { background-color: var(--live-wash); } 100% { background-color: transparent; } }
+@keyframes live-breathe { 50% { box-shadow: 0 0 0 4px var(--live-wash), 0 0 18px var(--live-glow); } }
+@keyframes slide-in-right { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.m-establish { animation: establish var(--t-establish) var(--ease-establish) both; }
+.m-print { animation: print-in var(--t-print) var(--ease-print) both; }
+
+/* A projector-safe grain + vignette for any large dark stage. Put on a positioned element. */
+.film {
+  position: relative; isolation: isolate;
+}
+.film::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  background-image: var(--vignette),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-establish, .m-print { animation: none; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+}
