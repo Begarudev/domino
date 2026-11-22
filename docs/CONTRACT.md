@@ -273,3 +273,17 @@ replacement hire or dated job post for F at A within 30 days of the last departu
 | `POST /api/runs/:id/kill`, `/resume` | | existing endpoints (kill and resume any pipeline run) |
 
 Privacy: candidates opt in with their own profile; only consented fields are stored or shown; no emails or phones.
+
+### Company dossier (full company analysis stays in the product; Garud, 14:19)
+
+`GET /api/companies/:id/dossier[?run=<runId>]` → `CompanyDossier` (`shared/desk.ts`), built from the latest
+completed/awaiting-approval **analysis run** (the `outbound` pipeline: triggers, entity resolution, cascade rules
+TALENT_DRAIN (R1) / DISPLACEMENT / CONTAGION / CAPITAL / DIRECT, watchlist and Hold, deciders, drafts, approvals,
+outbox) that contains the company, plus the openings of the latest `openings` scan. Fields:
+`timeline` (dated news/posts, funding, headcount jumps, hires, departures; newest first), `jobPosts`, `talentFlows`
+(in/out, **role + initial + date** only, one row per move), `chains` (cross-company edges where the company is the
+`cause` or the `effect`, with rationale, alternative explanation, confidence), `predictedNeeds` (status
+target/held/watch with hold reasons), `openings`, `outreach` (decider, verified draft, verifier result: removed
+sentences and "I can't verify" claims, approvals, outbox actions sent once), `evidence` (every cited row).
+Company ids are canonical (`co_…`, stable for the same Crustdata id/domain); an alias name is also accepted.
+Start an analysis run with the existing `POST /api/runs {request}` and approve with `POST /api/approvals/:id`.
