@@ -174,7 +174,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     const checks: ReplacementCheck[] = groups.flatMap(group => {
       const crustdataId = crustId.get(group.companyId);
       const since = group.conclusive.map(d => d.left[0]).sort().at(-1)!;
-      return crustdataId == null ? [] : [{ companyId: group.companyId, crustdataId, roleFamily: group.roleFamily, since }];
+      return crustdataId == null ? [] : [{ companyId: group.companyId, crustdataId, roleFamily: group.roleFamily, since, companyName: group.conclusive[0].companyName }];
     });
     const replacementFacts: ReplacementFact[] = [];
     const evidence: Evidence[] = [];
@@ -193,6 +193,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
         evidence.push(...jobs.evidence);
         replacementFacts.push(...(jobs.parsed.replacements ?? []).map(r => ({ ...r, evidenceId: jobs.remap(r.evidenceId) })));
         for (const id of jobs.parsed.checked ?? []) jobChecks[id] = { checkedAt: scope.asOf, scope: scopeOf('Job search', id),
+          evidenceId: jobs.parsed.checkEvidence?.[id] ? jobs.remap(jobs.parsed.checkEvidence[id]) : undefined,
           records: (jobs.parsed.replacements ?? []).filter(r => r.companyId === id).length };
       } catch {
         // A failed job search leaves the leg unverifiable: O1 puts the group on Watch ("I can't verify no replacement was posted").
@@ -206,6 +207,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
         const found = (hires.parsed.replacements ?? []).map(r => ({ ...r, evidenceId: hires.remap(r.evidenceId) }));
         replacementFacts.push(...found);
         for (const id of hires.parsed.checked ?? []) hireChecks[id] = { checkedAt: scope.asOf, scope: scopeOf('Person search (current role)', id),
+          evidenceId: hires.parsed.checkEvidence?.[id] ? hires.remap(hires.parsed.checkEvidence[id]) : undefined,
           records: found.filter(r => r.companyId === id).length };
       } catch {
         // A timed-out or failed hire check is "I can't verify": O1 keeps the group on Watch, never open.
