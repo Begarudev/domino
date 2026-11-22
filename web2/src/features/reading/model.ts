@@ -176,7 +176,9 @@ export function stageRows(stages: FunnelStage[], idx: number, domainOf: DomainOf
     out.push(personRow(mine, `${s.id}:${id}:${i}`, ...personDecision(mine, here.has(id), s.id), domainOf));
   });
   rows.forEach((r, i) => { if (!seen.has(idOf(r))) out.push(personRow(r, `${s.id}:${idOf(r)}:x${i}`, ...personDecision(r, true, s.id), domainOf)); });
-  return { rows: out, unlisted: 0 };
+  // Survivors first (kept, then not conclusive), then this step's discards, each in the scan's order.
+  const rank: Record<Decision, number> = { kept: 0, provisional: 0, inconclusive: 1, held: 1, discarded: 2 };
+  return { rows: out.map((r, i) => [r, i] as const).sort((a, b) => rank[a[0].decision] - rank[b[0].decision] || a[1] - b[1]).map(([r]) => r), unlisted: 0 };
 }
 
 // ---------------------------------------------------------------- the run's own reads
