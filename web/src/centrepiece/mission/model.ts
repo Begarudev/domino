@@ -232,6 +232,7 @@ export function looseUnverifiable(events: StoredEvent[], rows: ChainRow[]): { se
 // ---------- the approval gate ----------
 
 export interface GateView {
+  requestedSeq: number;
   draft: Draft;
   approval: Approval | null;
   decider: { name: string; title: string; company: string } | null;
@@ -250,7 +251,9 @@ export function gateView(snap: RunSnapshot, events: StoredEvent[]): GateView | n
   if (!approval) return null;
   let sent: GateView['sent'] = null;
   const duplicates: GateView['duplicates'] = [];
+  let requestedSeq = 0;
   for (const { seq, event } of events) {
+    if (event.type === 'approval.requested' && event.approval.id === approval.id && !requestedSeq) requestedSeq = seq;
     if (event.type === 'action.executed' && event.action.approvalId === approval.id) sent = { seq, action: event.action };
     if (event.type === 'action.duplicate_blocked' && event.approvalId === approval.id) duplicates.push({ seq, key: event.idempotencyKey });
   }
@@ -261,6 +264,7 @@ export function gateView(snap: RunSnapshot, events: StoredEvent[]): GateView | n
   const company = snap.companies.find((c) => c.id === draft.companyId)?.name ?? snap.graph.nodes.find((n) => n.id === draft.companyId)?.name ?? '';
   const d = top?.decider ?? null;
   return {
+    requestedSeq,
     draft,
     approval,
     decider: d ? { name: d.name, title: d.title, company } : null,
@@ -299,4 +303,156 @@ export function replayView(snap: RunSnapshot, events: StoredEvent[]): ReplayView
 
 export function companyName(snap: RunSnapshot, id: string): string {
   return snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name ?? id.replace(/^co_/, '');
+}
+
+// ---------- the reading desk ----------
+
+export interface SourceCard {
+  id: string; seq: number; claim: string; value: string | null; endpoint: string; kind: string; kindLabel: string;
+  observedAt: string | null; dated: boolean; mode: string;
+}
+
+export interface DeskView {
+  pending: { endpoint: string; attempt: number; seq: number } | null;
+  cards: SourceCard[];
+  dated: number;
+  signalCount: number;
+  companies: { id: string; name: string; alias: string | null; seq: number; signals: { id: string; seq: number; kind: string; kindLabel: string; summary: string; date: string }[] }[];
+  keptApart: string[];
+}
+
+export function sourceKind(endpoint: string): [string, string] {
+  if (endpoint.includes('job')) return ['job', 'Job post'];
+  if (endpoint.includes('social') || endpoint.includes('post')) return ['post', 'LinkedIn post'];
+  if (endpoint.includes('person')) return ['person', 'People move'];
+  if (endpoint.includes('news')) return ['news', 'News'];
+  if (endpoint.includes('web')) return ['web', 'Web page'];
+  if (endpoint.includes('company/search')) return ['company', 'Company search'];
+  if (endpoint.includes('company')) return ['company', 'Company profile'];
+  return ['other', 'Source'];
+}
+
+const TRIGGER_LABEL: Record<string, string> = {
+  job_post: 'Job post', hire: 'Hires', departure: 'Departures', headcount_jump: 'Headcount', funding: 'Funding', post: 'News',
+};
+
+export function deskView(events: StoredEvent[], snap: RunSnapshot): DeskView {
+  const cards: SourceCard[] = [];
+  const seen = new Set<string>();
+  const cos = new Map<string, DeskView['companies'][number]>();
+  const nameOf = (id: string) => companyName(snap, id);
+  const keptApart: string[] = [];
+  let signalCount = 0;
+  const claims = new Map<string, string>();
+  for (const { event } of events) if (event.type === 'evidence.added') for (const e of event.evidence) claims.set(e.id, e.claim);
+  // Before enrichment the snapshot may not know the display name yet; the evidence claim that produced the
+  // trigger starts with it ("Kestrel Labs hired ..."), so read the leading capitalised words.
+  const nameFromTrigger = (id: string, evIds: string[]) => {
+    const known = nameOf(id);
+    if (known !== id.replace(/^co_/, '')) return known;
+    for (const ev of evIds) {
+      const m = claims.get(ev)?.match(/^((?:[A-Z0-9][\w.&'-]*\s?)+)/);
+      if (m) return m[1].trim().replace(/'s$/, '');
+    }
+    return known;
+  };
+  const open = new Map<string, { endpoint: string; attempt: number; seq: number }>();
+  for (const { seq, event } of events) {
+    if (event.type === 'tool.call') open.set(event.callId, { endpoint: event.endpoint, attempt: event.attempt, seq });
+    if (event.type === 'tool.result' || event.type === 'tool.fallback') open.delete(event.callId);
+    if (event.type === 'engine.crashed') open.clear();
+    if (event.type === 'evidence.added') {
+      for (const e of event.evidence) {
+        if (seen.has(e.id)) continue;
+        seen.add(e.id);
+        const [kind, kindLabel] = sourceKind(e.source.endpoint);
+        cards.push({
+          id: e.id, seq, claim: e.claim, value: e.value == null || e.value === '' ? null : String(e.value), endpoint: e.source.endpoint,
+          kind, kindLabel, observedAt: e.observedAt, dated: e.verifiable && !!e.observedAt, mode: e.mode,
+        });
+      }
+    }
+    if (event.type === 'trigger.found') {
+      const t = event.trigger;
+      let co = cos.get(t.companyId);
+      if (!co) { co = { id: t.companyId, name: nameFromTrigger(t.companyId, t.evidenceIds), alias: null, seq, signals: [] }; cos.set(t.companyId, co); }
+      if (!co.signals.some((s) => s.id === t.id)) {
+        co.signals.push({ id: t.id, seq, kind: t.kind, kindLabel: TRIGGER_LABEL[t.kind] ?? t.kind, summary: t.summary, date: t.date });
+        signalCount++;
+      }
+    }
+    if (event.type === 'entity.merged' && event.merge.kind === 'company') {
+      const co = cos.get(event.merge.canonicalId);
+      const other = event.merge.names.find((n) => n !== (co?.name ?? event.merge.names[0]));
+      if (co && other) co.alias = other;
+    }
+    if (event.type === 'entity.kept_apart' && event.decision.kind === 'company') keptApart.push(`${event.decision.names.join(' and ')} (${event.decision.reason})`);
+  }
+  const pending = [...open.values()].at(-1) ?? null;
+  return { pending, cards, dated: cards.filter((c) => c.dated).length, signalCount, companies: [...cos.values()], keptApart };
+}
+
+// ---------- narration: one plain sentence about what the engine is doing right now ----------
+
+const STEP_DOING: Record<StepName, string> = {
+  parse_request: 'Reading the request and working out what you sell',
+  pull_triggers: 'Searching Crustdata for dated job posts, hires and headcount changes',
+  resolve_entities: 'Working out which mentions are the same company',
+  enrich_companies: 'Pulling company profiles: headcount, funding, peers',
+  cascade: 'Looking for changes at one company that create a need at another',
+  rank_targets: 'Ranking accounts against a plain hiring filter',
+  find_deciders: 'Finding the one person who decides at each account',
+  warm_paths: 'Checking for a warm route in',
+  draft_messages: 'Writing first messages from numbered, dated claims only',
+  approval_gate: 'Nothing is sent until a person approves',
+  score_replay: 'Checking what actually happened after the frozen date',
+};
+
+export function narrate(events: StoredEvent[], snap: RunSnapshot): { seq: number; text: string; tone: 'info' | 'warn' | 'fail' | 'ok' } | null {
+  const nameOf = (id: string) => companyName(snap, id);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const { seq, event: ev } = events[i];
+    switch (ev.type) {
+      case 'step.started': return { seq, text: STEP_DOING[ev.step], tone: 'info' };
+      case 'tool.call': return { seq, text: `Calling ${ev.endpoint}${ev.attempt > 1 ? ` again (try ${ev.attempt})` : ''}`, tone: 'info' };
+      case 'tool.retry': return { seq, text: `${ev.endpoint.replace(/_/g, '/')} ${ev.reason === 'nonsense' ? 'sent back a malformed body' : ev.reason.replace('_', ' ')}${ev.injected ? ' (injected fault)' : ''}. Retrying in ${ev.backoffMs} ms`, tone: 'warn' };
+      case 'tool.fallback': return { seq, text: `${ev.endpoint} failed live; using the ${ev.to} copy and labelling it`, tone: 'warn' };
+      case 'evidence.added': {
+        const e = ev.evidence[ev.evidence.length - 1];
+        return e ? { seq, text: `Read ${ev.evidence.length} source${ev.evidence.length === 1 ? '' : 's'}: “${e.claim}”`, tone: 'info' } : null;
+      }
+      case 'trigger.found': return { seq, text: `Signal at ${nameOf(ev.trigger.companyId)}: ${ev.trigger.summary}, ${day(ev.trigger.date)}`, tone: 'info' };
+      case 'entity.merged': return { seq, text: `${ev.merge.names.join(' and ')} are one company: ${ev.merge.reason}`, tone: 'info' };
+      case 'entity.kept_apart': return { seq, text: `${ev.decision.names.join(' and ')} stay separate: ${ev.decision.reason}`, tone: 'info' };
+      case 'claim.unverifiable': return { seq, text: `I can't verify “${ev.claim}”. ${ev.reason}. Leaving it out`, tone: 'fail' };
+      case 'graph.node': return { seq, text: `${ev.node.name} enters the chain${ev.node.need ? `: ${ev.node.need.toLowerCase()}` : ''}`, tone: 'info' };
+      case 'graph.edge': return { seq, text: `${nameOf(ev.edge.from)} → ${nameOf(ev.edge.to)}: ${ev.edge.label}`, tone: 'info' };
+      case 'targets.ranked': {
+        const nn = ev.targets.filter((t) => t.netNew).length;
+        return { seq, text: `Ranked ${ev.targets.length} accounts; a hiring filter would miss ${nn} of them`, tone: 'ok' };
+      }
+      case 'target.held': return { seq, text: `${nameOf(ev.companyId)} put on hold: ${ev.reasons.join('; ')}`, tone: 'warn' };
+      case 'decider.found': return { seq, text: ev.decider ? `${ev.decider.name}, ${ev.decider.title}, decides at ${nameOf(ev.companyId)}` : `No decider verified at ${nameOf(ev.companyId)}`, tone: 'info' };
+      case 'path.found': return { seq, text: ev.path ? `Route into ${nameOf(ev.companyId)}: ${ev.path.explanation}` : `No warm route into ${nameOf(ev.companyId)}`, tone: 'info' };
+      case 'draft.ready': {
+        const removed = ev.draft.checks.filter((c) => c.status === 'removed').length;
+        return { seq, text: `Drafted to ${nameOf(ev.draft.companyId)}; the verifier removed ${removed} unsupported sentence${removed === 1 ? '' : 's'}`, tone: 'info' };
+      }
+      case 'approval.requested': return { seq, text: 'Draft verified. Nothing is sent until a person approves it', tone: 'info' };
+      case 'action.executed': return { seq, text: `${ev.action.kind === 'send_message' ? 'Message' : 'Meeting hold'} written to the team test inbox, once`, tone: 'ok' };
+      case 'action.duplicate_blocked': return { seq, text: 'Already sent. Same key, so nothing was sent twice', tone: 'warn' };
+      case 'delivery.receipt': return { seq, text: ev.receipt.status === 'delivered' ? 'Test inbox confirmed delivery' : 'Test inbox already had it: already delivered, not delivered twice', tone: 'ok' };
+      case 'engine.crashed': return { seq, text: `Engine killed during ${ev.atStep ? STEP_SHORT[ev.atStep] : 'start-up'}. State is safe in SQLite`, tone: 'fail' };
+      case 'engine.resumed': return { seq, text: `Back up: ${ev.skipped.length} finished steps reused from the checkpoint, picking up at ${STEP_SHORT[ev.fromStep]}`, tone: 'ok' };
+      case 'replay.outcome': return { seq, text: `${nameOf(ev.outcome.companyId)}: ${ev.outcome.outcome}`, tone: ev.outcome.hit ? 'ok' : 'info' };
+      case 'replay.scored': return { seq, text: `Replay scored: DOMINO ${ev.score.domino.hits} of ${ev.score.domino.predicted}, hiring filter ${ev.score.baselineFirstOrder.hits} of ${ev.score.baselineFirstOrder.predicted}`, tone: 'ok' };
+      case 'run.status':
+        if (ev.status === 'budget_exhausted') return { seq, text: `Stopped at the credit cap. Partial result kept`, tone: 'fail' };
+        if (ev.status === 'completed') return { seq, text: ev.note ?? 'Finished', tone: 'ok' };
+        break;
+      default:
+        break;
+    }
+  }
+  return null;
 }

@@ -34,8 +34,14 @@ if (!only || only.has('live')) {
   const p = await page('');
   await shot(p, '01-ready');
   await p.click('.hx-go');
-  await wait(3200);
-  await shot(p, '02-call-stream');
+  await wait(1500);
+  await shot(p, '02a-calling');
+  await stepIs(p, 'Pull triggers', 'done');
+  await wait(150);
+  await shot(p, '02b-reading-desk');
+  await stepIs(p, 'Enrich', 'running');
+  await wait(1700);
+  await shot(p, '02c-desk-signals');
   await stepIs(p, 'Cascade', 'running');
   await wait(500);
   await p.click('.mc-kill');

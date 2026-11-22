@@ -76,7 +76,7 @@ function NeedFace({ row }: { row: ChainRow }) {
     <>
       <div className="mc-need__top">
         <span className="mc-need__mech">{MECHANISM_LABEL[row.need.mechanism]}</span>
-        <span className="mc-need__conf">{pct}<small>%</small></span>
+        <span className="mc-need__conf" style={{ ['--target' as string]: pct } as CSSProperties} aria-label={`${pct}% confidence`}><small>%</small></span>
       </div>
       <span className="mc-need__text">{row.need.text}</span>
       <span className="mc-need__bar"><i style={{ width: `${pct}%` }} /></span>

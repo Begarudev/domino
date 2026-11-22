@@ -1,15 +1,16 @@
 // The approval gate: the one irreversible step. Hold to approve; the message folds, is sealed, and drops into the
 // team test inbox exactly once. A second approval shows the idempotency key turning it away.
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { GateView } from './model.ts';
 import { clockTime, day, shortKey } from './model.ts';
 
 const HOLD_MS = 1100;
 
-function Body({ gate }: { gate: GateView }) {
-  const parts = gate.draft.body.split(/(\[\d+\])/g);
+function Cited({ text, gate }: { text: string; gate: GateView }) {
+  const parts = text.split(/(\[\d+\])/g);
   return (
-    <p className="mc-gate__body">
+    <>
       {parts.map((p, i) => {
         const m = p.match(/^\[(\d+)\]$/);
         if (!m) return <span key={i}>{p}</span>;
@@ -21,6 +22,22 @@ function Body({ gate }: { gate: GateView }) {
           </sup>
         );
       })}
+    </>
+  );
+}
+
+/** The draft assembles sentence by sentence from the verifier's checks; removed sentences stay visible, struck out. */
+function Body({ gate, live }: { gate: GateView; live: boolean }) {
+  const checks = gate.draft.checks;
+  if (!checks.length) return <p className="mc-gate__body"><Cited text={gate.draft.body} gate={gate} /></p>;
+  return (
+    <p className={`mc-gate__body${live ? ' is-live' : ''}`}>
+      {checks.map((c, i) => (
+        <span key={i} className={`mc-sent mc-sent--${c.status}`} style={{ ['--i' as string]: i } as CSSProperties}>
+          <Cited text={c.sentence} gate={gate} />
+          {c.status === 'removed' && <em className="mc-sent__why">Removed by the verifier: {c.note ?? 'no evidence row supports it'}</em>}{' '}
+        </span>
+      ))}
     </p>
   );
 }
@@ -58,10 +75,32 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
   useEffect(() => cancel, []);
 
   const state = gate.sent ? 'sent' : 'pending';
+  // After the seal lands, the band shrinks to a receipt strip that keeps "Approve again" in reach.
+  const [sealed, setSealed] = useState(!!gate.sent && !sentLive);
+  useEffect(() => {
+    if (!gate.sent) { setSealed(false); return; }
+    if (!sentLive) { setSealed(true); return; }
+    setSealed(false);
+    const t = setTimeout(() => setSealed(true), 2300);
+    return () => clearTimeout(t);
+  }, [gate.sent?.seq]);
   const recipient = gate.decider ? `${gate.decider.name}, ${gate.decider.title} at ${gate.decider.company}` : 'No decider verified';
 
   return (
-    <section className={`mc-gate mc-gate--${state}${sentLive ? ' is-sealing' : ''}${dupFlash ? ' is-dup' : ''}`} aria-label="Approval gate">
+    <section className={`mc-gate mc-gate--${state}${state === 'sent' ? (sealed ? ' is-sealed' : ' is-sealing') : ''}${dupFlash ? ' is-dup' : ''}`} aria-label="Approval gate">
+      {sealed && gate.sent ? (
+        <div className="mc-gate__strip">
+          <span className="mc-env" aria-hidden="true"><i /><b>1</b></span>
+          <span className="mc-gate__striptext">
+            <strong>Sent once to {gate.decider ? `${gate.decider.name}, ${gate.decider.company}` : 'the team test inbox'}</strong>
+            <span>Team test inbox · {clockTime(gate.sent.action.executedAt)} · key <code>{shortKey(gate.sent.action.idempotencyKey)}</code></span>
+          </span>
+          {onApprove && gate.approval && <button type="button" className="mc-again" onClick={() => onApprove(gate.approval!.id)}>Approve again</button>}
+          <span className={`mc-gate__dup${dupFlash ? ' is-flash' : ''}`}>
+            {gate.duplicates.length ? `Already sent, skipped${gate.duplicates.length > 1 ? ` ×${gate.duplicates.length}` : ''}` : 'One key, one send'}
+          </span>
+        </div>
+      ) : (<>
       <div className="mc-gate__band">
         <div className="mc-gate__who">
           <span className="mc-gate__k">To</span>
@@ -75,7 +114,7 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
         <div className="mc-gate__letter">
           <div className="mc-gate__paper">
             <span className="mc-gate__subject">{gate.draft.subject}</span>
-            <Body gate={gate} />
+            <Body gate={gate} live={gate.requestedSeq > settledSeq && !reducedMotion} />
           </div>
           <div className="mc-gate__seal" aria-hidden="true"><span>sent</span><b>once</b></div>
         </div>
@@ -122,6 +161,7 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
           </span>
         )}
       </div>
+      </>)}
     </section>
   );
 }

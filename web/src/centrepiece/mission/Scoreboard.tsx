@@ -86,7 +86,7 @@ export function Scoreboard({ view, animate, nameOf, onSelect, fixture, reducedMo
         </div>
       </header>
 
-      <div className="mc-score__lanes" style={{ ['--p' as string]: p } as CSSProperties}>
+      <div className="mc-score__lanes" style={{ ['--p' as string]: p, ['--lanes' as string]: lanes.length } as CSSProperties}>
         {lanes.map((lane) => {
           const s = stats[lane.id];
           const n = lane.items.length;
@@ -95,7 +95,7 @@ export function Scoreboard({ view, animate, nameOf, onSelect, fixture, reducedMo
               <div className="mc-lane__tally">
                 <span className="mc-lane__name">{lane.name}</span>
                 <span className="mc-lane__blurb">{lane.blurb}</span>
-                <span className="mc-lane__num"><b>{lane.hitsSoFar}</b><small>of {n}</small></span>
+                <span className="mc-lane__num"><b key={lane.hitsSoFar}>{lane.hitsSoFar}</b><small>of {n}</small></span>
                 <span className="mc-lane__sub">
                   {done && s ? `${Math.round((s.hits / Math.max(1, s.predicted)) * 100)}% right${s.medianLeadDays != null ? ` · median lead ${s.medianLeadDays} d` : ''}` : 'showed the need'}
                 </span>
@@ -103,9 +103,13 @@ export function Scoreboard({ view, animate, nameOf, onSelect, fixture, reducedMo
               <div className="mc-lane__track">
                 {lane.items.map((o, i) => {
                   const fell = o.hit && !!o.outcomeDate && dayNumber(o.outcomeDate) <= clockDay;
-                  const shelfX = (i + 0.5) * Math.min(16, 100 / n);
-                  const x = fell && o.outcomeDate ? xOf(o.outcomeDate) : shelfX;
+                  // A hit hangs above the date that will prove it and drops when the clock gets there; a miss
+                  // hangs past the end of the window, where no date can rescue it.
+                  const misses = lane.items.filter((m) => !(m.hit && m.outcomeDate));
+                  const mi = misses.indexOf(o);
+                  const x = o.hit && o.outcomeDate ? Math.min(92, Math.max(8, xOf(o.outcomeDate))) : 100 - 9 - mi * 17;
                   const miss = done && !fell;
+                  void n;
                   return (
                     <button
                       type="button"

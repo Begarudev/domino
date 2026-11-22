@@ -5,11 +5,12 @@ import type { StepName } from '../../../../shared/types.ts';
 import { STEP_ORDER } from '../../../../shared/types.ts';
 import type { CentrepieceProps } from '../contract.ts';
 import { ChainStage, LooseClaim } from './Chain.tsx';
+import { Desk } from './Desk.tsx';
 import { Gate } from './Gate.tsx';
 import { CallStream, Gauge, StepRail } from './Instruments.tsx';
 import { Scoreboard } from './Scoreboard.tsx';
 import {
-  STEP_SHORT, chainRows, companyName, day, engineView, gateView, looseUnverifiable, replayView, streamRows,
+  STEP_SHORT, chainRows, companyName, day, deskView, engineView, gateView, looseUnverifiable, narrate, replayView, streamRows,
 } from './model.ts';
 import './mission.css';
 
@@ -25,7 +26,7 @@ export interface MissionControls {
 const MODE_LABEL = { live: 'Live Crustdata', cache: 'Cached live responses', fixture: 'Fixture · synthetic data' } as const;
 
 const STATUS_LINE: Record<string, string> = {
-  queued: 'Queued', running: 'Working', awaiting_input: 'Waiting for one answer', awaiting_approval: 'Waiting for a person to approve',
+  queued: 'Queued', running: 'Working', awaiting_input: 'Waiting for one answer', awaiting_approval: 'Your turn',
   completed: 'Finished', failed: 'Failed', crashed: 'Engine down', budget_exhausted: 'Stopped at the credit cap',
 };
 
@@ -51,6 +52,8 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
   const engine = useMemo(() => engineView(events), [events]);
   const gate = useMemo(() => gateView(snap, events), [snap, events]);
   const replay = useMemo(() => replayView(snap, events), [snap, events]);
+  const desk = useMemo(() => deskView(events, snap), [events, snap]);
+  const line = useMemo(() => narrate(events, snap), [events, snap]);
 
   const calls = snap.ledger.length ? snap.ledger : stream.flatMap((r) => (r.kind === 'call' ? [r.entry] : []));
   const total = { calls: calls.length, credits: calls.reduce((s, e) => s + (e.credits || 0), 0) };
@@ -110,7 +113,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
   const nameOf = (id: string) => companyName(snap, id);
   const gateShown = view === 'run' && !!gate;
   const gatePending = gateShown && !gate?.sent;
-  const maxRows = gatePending ? 2 : 4;
+  const maxRows = gatePending ? (compact ? 1 : 2) : 4;
   const gateH = Math.round(height * (compact ? 0.5 : 0.44));
   const empty = rows.length === 0 && loose.length === 0;
 
@@ -125,6 +128,9 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
           <strong>{statusLine}</strong>
           {snap.status === 'running' && current && <span className="mc-head__step">step {stepIdx} of {STEP_ORDER.length}</span>}
         </div>
+        {line && (
+          <p key={line.seq} className={`mc-say mc-say--${line.tone}${line.seq > settledSeq ? ' is-live' : ''}`} aria-live="polite">{line.text}</p>
+        )}
         {replay?.score && (
           <div className="mc-tabs" role="tablist">
             <button role="tab" aria-selected={view === 'run'} className={view === 'run' ? 'on' : ''} onClick={() => setView('run')}>The run</button>
@@ -144,7 +150,13 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
           <Scoreboard view={replay} animate={scoredSeq > settledSeq || stageKey > 0} nameOf={nameOf} onSelect={onSelect} fixture={snap.dataMode === 'fixture'} reducedMotion={reducedMotion} />
         ) : (
           <>
-            {empty && (
+            {rows.length === 0 && (desk.cards.length > 0 || desk.pending) && <Desk desk={desk} settledSeq={settledSeq} onSelect={onSelect} />}
+            {rows.length > 0 && (
+              <div className="mc-from">
+                From <b>{desk.cards.length}</b> sources read and <b>{desk.signalCount}</b> signals across <b>{desk.companies.length}</b> companies, these links held up:
+              </div>
+            )}
+            {empty && desk.cards.length === 0 && !desk.pending && (
               <div className="mc-empty">
                 <Dominoes />
                 <p>{snap.status === 'queued' || snap.status === 'running' ? 'Pulling dated changes. The chain builds here as each link is verified.' : 'Start a run to watch the chain build.'}</p>
@@ -195,7 +207,11 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
             <span className="mc-crash__sig">SIGKILL · pid {crashed.pid}</span>
             <strong>The engine died during {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start-up'}.</strong>
             <span>{doneCount} of {STEP_ORDER.length} steps are checkpointed in SQLite. Sends go through an idempotent outbox.</span>
-            <span className="mc-crash__wait">{controls?.autoResume ? 'Restarting the engine…' : 'Waiting for Resume'}</span>
+            {controls?.resume && !controls.autoResume ? (
+              <button type="button" className="mc-crash__resume" onClick={() => controls.resume?.()}>Resume from the checkpoint</button>
+            ) : (
+              <span className="mc-crash__wait">{controls?.autoResume ? 'Restarting the engine…' : 'Waiting for Resume'}</span>
+            )}
           </div>
         </div>
       )}
