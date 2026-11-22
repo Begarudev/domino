@@ -1,5 +1,11 @@
 # Live yield check for the talent-drain rule (22 Nov 2026, 13:43 IST)
 
+> **Superseded at 14:20 IST by [LIVE-DATA.md](LIVE-DATA.md).** All 1,410 of 1,410 profiles were then fetched
+> (324 credits). The completed funnel is 1,410 → 770 direct moves → 289 infra/serving → 151 at ≤ 5,000 staff →
+> 148 companies → 3 with ≥ 2 → 0 with ≥ 3; R1 stays at 0. The live talent-drain decision is now rule O1: 1 predicted
+> opening (Abacus.AI, ML platform, provisional) and 1 Hold (Poolside, NVIDIA acqui-hire). The partial count below is
+> kept for the record.
+
 Question: how many accounts does R1 (an AI company loses its 3rd infra/serving engineer to other companies, the 3rd
 inside the last 30 days) produce on live Crustdata data right now? Rules and thresholds were fixed before counting.
 
