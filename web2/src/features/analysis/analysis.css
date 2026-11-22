@@ -211,3 +211,4 @@ ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 40
 .cf-collapsed b { color: var(--ink); font-weight: 600; white-space: nowrap; }
 .cf-big.num, .cf-why-pos.num { font-variant-numeric: proportional-nums; letter-spacing: -.01em; }
 .cf-chart { margin: 4px -4px 0; min-height: 150px; }
+.cf-p > p.cf-empty.sm { padding: 12px 16px; margin: 0; }
