@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type {
   Approval, Ask, CascadeGraph, Company, Draft, Evidence, Intent, Person, ReplayScore, RunEvent, StepName, Target, Trigger,
 } from '../../shared/types.ts';
-import type { EndpointSpec } from '../crustdata/spec.ts';
 import { now } from '../db.ts';
 import type { OutcomeFact, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { root } from '../env.ts';
@@ -166,12 +165,12 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
   };
 }
 
-type TriggerSource<I> = EndpointSpec<I, TriggerBatch>;
-async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpoints): Promise<StepResult<'pull_triggers'>> {
+async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): Promise<StepResult<'pull_triggers'>> {
+  const intent = parse_request!;
+  const input = { intent };
   const output = emptyBatch();
-  for (const spec of [deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth] satisfies TriggerSource<{ intent: Intent }>[]) {
-    const batch = await readSource(ctx, spec, { intent: intent! }, intent!);
-    const kept = guardBatch(batch, intent!);
+  const append = (batch: Awaited<ReturnType<typeof readSource>>) => {
+    const kept = guardBatch(batch, intent);
     ctx.store.transaction(() => {
       publishSource(ctx, batch, kept.evidence, kept.triggers.flatMap(trigger => trigger.evidenceIds));
       publishTriggers(ctx, kept.triggers);
@@ -180,7 +179,12 @@ async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpo
     output.people.push(...kept.people);
     output.triggers.push(...kept.triggers);
     output.evidence.push(...kept.evidence);
+  };
+  append(await readSource(ctx, deps.jobSearch, input, intent));
+  for await (const page of deps.readMovesPages(intent, request => readSource(ctx, deps.personSearchRecentMoves, request, intent))) {
+    append(page);
   }
+  append(await readSource(ctx, deps.companySearchGrowth, input, intent));
   output.evidence = byId(output.evidence);
   output.triggers = byId(output.triggers);
   return { output, summary: `${output.triggers.length} triggers from ${output.evidence.length} evidence rows` };
@@ -278,7 +282,7 @@ async function findDeciders(ctx: ToolContext, c: Checkpoints): Promise<StepResul
   const { companies, people } = c.enrich_companies!;
   const output: Deciders = { targets: [], people: [...people], evidence: [] };
   for (const target of c.rank_targets!.targets) {
-    if (target.hold) {
+    if (target.hold || target.watch) {
       output.targets.push(target);
       continue;
     }
@@ -340,7 +344,7 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
   // Each attempt reserves its cost inside the ledger transaction before making a model request.
   const results = await mapLimit(c.warm_paths!, draftConcurrency, async target => {
     const company = companies.find(row => row.id === target.companyId);
-    if (!company || target.hold) return { target };
+    if (!company || target.hold || target.watch) return { target };
     const claims = deps.buildClaims(target, company, triggers, evidence, c.cascade!);
     const template = deps.templateDraft(target, target.decider, claims, profile);
     const prompt = deps.llmDraftPrompt(target, target.decider, claims.filter(claim => claim.verifiable), profile);
@@ -384,7 +388,7 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
 function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_gate'> {
   const { targets, drafts } = c.draft_messages!;
   const output = targets.flatMap(target => {
-    if (target.hold) return [];
+    if (target.hold || target.watch) return [];
     const draft = drafts.find(row => row.id === target.draftId);
     return !draft ? [] : (['send_message', 'book_meeting'] as const).map((kind): Approval => {
       const idempotencyKey = hash([ctx.runId, target.companyId, draft.personId ?? '', draft.body, kind].join('|')).slice(0, 16);
