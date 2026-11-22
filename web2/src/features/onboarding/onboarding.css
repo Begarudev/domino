@@ -156,3 +156,8 @@
 .onb-preview li.off small { color: var(--ink-2, #666); }
 .onb-preview-dot { width: 7px; height: 7px; border-radius: 50%; background: #0f9488; }
 .onb-preview li.off .onb-preview-dot { background: #c9c9c4; }
+
+/* g5: Attio flat pass — plain canvas, hairline cards, no glow on the current step */
+.onb { background: var(--canvas, #fff); }
+.onb .onb-form, .onb .onb-check { box-shadow: none; }
+.onb-steps li.now { box-shadow: none; }
