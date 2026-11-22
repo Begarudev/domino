@@ -61,9 +61,25 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
   const last = rows.length ? stepName(rows[rows.length - 1]).toLowerCase() : null;
   const running = snap.status === 'running';
   const delivered = (snap.outbox ?? []).length;
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [openKeys, setOpenKeys] = useState<Record<string, boolean>>({});
+  const groups = useMemo(() => groupRows(rows.filter(FILTER_FN[filter]).filter((r) => matches(r, q))), [rows, filter, q]);
 
   return (
     <div className="ledger">
+      <RunPicker current={snap.id} />
+      <div className="lg-kpis">
+        <Kpi label="New credits" value={fmtCredits(credits)} sub={`of ${fmtInt(b.limits.maxCredits)} cap`} />
+        <Kpi label="Model spend" value={fmtUsd(usd)} sub={`of ${fmtUsd(b.limits.maxModelUsd)} cap`} />
+        <Kpi label="Time" value={`${fmtInt(b.used.seconds)} s`} sub={`of ${fmtInt(b.limits.maxSeconds)} s cap`} />
+        <Kpi label="Calls" value={fmtInt(rows.length)} sub={`${rows.filter((r) => r.status === 'cache_hit').length} cache hits · ${blocked.length} blocked`} />
+      </div>
+      <details className="lg-how">
+        <summary>How this is computed</summary>
+        Reads GET /api/runs/:id (the run snapshot: budget and ledger) and GET /api/runs for the run list. Each row is one data call (Crustdata person search, company enrich, job search, news) or one GPT-6 Luna model call (parse, refine, draft), written when the call returns.
+        Before a call is sent, the budget guard adds its estimated cost to what is used and reserved; if that would cross a cap the call is recorded as “Not dispatched” and spends nothing.
+      </details>
       <div className="lg-run">
         <span className="st plain mono" title={snap.id}>{snap.id.slice(0, 12)}</span>
         <b className="lg-sum" data-testid="ledger-sum">{plural(rows.length, "call")} · {fmtCredits(credits)} new credits</b>
@@ -128,7 +144,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
         <header>
           <div className="lg-sec-h">
             <h2>{plural(rows.length, 'call')} in this run</h2>
-            <span>One row per data or model call, in the order it returned: credits, tokens, model cost and latency.</span>
+            <span>Identical calls (same step, endpoint, mode and status) are grouped; open a group to see each call.</span>
           </div>
           {!paid && rows.length > 0 && <span className="lg-note" data-testid="cached-note">This scan reused cached live responses: 0 new credits</span>}
         </header>
@@ -136,9 +152,20 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
           <p className="pad faint">This run made no paid calls. Rows appear here as each call returns, with its credits and cost.</p>
         ) : (
           <div className="lg-scroll" tabIndex={0} role="region" aria-label="Calls in this run">
+          <div className="lg-tools">
+            <input className="lg-search" type="search" placeholder="Search step, endpoint, status…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search calls" />
+            {FILTERS.map(([k, label]) => (
+              <button key={k} className={`lg-chip${filter === k ? ' on' : ''}`} aria-pressed={filter === k} onClick={() => setFilter(k)}>
+                {label} <span className="faint">{rows.filter(FILTER_FN[k]).length}</span>
+              </button>
+            ))}
+          </div>
           <table className="t lg-table">
             <thead><tr><th>Time</th><th>Step</th><th>Endpoint</th><th>Mode</th><th>Status</th><th className="num">Credits</th><th className="num">Tokens</th><th className="num">USD</th><th className="num">Latency</th></tr></thead>
-            <tbody>{rows.map((r) => <Row key={r.id} r={r} />)}</tbody>
+            <tbody>
+              {groups.length === 0 && <tr><td colSpan={9} className="faint">No call matches “{q}” with this filter.</td></tr>}
+              {groups.map((g) => <Group key={g.key} g={g} open={!!openKeys[g.key]} toggle={() => setOpenKeys((o) => ({ ...o, [g.key]: !o[g.key] }))} />)}
+            </tbody>
             <tfoot>
               <tr>
                 <td colSpan={5}><b>Run total</b> <span className="faint">against the caps</span></td>
@@ -156,12 +183,84 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
   );
 }
 
-function Row({ r }: { r: LedgerEntry }) {
+type FilterKey = 'all' | 'paid' | 'cache' | 'model' | 'problems';
+const FILTERS: [FilterKey, string][] = [['all', 'All'], ['paid', 'Spent credits'], ['cache', 'Cache hit'], ['model', 'Model calls'], ['problems', 'Blocked or failed']];
+const FILTER_FN: Record<FilterKey, (r: LedgerEntry) => boolean> = {
+  all: () => true,
+  paid: (r) => r.credits > 0,
+  cache: (r) => r.status === 'cache_hit',
+  model: (r) => isLlm(r),
+  problems: (r) => r.status !== 'ok' && r.status !== 'cache_hit',
+};
+const matches = (r: LedgerEntry, q: string) => {
+  const s = q.trim().toLowerCase();
+  return !s || [stepName(r), r.step, r.endpoint, STATUS[r.status], modeLabel(r)].some((x) => x.toLowerCase().includes(s));
+};
+type Grp = { key: string; rows: LedgerEntry[] };
+function groupRows(rows: LedgerEntry[]): Grp[] {
+  const m = new Map<string, Grp>();
+  for (const r of rows) {
+    const key = `${r.step}|${r.endpoint}|${r.mode}|${r.status}|${r.injected ? 1 : 0}`;
+    const g = m.get(key) ?? { key, rows: [] };
+    g.rows.push(r);
+    m.set(key, g);
+  }
+  // A call the cap refused leads the grid: it is the row a reader most needs to see.
+  return [...m.values()].sort((a, b) => Number(b.rows[0].status === 'budget_blocked') - Number(a.rows[0].status === 'budget_blocked'));
+}
+
+function Group({ g, open, toggle }: { g: Grp; open: boolean; toggle: () => void }) {
+  if (g.rows.length === 1) return <Row r={g.rows[0]} />;
+  const r = g.rows[0];
+  const sum = (f: (x: LedgerEntry) => number) => g.rows.reduce((s, x) => s + f(x), 0);
+  const credits = sum((x) => x.credits), usd = sum((x) => x.usd), tok = sum((x) => x.inputTokens + x.outputTokens);
+  const lat = sum((x) => x.latencyMs) / g.rows.length;
+  const bad = r.status !== 'ok' && r.status !== 'cache_hit';
+  return (
+    <>
+      <tr data-testid="ledger-group" className={`lg-grp${r.status === 'budget_blocked' ? ' blocked-row' : ''}`} onClick={toggle} aria-expanded={open}>
+        <td className="lg-time"><button className="lg-x" aria-label={open ? 'Collapse' : 'Expand'}>{open ? '▾' : '▸'}</button> {fmtTime(r.ts)}</td>
+        <td className="lg-step"><b className="lg-n">{g.rows.length} ×</b> {stepName(r)}</td>
+        <td className="mono">{r.endpoint}</td>
+        <td>{r.injected ? <span className="ctag tone-held">Injected fault</span> : modeLabel(r)}</td>
+        <td><span className={`ctag ${r.status === 'budget_blocked' ? 'tone-held' : bad ? 'tone-not-met' : 'tone-met'}`}>{STATUS[r.status]}</span></td>
+        <td className="num">{credits ? fmtCredits(credits) : <span className="faint">0</span>}</td>
+        <td className="num">{tok ? fmtInt(tok) : <span className="faint">–</span>}</td>
+        <td className="num">{usd ? fmtUsd(usd) : <span className="faint">$0</span>}</td>
+        <td className="num" title="Average per call">{fmtSeconds(lat)} <span className="faint">avg</span></td>
+      </tr>
+      {open && g.rows.map((x) => <Row key={x.id} r={x} child />)}
+    </>
+  );
+}
+
+function RunPicker({ current }: { current: string }) {
+  const [runs, setRuns] = useState<{ id: string; request: string; status: string; createdAt: string }[]>([]);
+  useEffect(() => { fetch('/api/runs').then((r) => (r.ok ? r.json() : [])).then(setRuns).catch(() => setRuns([])); }, []);
+  if (runs.length < 2) return null;
+  return (
+    <label className="lg-picker">
+      <span>Run</span>
+      <select value={current} onChange={(e) => { const u = new URL(location.href); u.searchParams.set('run', e.target.value); location.assign(u.toString()); }}>
+        {runs.map((r) => (
+          <option key={r.id} value={r.id}>{r.id.slice(0, 12)} · {r.status.replace(/_/g, ' ')} · {new Date(r.createdAt).toLocaleString()} · {r.request.slice(0, 60)}</option>
+        ))}
+      </select>
+      <span className="faint">{runs.length} runs</span>
+    </label>
+  );
+}
+
+function Kpi({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return <div className="lg-kpi"><span className="lg-kpi-l">{label}</span><b className="lg-kpi-v">{value}</b><span className="lg-kpi-s">{sub}</span></div>;
+}
+
+function Row({ r, child }: { r: LedgerEntry; child?: boolean }) {
   const ref = useRef<HTMLTableRowElement>(null);
   useEffect(() => { if (!reducedMotion()) ref.current?.animate(ENTER, { duration: 200, easing: 'cubic-bezier(.2,.7,.2,1)' }); }, []);
   const bad = r.status !== 'ok' && r.status !== 'cache_hit';
   return (
-    <tr ref={ref} data-testid="ledger-row" className={r.status === 'budget_blocked' ? 'blocked-row' : undefined}>
+    <tr ref={ref} data-testid="ledger-row" className={[r.status === 'budget_blocked' ? 'blocked-row' : '', child ? 'lg-child' : ''].join(' ').trim() || undefined}>
       <td className="lg-time">{fmtTime(r.ts)}</td>
       <td className="lg-step" title={stepName(r)}>{stepName(r)}</td>
       <td className="mono" title={ENDPOINT_NOUN[r.endpoint] ?? r.endpoint}>{r.endpoint}</td>
