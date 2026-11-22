@@ -4,7 +4,7 @@
 // intro: draft_intro (sourced draft through the shared verifier) -> intro_gate (one approval; the existing outbox +
 // receiver deliver it once to the test inbox).
 import { z } from 'zod';
-import type { Approval, Company, Draft, Evidence, SourceItem } from '../../shared/types.ts';
+import type { Approval, Company, Draft, Evidence, SourceItem, Target } from '../../shared/types.ts';
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import type { Candidate, CandidateHistoryItem, IntroRequest, Match, Opening, RoleFamily } from '../../shared/desk.ts';
 import { now } from '../db.ts';
@@ -224,6 +224,38 @@ export function introClaims(opening: Opening, candidate: Candidate, candidateEvi
   return claims;
 }
 
+type OutboundGate = (draft: Draft, target: Target, evidence: Evidence[]) => { reason: string; have: number; need: number } | null;
+const MIN_OPENING_FACTS = 1;
+
+// An intro is sent only if the outbound gate passes (>= 2 verified, dated, cited facts and a named role) AND at least
+// one of those facts is about the opening; otherwise it would be a profile with no reason to reach out.
+// The reason lists every missing item: "Not sent: not enough verified evidence (1 of 2 verified facts, 0 of 1 about
+// the opening); missing: 1 more verified, dated, cited fact, a verified, dated fact about the opening".
+export function introSendGate(draft: Draft, roleTitle: string, evidence: Evidence[], openingEvidenceIds: Set<string>,
+  outboundGate: OutboundGate): { reason: string; missing: string[] } | null {
+  const rows = new Map(evidence.map(row => [row.id, row]));
+  const factIds = new Set(draft.citations.filter(cite => {
+    const row = rows.get(cite.evidenceId);
+    return Boolean(row?.verifiable && row.observedAt && draft.body.includes(`[${cite.marker}]`));
+  }).map(cite => cite.evidenceId));
+  const openingFacts = [...factIds].filter(id => openingEvidenceIds.has(id)).length;
+  const role = { decider: { personId: '', name: roleTitle, title: roleTitle, reason: 'Intro role', evidenceIds: [] } } as unknown as Target;
+  const outbound = outboundGate(draft, role, evidence);
+  const need = outbound?.need ?? 2;
+  const have = outbound?.have ?? factIds.size;
+  const missing = [
+    ...(have < need ? [`${need - have} more verified, dated, cited fact${need - have === 1 ? '' : 's'}`] : []),
+    ...(openingFacts < MIN_OPENING_FACTS ? ['a verified, dated fact about the opening'] : []),
+    ...(!roleTitle.trim() || (outbound && have >= need) ? ['a named role'] : []),
+  ];
+  if (!missing.length) return null;
+  const counts = [
+    ...(have < need || openingFacts >= MIN_OPENING_FACTS ? [`${have} of ${need} verified facts`] : []),
+    ...(openingFacts < MIN_OPENING_FACTS ? [`${openingFacts} of ${MIN_OPENING_FACTS} about the opening`] : []),
+  ];
+  return { reason: `Not sent: not enough verified evidence (${counts.join(', ')}); missing: ${missing.join(', ')}`, missing };
+}
+
 async function draftIntro(ctx: ToolContext) {
   const intro = await rowFor(ctx, 'intro', id => getIntroRow(ctx.store, id));
   const row = getCandidateRow(ctx.store, intro.candidateId);
@@ -252,15 +284,10 @@ async function draftIntro(ctx: ToolContext) {
     generator: 'template', verified: checked.verified && checked.body.trim().length > 0,
     meeting: { title: `Intro: ${opening.roleTitle}`, durationMin: 20, proposedSlots: [] },
   };
-  // Same gate as outbound (steps.ts draftGate): >= 2 verified, dated, cited facts and a named role. An intro also needs
-  // at least one of those facts to be about the opening, or it would be a profile with no reason to reach out.
-  // Loaded lazily: steps.ts imports this module, so a static import would be circular.
+  // Same gate as outbound (steps.ts draftGate), plus a verified fact about the opening. Loaded lazily: steps.ts
+  // imports this module, so a static import would be circular.
   const { draftGate } = await import('./steps.ts');
-  const named = { companyId: opening.companyId, decider: { personId: '', name: opening.roleTitle, title: opening.roleTitle, reason: 'Intro role', evidenceIds: [] } };
-  const openingRows = new Set(snapshot.evidence.map(item => item.id));
-  const openingFacts = draft.citations.filter(item => openingRows.has(item.evidenceId) && evidence.get(item.evidenceId)?.verifiable).length;
-  const gate = draftGate(draft, named as unknown as Parameters<typeof draftGate>[1], [...evidence.values()])
-    ?? (openingFacts ? null : { reason: 'Not drafted: no verified, dated fact about the opening' });
+  const gate = introSendGate(draft, opening.roleTitle, [...evidence.values()], new Set(snapshot.evidence.map(item => item.id)), draftGate);
   draft.status = gate ? 'not_drafted' : 'ready';
   draft.blockedReason = gate?.reason ?? null;
   const cited = new Set(draft.citations.map(item => item.evidenceId));
