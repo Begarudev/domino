@@ -66,3 +66,7 @@
 .dg-hint { margin-left: auto; color: var(--ink-3); }
 .dg .struck, .dg .struck text, .dg .struck tspan { text-decoration: none; }
 .dg-e text { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+/* Attio pass: shared radius on the panel, softer node chips */
+.dg { border-radius: var(--r-lg); }
+.dg-n rect { rx: 8px; }
+.dg-legend { color: var(--ink-2); }
