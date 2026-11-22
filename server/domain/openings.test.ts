@@ -48,14 +48,21 @@ test('Abacus.AI: two settled October departures and no replacement yet -> open, 
   assert.equal(opening.windowClosesBy, '2026-11-30');
   assert.match(opening.reasons.find(r => r.kind === 'no_replacement')!.label, /replacement window closes by 30 Nov 2026/);
   assert.match(opening.reasons[0].label, /^2 ML platform \/ ML infrastructure people left Oct 2026 \(to Arcfront, Bravebird\); 1 more/);
-  assert.equal(opening.confidence, 0.52);
+  assert.equal(opening.confidence, undefined);
+  const clause = (id: string) => opening.clauses!.find(c => c.id === id)!;
+  assert.equal(clause('o1.departures').state, 'met');
+  assert.match(clause('o1.departures').text, /^2 conclusive ML platform \/ ML infrastructure departures \(Oct, Oct\)/);
+  assert.match(clause('o1.departures').detail!, /Machine Learning Platform Engineer, Aug 2026 → Patronus AI: not conclusive, month straddles window start/);
+  assert.equal(clause('o1.no_replacement.jobs').state, 'met');
+  assert.equal(clause('o1.window').state, 'open');
+  assert.match(clause('o1.window').text, /closes by 30 Nov 2026/);
 });
 
 test('a settled no-replacement leg is not provisional', () => {
   const { openings } = detectOpenings(input(abacus(), { asOf: '2026-12-05', jobChecks: { 'Abacus.AI': { checkedAt: '2026-12-05' } } }));
   assert.equal(openings[0].status, 'open');
   assert.equal(isProvisional(openings[0]), false);
-  assert.equal(openings[0].confidence, 0.62);
+  assert.equal(openings[0].clauses!.find(c => c.id === 'o1.window')!.state, 'met');
 });
 
 test('any dated replacement post or hire for the family means no opening', () => {
@@ -79,6 +86,10 @@ test('Poolside: departures to the acquirer of a dated acqui-hire -> Hold, citing
     url: 'https://thenextweb.com/news/nvidia-poolside-6bn-model-factory-licence', evidenceId: 'evnews' }] }));
   assert.equal(openings[0].status, 'held');
   assert.match(openings[0].holdReasons![0], /^Acqui-hire: .*Poolside.*21 Aug 2026/);
+  const guard = openings[0].clauses!.find(c => c.id === 'guard.acquihire')!;
+  assert.equal(guard.state, 'failed');
+  assert.deepEqual(guard.evidenceIds, ['evnews']);
+  assert.match(guard.detail!, /company-level; it does not verify either person's move/);
   assert.ok(openings[0].evidenceIds.includes('evnews'));
   // Without the acquisition the same departures are an opening.
   assert.equal(detectOpenings(input(departures)).openings[0].status, 'open');
@@ -101,6 +112,11 @@ test('stale or failed job data -> Watch: cannot verify no replacement was posted
   assert.equal(stale.status, 'watch');
   assert.match(stale.watch!.reason!, /can't verify no replacement was posted/);
   assert.equal(detectOpenings(input(abacus(), { jobChecks: { 'Abacus.AI': { checkedAt: null, failed: true } } })).openings[0].status, 'watch');
+  // A timed-out person search is "I can't verify", never open.
+  const timeout = detectOpenings(input(abacus(), { hireChecks: { 'Abacus.AI': { checkedAt: null, failed: true } } })).openings[0];
+  assert.equal(timeout.status, 'watch');
+  assert.equal(timeout.clauses!.find(c => c.id === 'o1.no_replacement.people')!.state, 'cant_verify');
+  assert.equal(timeout.clauses!.find(c => c.id === 'o1.no_replacement.jobs')!.state, 'met');
 });
 
 test('false-drain guards: restructure, >40% of headcount, unknown size, size band, internal moves', () => {
