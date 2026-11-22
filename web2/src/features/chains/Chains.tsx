@@ -43,6 +43,9 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
   }
 
   const rest = rules.data.filter((r) => r.id !== 'O1' && r.id !== 'R1');
+  // O1 held here (e.g. acqui-hire): the same guard covers R1, so its "2 of 3" tally isn't shown as progress
+  const heldO = desk.openings.find((o) => o.status === 'held') ?? null;
+  const r1Held = heldO ? `Held: ${guardLabel(guardClause(heldO)?.id)}` : null;
   return (
     <div className="reg" ref={enter}>
       <div className="reg-wide"><DominoGraph desk={desk} dossier={dossier ?? null} /></div>
@@ -51,15 +54,15 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
         <div className="reg-wide verdict" data-testid="chains-verdict">
           <b>{desk.company.name}</b>
           {dossier.rules.map((r) => {
-            const c = ruleStateChip(r.state);
-            const w = r.id === 'R1' ? watchCount(r) : null;
-            return <span key={r.id} className="verdict-i"><span className="rid">{r.id}</span><span className={c.cls}>{w && r.state === 'not_met' ? `${w.have} of ${w.need}` : c.label}</span></span>;
+            const c = r.id === 'R1' && r1Held ? { cls: 'ctag tone-held', label: r1Held } : ruleStateChip(r.state);
+            const w = r.id === 'R1' && !r1Held ? watchCount(r) : null;
+            return <span key={r.id} className="verdict-i"><span className={`ctag bare rule-${r.id.toLowerCase()}`}>{r.id}</span><span className={c.cls}>{w && r.state === 'not_met' ? `${w.have} of ${w.need}` : c.label}</span></span>;
           })}
         </div>
       )}
       {/* explicit columns: the cross-company drain and its watchlist first, then the guards that hold and O1 */}
       <div className="reg-col">
-        {r1 && <RuleCardView rule={r1} desk={desk} mine={company('R1')} example={<R1Chain desk={desk} rule={company('R1')} />} />}
+        {r1 && <RuleCardView rule={r1} desk={desk} mine={company('R1')} heldNote={r1Held} scanRunId={o1?.sourceRunId ?? null} example={<R1Chain desk={desk} rule={company('R1')} />} />}
         <WatchCard desk={desk} dossier={dossier ?? null} loading={dq.loading} />
       </div>
       <div className="reg-col">
@@ -75,9 +78,19 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
 
 // ---------------------------------------------------------------- one registered rule
 
-function RuleCardView({ rule, desk, mine, example }: { rule: RuleCard; desk: CompanyDesk; mine?: DossierRule; example: ReactNode }) {
+function RuleCardView({ rule, desk, mine, example, heldNote, scanRunId }: {
+  rule: RuleCard; desk: CompanyDesk; mine?: DossierRule; example: ReactNode; heldNote?: string | null; scanRunId?: string | null;
+}) {
   const lock = lockParts(rule.lockedAt);
-  const chip = mine ? ruleStateChip(mine.state) : null;
+  const chip = heldNote ? { cls: 'ctag tone-held', label: heldNote } : mine ? ruleStateChip(mine.state) : null;
+  const short = (id: string) => id.replace(/^run_/, '').slice(0, 8);
+  // each count names the run it came from (count.sourceRunId, else the card's); one footnote per run
+  const byRun = new Map<string, string[]>();
+  for (const c of rule.counts) {
+    const run = c.sourceRunId ?? rule.sourceRunId;
+    if (run) byRun.set(run, [...(byRun.get(run) ?? []), c.label.replace(/\s*\(.*\)$/, '')]);
+  }
+  const runs = [...byRun.entries()];
   return (
     <article className="rule-card" data-testid={`rule-${rule.id}`}>
       <div className="id">
@@ -95,13 +108,19 @@ function RuleCardView({ rule, desk, mine, example }: { rule: RuleCard; desk: Com
         <span className="rc-k">Today</span>
         <span className="rc-counts">
           {rule.counts.map((c) => <span key={c.label}><b data-num>{fmtInt(c.value)}</b> {c.label}</span>)}
-          {rule.sourceRunId && <span className="rc-run">counted in run <span className="mono" title={rule.sourceRunId}>{rule.sourceRunId.replace(/^run_/, '').slice(0, 8)}</span>, all companies</span>}
+          {runs.map(([run, labels]) => (
+            <span key={run} className="rc-run">
+              {runs.length > 1 ? `${labels.join(', ')}: ` : 'counted in '}
+              {run === scanRunId ? 'openings scan' : 'run'} <span className="mono" title={run}>{short(run)}</span>
+              {runs.length === 1 && ', all companies'}
+            </span>
+          ))}
         </span>
       </div>
       {mine && chip && (
         <div className="rc-mine">
           <span className="rc-k">{desk.company.name}</span>
-          <span className="rc-mine-v"><span className={chip.cls}>{chip.label}</span> <span className="rc-sum">{mine.summary}</span></span>
+          <span className="rc-mine-v"><span className={chip.cls}>{chip.label}</span> <span className="rc-sum">{heldNote ? 'Not counted toward R1: the guard that holds O1 here covers R1 too.' : mine.summary}</span></span>
         </div>
       )}
       <div className="meta">

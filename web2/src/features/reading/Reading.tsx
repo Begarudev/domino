@@ -5,7 +5,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CompanyDesk, CompanySummary } from '../../data/desk.ts';
 import { deskApi, invalidate, useQuery } from '../../data/query.ts';
 import { runStore, useRunSel } from '../../data/store.ts';
-import { fmtInt } from '../../lib/format.ts';
+import { fmtInt, plural } from '../../lib/format.ts';
 import { useEnterOnce } from '../../lib/motion.ts';
 import { SourceNote } from '../../shell/SourceNote.tsx';
 import { openEvidence } from '../../shell/ui.ts';
@@ -119,7 +119,7 @@ export function Reading({ desk }: { desk: CompanyDesk }) {
         <div className="panel rd-panel rd-waiting" aria-hidden>
           <table className="t rd-table">
             <colgroup><col className="c-src" /><col className="c-title" /><col className="c-date" /><col className="c-dom" /><col className="c-dec" /><col className="c-why" /></colgroup>
-            <thead><tr><th>Source</th><th>Title</th><th>Date</th><th>Domain</th><th>Decision</th><th>Why</th></tr></thead>
+            <thead><tr><th>Source type</th><th>Title</th><th>Date</th><th>Domain</th><th>Kept or discarded</th><th>Why</th></tr></thead>
             <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i}>{Array.from({ length: 6 }, (_, j) => <td key={j}><i /></td>)}</tr>)}</tbody>
           </table>
         </div>
@@ -225,7 +225,7 @@ function DecisionTable({ funnel, view, filter, onFilter, domainOf, runLabel, liv
   const subs = decisionStage ? all.filter((r) => r.sub).length : 0;
   const showing = decisionStage
     ? `showing ${fmtInt(all.length - subs)}${subs ? `, with the ${fmtInt(subs)} departures behind ${all.length - subs === 1 ? 'it' : 'them'}` : ''}`
-    : `showing ${fmtInt(shown.length)}${shown.length < of ? ` of ${fmtInt(of)}` : ''}`;
+    : shown.length < of ? `showing ${fmtInt(shown.length)} of ${fmtInt(of)} rows` : `all ${plural(of, 'row')} shown`;
 
   return (
     <div className="panel rd-panel">
@@ -252,7 +252,7 @@ function DecisionTable({ funnel, view, filter, onFilter, domainOf, runLabel, liv
       {stage && <p className="rd-def">{funnel!.rule} step: {stage.label}</p>}
       <table className="t rd-table">
         <colgroup><col className="c-src" /><col className="c-title" /><col className="c-date" /><col className="c-dom" /><col className="c-dec" /><col className="c-why" /></colgroup>
-        <thead><tr><th>Source</th><th>Title</th><th>Date</th><th>Domain</th><th>Decision</th><th>Why</th></tr></thead>
+        <thead><tr><th>Source type</th><th>Title</th><th>Date</th><th>Domain</th><th>Kept or discarded</th><th>Why</th></tr></thead>
         <Body key={`${view}:${filter}`} rows={shown} streaming={!stage && live} catchingUp={catchingUp} />
       </table>
       {!shown.length && (
@@ -287,11 +287,11 @@ const Row = memo(function Row({ r, settled }: { r: LogRow; settled: boolean }) {
   return (
     <tr ref={ref} data-testid="reading-row" data-decision={r.decision} className={[open && 'rd-open', r.sub && 'rd-sub'].filter(Boolean).join(' ') || undefined}
       onClick={open} tabIndex={open ? 0 : undefined} onKeyDown={open ? (e) => { if (e.key === 'Enter') open(); } : undefined}>
-      <td className="rd-src">{r.source}</td>
-      <td className="rd-title">{r.title}</td>
+      <td className="rd-src"><span className={`ctag ${srcClass(r.source)}`}>{r.source}</span></td>
+      <td className="rd-title" title={r.title}>{r.title}</td>
       <td className="rd-date" title={r.monthLevel ? 'month-level date' : undefined}>{r.date}</td>
-      <td className={r.domain ? 'mono rd-dom' : 'faint'}>{r.domain ?? '–'}</td>
-      <td className="rd-dec"><DecisionMark d={r.decision} /></td>
+      <td className={r.domain ? 'mono rd-dom' : 'faint'} title={r.domain ?? 'no domain on record'}>{r.domain ?? '–'}</td>
+      <td className="rd-dec"><DecisionMark d={r.decision} why={r.why[0]} /></td>
       <td className="muted rd-why">{r.why.map((w, i) => <Clause key={i} text={w} />)}</td>
     </tr>
   );
@@ -304,10 +304,23 @@ function Clause({ text }: { text: string }) {
   return <span>{text}</span>;
 }
 
-function DecisionMark({ d }: { d: Decision }) {
-  if (d === 'kept') return <><span className="tick">✓</span> kept at this step</>;
-  if (d === 'provisional') return <span className="st prov">provisional</span>;
-  if (d === 'discarded') return <><span className="rd-x" aria-hidden>✕</span> discarded</>;
-  if (d === 'held') return <span className="st held">held</span>;
-  return <span className="st held">not conclusive</span>;
+/** Decision and source chips use the shared colour classes (styles/colors.css): one hue per meaning on every screen. */
+// Discarding is a rule outcome, not a failure: neutral grey, with its reason. Red stays for not met / can't verify.
+const TONE: Record<Decision, string> = {
+  kept: 'tone-met', provisional: 'tone-provisional', discarded: 'tone-not-evaluated', held: 'tone-held', inconclusive: 'tone-not-evaluated',
+};
+function DecisionMark({ d, why }: { d: Decision; why?: string }) {
+  const reason = d === 'discarded' && why ? why.replace(/^(✓|⏳️?)\s*/, '') : '';
+  const label = d === 'kept' ? 'kept at this step' : d === 'inconclusive' ? 'not conclusive' : d === 'discarded' ? (reason ? `Discarded · ${reason}` : 'Discarded') : d;
+  return <span className={`ctag ${TONE[d]} rd-dec-tag`} title={label}>{label}</span>;
+}
+
+function srcClass(source: string): string {
+  if (/^person/i.test(source)) return 'src-person';
+  if (/^company/i.test(source)) return 'src-company';
+  if (/^job/i.test(source)) return 'src-job';
+  if (/news/i.test(source)) return 'src-news';
+  if (/^web/i.test(source)) return 'src-web';
+  if (/rule/i.test(source)) return 'rule-o1';
+  return '';
 }

@@ -63,13 +63,13 @@ function Departures({ rows, opening }: { rows: DepartureRow[]; opening: Opening 
     <div className="panel rec-dep" data-testid="departures">
       <header>
         <h2>Departures, {familyLabel(opening?.roleFamily)}</h2>
-        <span className="faint" data-num>{yes + no > 0 ? `${fmtInt(yes)} conclusive${no ? ` · ${fmtInt(no)} struck` : ''}` : `${fmtInt(rows.length)} in 90 days`}</span>
+        <span className="faint" data-num>{yes + no > 0 ? `${plural(yes, 'conclusive departure')}${no ? ` · ${fmtInt(no)} struck` : ''}` : `${plural(rows.length, 'departure')} in 90 days`}</span>
       </header>
       {!rows.length ? (
         <p className="rec-empty"><span className="muted">No dated departure in this role family in the last 90 days.</span></p>
       ) : (
         <table className="t">
-          <thead><tr><th>Person</th><th>Went to</th><th>Left</th><th>Status</th></tr></thead>
+          <thead><tr><th>Person, role</th><th>Went to</th><th>Left</th><th>Status</th></tr></thead>
           <tbody>{rows.map((r) => <DepRow key={r.d.id} r={r} start={win?.split("–")[0].replace(/ \d{4}$/, "") ?? null} />)}</tbody>
         </table>
       )}
@@ -93,7 +93,7 @@ function DepRow({ r, start }: { r: DepartureRow; start: string | null }) {
       <td className={s}>{r.d.toCompanyName ?? 'not stated'}</td>
       <td className={s} data-num>{r.month ? fmtDate(r.month, true) : 'undated'}</td>
       <td>
-        {r.conclusive === true && <><span className="tick">✓</span> conclusive</>}
+        {r.conclusive === true && <span className="ctag tone-met">conclusive</span>}
         {r.conclusive === false && <span className="muted">{r.reason}{start ? ` (${start})` : ''}</span>}
         {r.conclusive === null && <span className="faint">not assessed</span>}
       </td>
@@ -115,7 +115,7 @@ function OpeningPanel({ o, ev, rows }: { o: OpeningWithWhy; ev: Map<string, Evid
         <span className={`st ${chip.cls}`} data-testid="opening-state">{chip.text}</span>
       </header>
       <div className="pad">
-        <p className="serif rec-role">{sentenceCase(o.roleTitle)}</p>
+        <p className="rec-role">{sentenceCase(o.roleTitle)}</p>
         <p className="faint rec-role-sub">O1 · evaluated {fmtDate(o.predictedAt, true)}{o.provisional && o.windowClosesBy ? ` · provisional, window closes ${fmtDate(o.windowClosesBy)}` : ''} · {familyLabel(o.roleFamily)} role family</p>
         <ol className="rec-proof" aria-label="The decision, dated" data-testid="proof">
           {proofSteps(o, rows).map((s) => (
@@ -266,7 +266,7 @@ function NoOpening({ desk }: { desk: CompanyDesk }) {
     <div className="panel rec-op" data-testid="no-opening">
       <header><h2>Rule decision</h2><span className="st plain">O1 · no opening</span></header>
       <div className="pad">
-        <p className="serif rec-role">No predicted opening</p>
+        <p className="rec-role">No predicted opening</p>
         <p className="muted">
           Rule O1 needs 2 or more conclusive dated departures in one role family within 90 days, and no replacement post or
           hire. {desk.departures.length ? `The ${fmtInt(desk.departures.length)} dated departures here don’t meet it.` : `No dated departure at ${desk.company.name} reached the rule.`}

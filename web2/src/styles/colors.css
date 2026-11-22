@@ -1,0 +1,112 @@
+/*
+  colors.css: DOMINO's meaning palette (Attio-style tinted chips). Imported once from main.tsx after tokens.css.
+  Colour ALWAYS encodes meaning (decision status, rule identity, source type) and always sits beside a text label
+  or a legend. Never use these hues for decoration. Teal is reserved for "DOMINO acted / delivered".
+
+  Each hue has four roles: --h-<hue>-dot (dot / stroke), --h-<hue>-fg (chip text), --h-<hue>-bg (soft tint),
+  --h-<hue>-bd (1px tinted border). Chip text passes >= 4.5:1 on its tint in both themes.
+
+  Anatomy:  <span class="ctag tone-verified">Verified</span>        dot + label chip (the dot is drawn by ::before)
+            <span class="cdot rule-o1" title="O1" />                dot only, for dense tables (needs a title/label)
+            <span class="ctag rule-r1 bare">R1</span>                 no tint, dot + coloured text (inline prose)
+  Semantic classes only set --c-dot/--c-fg/--c-bg/--c-bd, so they also work on any custom element:
+            .my-edge.rule-o1 { stroke: var(--c-dot); }
+*/
+
+:root {
+  --h-blue-dot: #3B82F6;   --h-blue-fg: #1D4ED8;   --h-blue-bg: #EEF4FF;   --h-blue-bd: #C9DBFE;
+  --h-green-dot: #22A35A;  --h-green-fg: #166534;  --h-green-bg: #ECFAF1;  --h-green-bd: #BDEBCD;
+  --h-amber-dot: #F59E0B;  --h-amber-fg: #92400E;  --h-amber-bg: #FEF6E4;  --h-amber-bd: #F5DCA3;
+  --h-orange-dot: #F97316; --h-orange-fg: #9A3412; --h-orange-bg: #FFF1E8; --h-orange-bd: #FBD3B8;
+  --h-red-dot: #EF4444;    --h-red-fg: #B91C1C;    --h-red-bg: #FEF0F0;    --h-red-bd: #F8CACA;
+  --h-pink-dot: #EC4899;   --h-pink-fg: #9D174D;   --h-pink-bg: #FDF0F7;   --h-pink-bd: #F5C9E1;
+  --h-teal-dot: #14A38B;   --h-teal-fg: #0F6B5C;   --h-teal-bg: #E8F7F4;   --h-teal-bd: #B5E3D9;
+  --h-sky-dot: #0EA5E9;    --h-sky-fg: #075985;    --h-sky-bg: #EBF7FD;    --h-sky-bd: #BCE3F5;
+  --h-grey-dot: #9CA3AF;   --h-grey-fg: #4B5563;   --h-grey-bg: #F3F4F6;   --h-grey-bd: #DFE2E6;
+}
+
+:root[data-theme=dark] {
+  --h-blue-dot: #60A5FA;   --h-blue-fg: #93BBFD;   --h-blue-bg: #16233B;   --h-blue-bd: #23406B;
+  --h-green-dot: #4ADE80;  --h-green-fg: #86E0A8;  --h-green-bg: #12291D;  --h-green-bd: #1E4D33;
+  --h-amber-dot: #FBBF24;  --h-amber-fg: #F5C970;  --h-amber-bg: #2B2111;  --h-amber-bd: #574118;
+  --h-orange-dot: #FB923C; --h-orange-fg: #FDB37E; --h-orange-bg: #2D1C12; --h-orange-bd: #5A3419;
+  --h-red-dot: #F87171;    --h-red-fg: #FCA5A5;    --h-red-bg: #2E1618;    --h-red-bd: #5C2A2D;
+  --h-pink-dot: #F472B6;   --h-pink-fg: #F9A8D4;   --h-pink-bg: #2C1724;   --h-pink-bd: #592C47;
+  --h-teal-dot: #3DBFA6;   --h-teal-fg: #7FDCC9;   --h-teal-bg: #0F2925;   --h-teal-bd: #1B4D45;
+  --h-sky-dot: #38BDF8;    --h-sky-fg: #8AD3F5;    --h-sky-bg: #0F2633;    --h-sky-bd: #1B4A62;
+  --h-grey-dot: #7C8491;   --h-grey-fg: #B4BAC4;   --h-grey-bg: #1F2329;   --h-grey-bd: #2E333B;
+}
+
+/* Grey default at zero specificity, so any semantic class on the same element wins. */
+:where(.ctag, .cdot) { --c-dot: var(--h-grey-dot); --c-fg: var(--h-grey-fg); --c-bg: var(--h-grey-bg); --c-bd: var(--h-grey-bd); }
+
+/* Hue utilities (prefer the semantic classes below). */
+.hue-blue   { --c-dot: var(--h-blue-dot);   --c-fg: var(--h-blue-fg);   --c-bg: var(--h-blue-bg);   --c-bd: var(--h-blue-bd); }
+.hue-green  { --c-dot: var(--h-green-dot);  --c-fg: var(--h-green-fg);  --c-bg: var(--h-green-bg);  --c-bd: var(--h-green-bd); }
+.hue-amber  { --c-dot: var(--h-amber-dot);  --c-fg: var(--h-amber-fg);  --c-bg: var(--h-amber-bg);  --c-bd: var(--h-amber-bd); }
+.hue-orange { --c-dot: var(--h-orange-dot); --c-fg: var(--h-orange-fg); --c-bg: var(--h-orange-bg); --c-bd: var(--h-orange-bd); }
+.hue-red    { --c-dot: var(--h-red-dot);    --c-fg: var(--h-red-fg);    --c-bg: var(--h-red-bg);    --c-bd: var(--h-red-bd); }
+.hue-pink   { --c-dot: var(--h-pink-dot);   --c-fg: var(--h-pink-fg);   --c-bg: var(--h-pink-bg);   --c-bd: var(--h-pink-bd); }
+.hue-teal   { --c-dot: var(--h-teal-dot);   --c-fg: var(--h-teal-fg);   --c-bg: var(--h-teal-bg);   --c-bd: var(--h-teal-bd); }
+.hue-sky    { --c-dot: var(--h-sky-dot);    --c-fg: var(--h-sky-fg);    --c-bg: var(--h-sky-bg);    --c-bd: var(--h-sky-bd); }
+.hue-grey   { --c-dot: var(--h-grey-dot);   --c-fg: var(--h-grey-fg);   --c-bg: var(--h-grey-bg);   --c-bd: var(--h-grey-bd); }
+
+/* Decision status */
+.tone-verified, .tone-met { --c-dot: var(--h-green-dot); --c-fg: var(--h-green-fg); --c-bg: var(--h-green-bg); --c-bd: var(--h-green-bd); }
+.tone-provisional { --c-dot: var(--h-blue-dot); --c-fg: var(--h-blue-fg); --c-bg: var(--h-blue-bg); --c-bd: var(--h-blue-bd); }
+.tone-held { --c-dot: var(--h-amber-dot); --c-fg: var(--h-amber-fg); --c-bg: var(--h-amber-bg); --c-bd: var(--h-amber-bd); }
+.tone-not-met, .tone-cant-verify { --c-dot: var(--h-red-dot); --c-fg: var(--h-red-fg); --c-bg: var(--h-red-bg); --c-bd: var(--h-red-bd); }
+.tone-open, .tone-watch { --c-dot: var(--h-sky-dot); --c-fg: var(--h-sky-fg); --c-bg: var(--h-sky-bg); --c-bd: var(--h-sky-bd); }
+.tone-not-evaluated { --c-dot: var(--h-grey-dot); --c-fg: var(--h-grey-fg); --c-bg: var(--h-grey-bg); --c-bd: var(--h-grey-bd); }
+.tone-delivered { --c-dot: var(--h-teal-dot); --c-fg: var(--h-teal-fg); --c-bg: var(--h-teal-bg); --c-bd: var(--h-teal-bd); }
+
+/* Rule identity: the same hue for a rule on every screen */
+.rule-o1 { --c-dot: var(--h-blue-dot); --c-fg: var(--h-blue-fg); --c-bg: var(--h-blue-bg); --c-bd: var(--h-blue-bd); }
+.rule-r1 { --c-dot: var(--h-orange-dot); --c-fg: var(--h-orange-fg); --c-bg: var(--h-orange-bg); --c-bd: var(--h-orange-bd); }
+.rule-contagion { --c-dot: var(--h-pink-dot); --c-fg: var(--h-pink-fg); --c-bg: var(--h-pink-bg); --c-bd: var(--h-pink-bd); }
+.rule-displacement { --c-dot: var(--h-amber-dot); --c-fg: var(--h-amber-fg); --c-bg: var(--h-amber-bg); --c-bd: var(--h-amber-bd); }
+.rule-direct { --c-dot: var(--h-green-dot); --c-fg: var(--h-green-fg); --c-bg: var(--h-green-bg); --c-bd: var(--h-green-bd); }
+/* Guards share the amber family; the chip label names which guard. */
+.guard-acquihire, .guard-restructure { --c-dot: var(--h-amber-dot); --c-fg: var(--h-amber-fg); --c-bg: var(--h-amber-bg); --c-bd: var(--h-amber-bd); }
+
+/* Source type */
+.src-person { --c-dot: var(--h-blue-dot); --c-fg: var(--h-blue-fg); --c-bg: var(--h-blue-bg); --c-bd: var(--h-blue-bd); }
+.src-company { --c-dot: var(--h-green-dot); --c-fg: var(--h-green-fg); --c-bg: var(--h-green-bg); --c-bd: var(--h-green-bd); }
+.src-job { --c-dot: var(--h-orange-dot); --c-fg: var(--h-orange-fg); --c-bg: var(--h-orange-bg); --c-bd: var(--h-orange-bd); }
+.src-news { --c-dot: var(--h-pink-dot); --c-fg: var(--h-pink-fg); --c-bg: var(--h-pink-bg); --c-bd: var(--h-pink-bd); }
+.src-web { --c-dot: var(--h-sky-dot); --c-fg: var(--h-sky-fg); --c-bg: var(--h-sky-bg); --c-bd: var(--h-sky-bd); }
+/* Model output (label it "GPT-6 Luna"): grey, because it is reasoning, not a primary source. */
+.src-llm { --c-dot: var(--h-grey-dot); --c-fg: var(--h-grey-fg); --c-bg: var(--h-grey-bg); --c-bd: var(--h-grey-bd); }
+
+/* Chip: 6px dot + 12px medium label, soft tint, 1px tinted border, 6px radius, 22px tall. */
+.ctag {
+  display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box;
+  height: 22px; padding: 0 8px; border-radius: 6px;
+  background: var(--c-bg); border: 1px solid var(--c-bd); color: var(--c-fg);
+  font-family: inherit; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0;
+  white-space: nowrap; vertical-align: middle; font-variant-numeric: tabular-nums;
+}
+.ctag::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--c-dot); }
+.ctag.lg { height: 24px; }
+.ctag.nodot::before { display: none; }
+.ctag.bare { background: none; border-color: transparent; padding: 0; height: auto; }
+
+/* Legacy shell status chip (.st, app.css) remapped onto the meaning palette so every existing status picks it up.
+   Doubled class beats app.css (imported later) without !important. Shape cues stay: provisional keeps its dashed
+   border, held keeps its hatch, so state never rests on colour alone. */
+.st.st { border-radius: 6px; }
+.st.st.verified { background: var(--h-green-bg); color: var(--h-green-fg); border: 1px solid var(--h-green-bd); }
+.st.st.delivered { background: var(--h-teal-bg); color: var(--h-teal-fg); border: 1px solid var(--h-teal-bd); }
+.st.st.prov { background: var(--h-blue-bg); color: var(--h-blue-fg); border: 1px dashed var(--h-blue-dot); }
+.st.st.held { color: var(--h-amber-fg); border: 1px solid var(--h-amber-bd);
+  background: repeating-linear-gradient(135deg, var(--h-amber-bg) 0 3px, color-mix(in srgb, var(--h-amber-bd) 45%, var(--h-amber-bg)) 3px 5px); }
+.st.st.plain { background: var(--h-grey-bg); color: var(--h-grey-fg); border: 1px solid var(--h-grey-bd); }
+.st.st:is(.verified, .delivered, .prov, .held)::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.st.st.verified::before { background: var(--h-green-dot); }
+.st.st.delivered::before { background: var(--h-teal-dot); }
+.st.st.prov::before { background: var(--h-blue-dot); }
+.st.st.held::before { background: var(--h-amber-dot); }
+
+/* Dot only, for dense tables. Always give it a title or a visible label/legend nearby. */
+.cdot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c-dot); vertical-align: middle; }
+.cdot.sm { width: 6px; height: 6px; }

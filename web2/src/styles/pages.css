@@ -14,8 +14,12 @@
 .side a[aria-current='page'] { background: var(--hover); color: var(--ink); }
 .side a .c { color: var(--ink-3); font-weight: 400; }
 .side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 13px; color: var(--ink-3); line-height: 18px; }
-.co-main { flex: 1; padding: 20px 24px 40px; min-width: 0; max-width: 1240px; }
-@media (min-width: 1800px) { .co-main { max-width: 1480px; } }
+/* fluid main column (Garud 17:11): full width with 32px gutters; grids stretch, prose keeps ~72ch */
+.co-main { flex: 1; padding: 20px 32px 48px; min-width: 0; max-width: none; }
+.co-main .ph p, .co-main .lede, .co-main .co-hint, .page .ph p { max-width: 72ch; }
+/* two-column feature layouts grow proportionally instead of pinning the side panel */
+.co-main .ver { grid-template-columns: minmax(0, 7fr) minmax(380px, 3fr); }
+.co-main .out-grid { grid-template-columns: minmax(0, 7fr) minmax(400px, 3fr); }
 
 .reading-panel { min-height: 60vh; display: grid; }
 .reading-panel .rail { min-height: 60vh; }
@@ -53,6 +57,25 @@
   transition: background 150ms var(--ease);
 }
 .cohort-row:last-child { border-bottom: 0; }
+.cohort-head { padding-top: 8px; padding-bottom: 8px; font-size: var(--fs-cap); font-weight: 500; color: var(--ink-2); border-bottom-color: var(--rule); }
+.cohort-head:hover { background: none; }
+.cohort-row .num { font-variant-numeric: tabular-nums; }
+
+/* breadcrumbs: Company › Abacus.AI › tab */
+.crumbs { margin: 0 0 12px; font-size: var(--fs-ui); line-height: 18px; }
+.crumbs ol { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 0; margin: 0; padding: 0; }
+.crumbs li { color: var(--ink-3); min-width: 0; }
+.crumbs li + li::before { content: '›'; margin: 0 8px; color: var(--ink-3); }
+.crumbs a { color: var(--ink-2); transition: color 150ms var(--ease); }
+.crumbs a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.crumbs li[aria-current='page'] { color: var(--ink); font-weight: 500; }
+.side a .c { font-variant-numeric: tabular-nums; }
+.side .grp { font-weight: 500; }
+.side a { min-height: var(--nav-h); align-items: center; border-radius: var(--r); font-size: var(--fs-body); }
+.side a[aria-current='page'] { font-weight: var(--w-semi); background: var(--hover); color: var(--ink); }
+.side .grp { font-size: var(--fs-cap); letter-spacing: 0; }
+.cohort-row { min-height: var(--row-h); padding: 8px var(--cell-x-edge); }
+.cohort-head { min-height: var(--head-h); padding-top: 0; padding-bottom: 0; }
 .cohort-row:hover { background: var(--row-hover); }
 .cohort-name b { font-weight: 600; }
 .cohort-name small { color: var(--ink-3); margin-left: 8px; font-size: 12px; }
@@ -107,3 +130,29 @@
 .dom-lane li + li::after { content: ''; position: absolute; left: -8px; top: calc(50% - 3px); border: 3.5px solid transparent; border-left: 6px solid var(--ink-2); border-right: 0; }
 @keyframes dom-in { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .dom-lane li { animation: none; opacity: 1; } }
+
+/* ---------------------------------------------------------------- sign-in, Attio SPEC pass (17:20)
+   Display heading semibold with tight tracking, hairline cards (8px), near-black primary (10px), generous gaps. */
+.signin { max-width: 1160px; padding: 72px 32px 80px; grid-template-columns: minmax(0, 1fr) 440px; gap: 64px; }
+.signin-head h1 { font-size: 44px; line-height: 48px; font-weight: 600; letter-spacing: -0.025em; margin: 0 0 16px; max-width: 15em; color: var(--ink); }
+.signin-head > p { font-size: 17px; line-height: 26px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink-2); max-width: 32em; }
+.signin-head > p.signin-at { margin-top: 40px; font-size: var(--fs-ui); font-weight: 500; letter-spacing: 0; color: var(--ink-2); }
+.signin-stats { margin-top: 12px; border: var(--hair); border-radius: var(--r-lg); background: var(--surface); }
+.signin-stats > div { padding: 14px 16px; }
+.signin-stats dt { font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-2); }
+.signin-stats dd { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.015em; color: var(--ink); margin-top: 4px; }
+.dominoes { margin-top: 32px; padding: 16px; gap: 12px; border: var(--hair); border-radius: var(--r-lg); background: var(--surface); }
+.dominoes figcaption { font-size: var(--fs-cap); font-weight: 500; color: var(--ink-2); }
+.dom-lane li { border-radius: var(--r-lg); border-color: var(--rule); background: var(--surface); font-size: var(--fs-ui); line-height: var(--lh-ui); padding: 10px 12px; }
+.dom-lane li.dom-cause { background: var(--canvas); }
+.signin-panel { padding: 28px; border-radius: var(--r-xl); }
+.signin-panel h2 { font-size: var(--fs-sec); line-height: 22px; letter-spacing: -0.01em; margin-bottom: 16px; }
+.role { border-radius: var(--r-lg); padding: 16px 18px; margin-bottom: 12px; }
+.role b { font-size: 15px; letter-spacing: -0.01em; }
+.role p { font-size: var(--fs-ui); line-height: var(--lh-ui); margin-top: 4px; }
+.role[aria-pressed='true'] { border-color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--ink); }
+.pick { border-radius: var(--r-ctl); }
+.signin-go, .signin .btn.pri, .signin .btn.primary { height: 40px; border-radius: 10px; font-weight: 500; font-size: var(--fs-body); }
+
+/* Schibsted tabular figures widen commas and colons: big numbers and the run chip use proportional figures */
+.signin-stats dd, .rec-fun b, .fun-n, .funnel b, .big-n, .runchip, .pl-node b { font-variant-numeric: lining-nums proportional-nums; }

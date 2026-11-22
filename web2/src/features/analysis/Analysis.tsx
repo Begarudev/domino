@@ -183,11 +183,11 @@ function Funding({ d }: { d?: CompanyDossier | null }) {
 
 // ---------------------------------------------------------------- rules
 const STATE: Record<DossierRule['state'], { label: string; cls: string }> = {
-  open: { label: 'Provisional', cls: 'st prov' },
-  held: { label: 'Held', cls: 'st held' },
-  met: { label: 'Met', cls: 'st verified' },
-  not_met: { label: 'Not met', cls: 'st plain' },
-  not_evaluated: { label: 'Not evaluated', cls: 'st plain cf-ne' },
+  open: { label: 'Provisional', cls: 'ctag tone-provisional' },
+  held: { label: 'Held', cls: 'ctag tone-held' },
+  met: { label: 'Met', cls: 'ctag tone-met' },
+  not_met: { label: 'Not met', cls: 'ctag tone-not-met' },
+  not_evaluated: { label: 'Not evaluated', cls: 'ctag tone-not-evaluated' },
 };
 const CLAUSE: Record<RuleClause['state'], { sym: string; cls: string; label: string }> = {
   met: { sym: '✓', cls: 'tick', label: 'Met' },

@@ -113,3 +113,27 @@
 @media (max-width: 1000px) {
   .onb-form, .onb-check-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------- tool-grade hierarchy (Garud 17:05)
+   Shared p5 tokens with fallbacks: page title, 13-14 labels, 14 body, 12 help; 36px controls at --r-ctl, cards at --r-lg. */
+.side-candidate .onb .onb-title, .side-candidate .onb .onb-h2 { font-size: var(--fs-page, 24px); line-height: var(--lh-page, 30px); letter-spacing: var(--track-tight, -0.02em); font-weight: var(--w-semi, 600); }
+.side-candidate .onb .onb-rule { font-size: var(--fs-ui, 13px); line-height: var(--lh-ui, 18px); max-width: 72ch; }
+.onb .onb-form { border-radius: var(--r-lg, 10px); padding: 24px; gap: 24px 40px; border-color: var(--hair, var(--line)); background: var(--surface); }
+.onb .onb-label, .onb .onb-consent legend { font-size: var(--fs-body, 14px); font-weight: var(--w-semi, 600); }
+.onb .onb-input, .onb .onb-input.small { height: var(--row-h-compact, 36px); padding: 0 12px; border-radius: var(--r-ctl, 8px); font-size: var(--fs-body, 14px); background: var(--surface); }
+.onb .onb-input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 18%, transparent); }
+.onb .onb-go, .onb .onb-demo { height: var(--row-h-compact, 36px); padding: 0 16px; font-size: var(--fs-body, 14px); border-radius: var(--r-ctl, 8px); }
+.onb .consent { gap: 14px; }
+.onb .consent-item { grid-template-columns: 18px 1fr; gap: 10px; }
+.onb .consent-item input { width: 18px; height: 18px; }
+.onb .consent-box { width: 18px; height: 18px; border-radius: 5px; }
+.onb .consent-box::after { left: 5px; top: 1.5px; width: 5px; height: 10px; border-width: 0 2px 2px 0; }
+.onb .consent-text b { font-size: var(--fs-body, 14px); font-weight: var(--w-semi, 600); }
+.onb .consent-text span, .onb .onb-after, .onb .onb-keep { font-size: var(--fs-cap, 12px); line-height: var(--lh-cap, 16px); }
+.onb .pcard, .onb .onb-confirm-form { border-radius: var(--r-lg, 10px); padding: 20px 24px; }
+.onb .pcard-fields { gap: 0; }
+.onb .pcard-fields > div { grid-template-columns: 140px 1fr; padding: 10px 0; }
+.onb .pcard-fields dt { font-size: var(--fs-cap, 12px); }
+.onb .chip { height: 24px; padding: 0 10px; font-size: var(--fs-cap, 12px); }
+.onb .h-dates { font-variant-numeric: tabular-nums; }
+.onb .onb-summary { border-radius: var(--r-lg, 10px); padding: 10px 16px; }

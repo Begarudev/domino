@@ -8,7 +8,7 @@ import { openEvidence } from '../../shell/ui.ts';
 import './network.css';
 
 type Kind = 'counted' | 'struck' | 'held' | 'in';
-interface Edge { key: string; other: string; side: 'out' | 'in'; kind: Kind; label: string; note: string | null; evidenceId: string | null }
+interface Edge { key: string; other: string; side: 'out' | 'in'; kind: Kind; n: number; label: string; note: string | null; evidenceId: string | null; noteEvidenceId?: string | null }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const month = (iso: string | null) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}` : 'undated');
@@ -43,10 +43,10 @@ function buildEdges(desk: CompanyDesk, dossier: CompanyDossier | null): Edge[] {
     const struck = depDetail.includes(`→ ${to}: not conclusive`);
     const isHeld = !struck && !!held && ds.every((d) => d.roleFamily === held.roleFamily);
     const kind: Kind = struck ? 'struck' : isHeld ? 'held' : 'counted';
-    const note = struck ? 'not counted' : isHeld
-      ? `Held: ${heldReason ?? 'guard matched'}${report?.observedAt ? ` · report ${fmtDate(report.observedAt, true)}` : ''}`
-      : null;
-    return { key: `o:${k}`, other: to, side: 'out', kind, label: `${people(ds)}, ${leftWhen(ds[0])}`, note, evidenceId: (isHeld && report?.id) || ds[0].evidenceId };
+    const note = struck ? 'not counted: not conclusive' : isHeld
+      ? `held: ${heldReason ?? 'guard matched'}${report?.observedAt ? `, guard report ${fmtDate(report.observedAt, true)}` : ''}`
+      : 'counted by O1';
+    return { key: `o:${k}`, other: to, side: "out", kind, n: ds.length, label: `${people(ds)}, left ${leftWhen(ds[0])}`, note, evidenceId: ds[0].evidenceId, noteEvidenceId: isHeld ? report?.id ?? null : null };
   });
 
   const seen = new Set(out.map((e) => e.other));
@@ -56,12 +56,12 @@ function buildEdges(desk: CompanyDesk, dossier: CompanyDossier | null): Edge[] {
     ins.set(f.otherCompanyName, [...(ins.get(f.otherCompanyName) ?? []), f]);
   }
   const inEdges: Edge[] = [...ins.entries()].slice(0, 4).map(([from, fs]) => ({
-    key: `i:${from}`, other: from, side: 'in', kind: 'in', label: `${people(fs)}, ${when(fs[0].date, fs[0].precision)}`, note: 'joined', evidenceId: fs[0].evidenceIds[0] ?? null,
+    key: `i:${from}`, other: from, side: 'in', kind: 'in', n: fs.length, label: `${people(fs)}, ${when(fs[0].date, fs[0].precision)}`, note: 'joined', evidenceId: fs[0].evidenceIds[0] ?? null,
   }));
   return [...out, ...inEdges];
 }
 
-const W = 960, NODE_H = 36, ROW = 92;
+const W = 1160, NODE_H = 34, ROW = 72;
 
 export function DominoGraph({ desk, dossier, checkedAt }: { desk: CompanyDesk; dossier: CompanyDossier | null; checkedAt?: string | null }) {
   const edges = buildEdges(desk, dossier);
@@ -84,20 +84,29 @@ export function DominoGraph({ desk, dossier, checkedAt }: { desk: CompanyDesk; d
   const cy = H / 2, cx = ins.length ? W / 2 : 200;
   const fw = Math.max(120, name.length * 9 + 32);
   const yAt = (i: number, n: number) => cy + (i - (n - 1) / 2) * ROW;
-  const counted = outs.filter((e) => e.kind === 'counted').length;
+  const counted = outs.filter((e) => e.kind === 'counted').reduce((s, e) => s + e.n, 0);
+  const heldN = outs.filter((e) => e.kind === 'held').length;
+  const depN = outs.reduce((s, e) => s + e.n, 0);
+  const struckN = outs.filter((e) => e.kind === 'struck').length;
 
   return (
     <section className="panel dg" data-testid="domino-graph">
       <header>
-        <h2>Domino graph</h2>
-        <span className="faint">{outs.length} out · {ins.length} in{asOf ? ` · checked ${fmtDate(asOf, true)}` : ''}</span>
+        <div className="dg-h">
+          <h2>Domino graph</h2>
+          <p>Where {name}'s people went in the 90-day window, and whether rule O1 counts each move.</p>
+        </div>
+        <span className="dg-sum">
+          {depN} {depN === 1 ? 'departure' : 'departures'} to {outs.length} {outs.length === 1 ? 'company' : 'companies'} · {counted} counted by O1
+          {ins.length > 0 ? ` · ${ins.reduce((s, e) => s + e.n, 0)} joined` : ''}{asOf ? ` · checked ${fmtDate(asOf, true)}` : ''}
+        </span>
       </header>
       <svg className="dg-svg" viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`Moves between ${name} and other companies`}>
         {[...outs.map((e, i) => ({ e, y: yAt(i, outs.length) })), ...ins.map((e, i) => ({ e, y: yAt(i, ins.length) }))].map(({ e, y }, i) => {
           const x0 = e.side === 'out' ? cx + fw / 2 : 150;
           const x1 = e.side === 'out' ? W - 150 : cx - fw / 2;
           const y0 = e.side === 'out' ? cy : y, y1 = e.side === 'out' ? y : cy;
-          const span = x1 - x0, ca = e.side === 'out' ? x0 + span * 0.22 : x0 + span * 0.6, cb = e.side === 'out' ? x0 + span * 0.4 : x0 + span * 0.78;
+          const span = x1 - x0, ca = e.side === 'out' ? x0 + span * 0.12 : x0 + span * 0.6, cb = e.side === "out" ? x0 + span * 0.26 : x0 + span * 0.78;
           const d = `M${x0},${y0} C${ca},${y0} ${cb},${y1} ${x1},${y1}`; // fan out early, run flat under the label
           const lx = e.side === 'out' ? x1 - 14 : x0 + 14;
           const anchor = e.side === 'out' ? 'end' : 'start';
@@ -109,8 +118,13 @@ export function DominoGraph({ desk, dossier, checkedAt }: { desk: CompanyDesk; d
               onClick={open} onKeyDown={(k) => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); open(); } }}>
               <path className="hit" d={d} />
               <path className="ln" d={d} pathLength={1} markerEnd={`url(#dg-arrow-${e.kind})`} />
-              <text className="lbl" x={lx} y={y - 28} textAnchor={anchor}>{e.label}</text>
-              {e.note && <text className="note" x={lx} y={y - 12} textAnchor={anchor}>{e.note}</text>}
+              <text x={lx} y={y - 12} textAnchor={anchor}>
+                <tspan className="lbl">{e.label}</tspan>
+                {e.note && <tspan className="sep">{'  ·  '}</tspan>}
+                {e.note && (e.noteEvidenceId
+                  ? <tspan className="note st-t src" onClick={(ev) => { ev.stopPropagation(); openEvidence(e.noteEvidenceId as string); }}>{e.note}</tspan>
+                  : <tspan className="note st-t">{e.note}</tspan>)}
+              </text>
             </g>
           );
         })}
@@ -129,11 +143,11 @@ export function DominoGraph({ desk, dossier, checkedAt }: { desk: CompanyDesk; d
         </g>
       </svg>
       <p className="dg-legend">
-        <span><i className="sw counted" />counted by O1 ({counted})</span>
-        <span><i className="sw held" />held by a guard</span>
-        <span><i className="sw struck" />not counted</span>
-        {ins.length > 0 && <span><i className="sw in" />joined {name}</span>}
-        <span className="faint">Click an edge for its dated source.</span>
+        <span><i className="sw counted" />Counted by O1 · {counted}</span>
+        {heldN > 0 && <span><i className="sw held" />Held by a guard · {heldN}</span>}
+        {struckN > 0 && <span><i className="sw struck" />Not counted · {struckN}</span>}
+        {ins.length > 0 && <span><i className="sw in" />Joined {name} · {ins.length}</span>}
+        <span className="dg-hint">Click an edge for its dated source.</span>
       </p>
     </section>
   );

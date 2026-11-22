@@ -74,7 +74,11 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
         {readOnly && <span className="faint">Past run, read-only</span>}
       </div>
 
-      <section className="panel lg-strip" aria-label="Spend against the caps">
+      <section className="panel lg-strip" aria-labelledby="lg-caps-h">
+        <div className="lg-sec-h">
+          <h2 id="lg-caps-h">Spend against the caps</h2>
+          <span>What this run has used and reserved against its credit, model spend and time limits.</span>
+        </div>
         <p className="lg-line" data-testid="cap-line">
           <span>Used <b><Count value={credits} format={fmtCredits} /></b> credits</span>
           <span className="sep">·</span>
@@ -100,7 +104,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
             <b>Blocked before spend</b> · {stepName(r)} · <span className="mono">{r.endpoint}</span>
             <div className="faint">Credit cap {fmtInt(b.limits.maxCredits)} · used {fmtCredits(credits)} + would have cost ≈ {fmtCredits(r.credits)} = {fmtCredits(credits + r.credits)} · not dispatched</div>
           </div>
-          <span className="st held">Not dispatched</span>
+          <span className="ctag tone-held">Not dispatched</span>
         </div>
       )) : (
         <div className={`blocked${b.exhausted ? '' : ' quiet'}`} data-testid="blocked-call">
@@ -109,7 +113,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
             <div className="faint">A call that would cross a cap is refused before it spends and shows here as “Not dispatched”.
               {b.exhausted === 'seconds' ? ` It ran ${fmtInt(b.used.seconds)} s of ${fmtInt(b.limits.maxSeconds)} s; nothing after that was sent.` : ''}</div>
           </div>
-          <span className={`st ${b.exhausted ? 'held' : 'plain'}`}>{b.exhausted ? 'Cap reached' : 'Within caps'}</span>
+          <span className={`ctag ${b.exhausted ? 'tone-held' : 'tone-met'}`}>{b.exhausted ? 'Cap reached' : 'Within caps'}</span>
         </div>
       )}
 
@@ -122,12 +126,16 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
 
       <section className="panel">
         <header>
-          <h2>{plural(rows.length, 'call')} in this run</h2>
+          <div className="lg-sec-h">
+            <h2>{plural(rows.length, 'call')} in this run</h2>
+            <span>One row per data or model call, in the order it returned: credits, tokens, model cost and latency.</span>
+          </div>
           {!paid && rows.length > 0 && <span className="lg-note" data-testid="cached-note">This scan reused cached live responses: 0 new credits</span>}
         </header>
         {rows.length === 0 ? (
           <p className="pad faint">This run made no paid calls. Rows appear here as each call returns, with its credits and cost.</p>
         ) : (
+          <div className="lg-scroll" tabIndex={0} role="region" aria-label="Calls in this run">
           <table className="t lg-table">
             <thead><tr><th>Time</th><th>Step</th><th>Endpoint</th><th>Mode</th><th>Status</th><th className="num">Credits</th><th className="num">Tokens</th><th className="num">USD</th><th className="num">Latency</th></tr></thead>
             <tbody>{rows.map((r) => <Row key={r.id} r={r} />)}</tbody>
@@ -141,6 +149,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
               </tr>
             </tfoot>
           </table>
+          </div>
         )}
       </section>
     </div>
@@ -153,11 +162,11 @@ function Row({ r }: { r: LedgerEntry }) {
   const bad = r.status !== 'ok' && r.status !== 'cache_hit';
   return (
     <tr ref={ref} data-testid="ledger-row" className={r.status === 'budget_blocked' ? 'blocked-row' : undefined}>
-      <td className="mono">{fmtTime(r.ts)}</td>
+      <td className="lg-time">{fmtTime(r.ts)}</td>
       <td className="lg-step" title={stepName(r)}>{stepName(r)}</td>
       <td className="mono" title={ENDPOINT_NOUN[r.endpoint] ?? r.endpoint}>{r.endpoint}</td>
-      <td>{r.injected ? <span className="st held">Injected fault</span> : modeLabel(r)}</td>
-      <td className={bad ? 'lg-bad' : undefined}>{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</td>
+      <td>{r.injected ? <span className="ctag tone-held">Injected fault</span> : modeLabel(r)}</td>
+      <td><span className={`ctag ${r.status === 'budget_blocked' ? 'tone-held' : bad ? 'tone-not-met' : 'tone-met'}`}>{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</span></td>
       <td className="num">{r.credits ? fmtCredits(r.credits) : <span className="faint">0</span>}</td>
       <td className="num">{isLlm(r) ? fmtInt(r.inputTokens + r.outputTokens) : <span className="faint">–</span>}</td>
       <td className="num">{r.usd ? fmtUsd(r.usd) : <span className="faint">$0</span>}</td>

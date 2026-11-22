@@ -171,3 +171,30 @@
   .rec-count, .rec-foot, .rec-fun-l { font-size: 15px; }
   .rec-fun b { font-size: 26px; line-height: 32px; }
 }
+
+/* polish pass on p5's Attio tokens: the shell's table.t gives the sticky 36px head, 40px rows, 16px edge gutters and
+   row hover; this only sets the type steps, the tabular figures, the 10px cards and the state pill. Sans only. */
+.rec .panel { border-radius: var(--r-lg); }
+.rec-fun b { font-family: var(--sans); font-weight: var(--w-semi); letter-spacing: var(--track-tight); font-variant-numeric: lining-nums proportional-nums; }
+.rec-fun .rec-plus { font-family: var(--sans); }
+.rec-role { font-size: var(--fs-h); line-height: var(--lh-h); font-weight: var(--w-semi); letter-spacing: var(--track-snug); }
+.rec-role-sub { font-size: var(--fs-cap); line-height: var(--lh-cap); }
+.rec table [data-num], .rec-ev-date { font-variant-numeric: tabular-nums; }
+.rec .panel > header > span:not(.st) { font-size: var(--fs-ui); }
+.rec-dep table.t td { vertical-align: middle; }
+/* a departure month is a date, not a quantity: it reads left under its "Left" head */
+.rec-dep table.t td[data-num] { text-align: left; }
+.rec-hire td:nth-child(3) { font-variant-numeric: tabular-nums; }
+.rec-fit li + li { margin-top: 4px; }
+.rec-foot { padding: 10px var(--cell-x-edge) 12px; }
+@media (min-width: 1800px) {
+  .rec table.t td { font-size: var(--fs-lead); padding-top: 10px; padding-bottom: 10px; }
+  .rec-role { font-size: var(--fs-page); line-height: var(--lh-page); }
+  .rec .panel > header > span:not(.st) { font-size: var(--fs-body); }
+}
+
+/* Attio SPEC + council r1: hairline column dividers, a filled teal-tint pill with no stroke, 38-40px rows. */
+.rec-dep table.t th + th, .rec-dep table.t td + td, .rec-hire th + th, .rec-hire td + td { border-left: 1px solid var(--rule-2); }
+.rec-dep table.t td { padding-top: 9px; padding-bottom: 9px; }
+.rec-dep .ctag { height: 20px; }
+
