@@ -123,7 +123,7 @@ const departure = (id: string, companyId: string, role: string, roleFamily: Role
 // ---------------------------------------------------------------- client
 
 export interface DeskApi {
-  createCandidate(input: { linkedinUrl: string; samples: string[]; consent: Consent }): Promise<Sourced<{ candidateId: string; runId: string | null }>>;
+  createCandidate(input: { linkedinUrl: string; samples: string[]; consent: Consent; dataMode?: 'fixture' | 'cache' | 'live' }): Promise<Sourced<{ candidateId: string; runId: string | null }>>;
   candidate(id: string): Promise<Sourced<Candidate>>;
   confirmCandidate(id: string, consent: Consent): Promise<Sourced<Candidate>>;
   candidateOpenings(id: string): Promise<Sourced<Opening[]>>;
