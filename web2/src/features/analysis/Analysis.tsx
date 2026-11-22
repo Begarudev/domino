@@ -20,6 +20,11 @@ const when = (iso: string | null | undefined, month: boolean) => (iso ? fmtDate(
 /** Server fact lines carry ISO dates ("on 2026-11-02"); show them like every other date ("2 Nov 2026"). */
 const prettyDates = (t: string) => t.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => fmtDate(iso, true));
 const hostOf = (e: Evidence) => (e.source.url ? e.source.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : null);
+/** The decisive count in a search row ("0 records") is the fact the rule used; set it in the same weight as a value. */
+function factLine(t: string) {
+  const parts = prettyDates(t).split(/(\b\d[\d,]* records?\b)/);
+  return parts.map((x, i) => (i % 2 ? <b key={i} className="cf-count">{x}</b> : x));
+}
 const pct1 = (p: number) => `${p > 0 ? '+' : p < 0 ? '−' : ''}${(Math.round(Math.abs(p) * 10) / 10).toFixed(1)}%`;
 
 export function Analysis({ desk }: { desk: CompanyDesk }) {
@@ -56,14 +61,14 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
       {q.error && (
         <div className="cf-err" role="alert" data-testid="file-error">
           <div>
-            <b>No company file for {company.name} yet.</b>
+            <b>Company file unavailable for {company.name}.</b>
             <span>{q.error.replace(/\.$/, '')}. The rows below come from the company view; the rest stays empty until a run covers this company.</span>
           </div>
           <button className="btn small" onClick={q.refetch}>Try again</button>
         </div>
       )}
 
-      <div className="cf-top">
+      <div className={`cf-top ${hasFunding(d) ? '' : 'no-fund'}`}>
         <Headcount d={d} desk={desk} />
         <Funding d={d} />
         <Rules rules={rules} fromDesk={!d} name={desk.company.name} open={openRule} onToggle={(id) => setOpenRule(openRule === id ? null : id)} />
@@ -78,7 +83,8 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
           <span className="cf-why-h">Why this target</span>
           <span className="cf-why-pos num">{d.whyTarget.companyRanking.position} of {fmtInt(d.whyTarget.companyRanking.of)} companies</span>
           <span className="cf-why-rule">{d.whyTarget.companyRanking.rule}</span>
-          <span className="cf-why-because"><span className="faint">Because</span>{d.whyTarget.companyRanking.because.map((b) => <span key={b} className="cf-why-b">{b}</span>)}</span>
+          <span className="cf-why-because"><span className="faint">Because</span>{d.whyTarget.companyRanking.because.map((b) => <span key={b} className="cf-why-b">{b}</span>)}
+            <span className="cf-why-note faint">Ranking counts every departure record in the window; O1 counts only conclusive ones.</span></span>
         </section>
       )}
 
@@ -148,6 +154,7 @@ function Spark({ series, mark, onOpen }: { series: { date: string; count: number
 }
 
 // ---------------------------------------------------------------- funding
+const hasFunding = (d?: CompanyDossier | null) => !!d && (d.timeline.some((t) => t.kind === 'funding') || !!d.company.lastFunding?.date);
 function Funding({ d }: { d?: CompanyDossier | null }) {
   const rows = (d?.timeline ?? []).filter((t) => t.kind === 'funding');
   const lf = d?.company.lastFunding;
@@ -177,10 +184,10 @@ const STATE: Record<DossierRule['state'], { label: string; cls: string }> = {
   not_evaluated: { label: 'Not evaluated', cls: 'st plain cf-ne' },
 };
 const CLAUSE: Record<RuleClause['state'], { sym: string; cls: string; label: string }> = {
-  met: { sym: '✓', cls: 'tick', label: 'met' },
-  open: { sym: '○', cls: 'open-c', label: 'open' },
-  failed: { sym: '✗', cls: 'cf-fail', label: 'failed' },
-  cant_verify: { sym: '?', cls: 'open-c', label: 'can’t verify' },
+  met: { sym: '✓', cls: 'tick', label: 'Met' },
+  open: { sym: '○', cls: 'cf-open', label: 'Open' },
+  failed: { sym: '✗', cls: 'cf-fail', label: 'Failed' },
+  cant_verify: { sym: '?', cls: 'cf-open', label: 'Can’t verify' },
 };
 
 /** The company view's O1 opening as a rule row, used only when the file itself didn't load. */
@@ -202,7 +209,8 @@ function Rules({ rules, fromDesk, name, open, onToggle }: { rules: DossierRule[]
         <ul className="cf-rules">
           {rules.map((r) => {
             const met = r.clauses.filter((c) => c.state === 'met').length;
-            const tally = r.id === 'R1' && r.clauses[0] ? r.clauses[0].text.replace(/ conclusive departures$/, ' departures') : r.clauses.length ? `${met} of ${r.clauses.length} clauses met` : 'needs a company analysis run';
+            const tally = r.id === 'R1' && r.clauses[0] ? r.clauses[0].text.replace(/ conclusive departures$/, ' conclusive departures') : r.clauses.length ? `${met} of ${r.clauses.length} evaluated clauses met` : 'needs a company analysis run';
+            const decided = decidingFact(r);
             const x = open === r.id;
             return (
               <li key={r.id} className={`cf-rule ${x ? 'x' : ''}`} data-testid={`file-rule-${r.id}`}>
@@ -211,6 +219,7 @@ function Rules({ rules, fromDesk, name, open, onToggle }: { rules: DossierRule[]
                   <span className={STATE[r.state].cls}>{STATE[r.state].label}</span>
                   <span className="cf-chev" aria-hidden>›</span>
                   <span className="cf-rule-tally">{r.id.length > 3 && `${r.name.toLowerCase()} · `}{tally}</span>
+                  {decided && <span className="cf-rule-fact">{decided}</span>}
                 </button>
               </li>
             );
@@ -222,6 +231,21 @@ function Rules({ rules, fromDesk, name, open, onToggle }: { rules: DossierRule[]
   );
 }
 
+/** The one fact that decided a rule, shown on its collapsed row: the open window, or the failed guards. */
+function decidingFact(r: DossierRule): string | null {
+  if (r.state === 'open') { const w = r.clauses.find((c) => c.state === 'open'); return w ? w.text.replace(/^.*?:\s*/, '').replace(/^closes/, 'Window closes') : null; }
+  if (r.state === 'held') {
+    const f = r.clauses.filter((c) => c.state === 'failed').map((c) => c.text.replace(/\s*\(.*\)$/, '').replace(/:.*$/, ''));
+    return f.length ? f.join(' · ') : null;
+  }
+  return null;
+}
+/** "Acqui-hire: “long headline” (thenextweb.com) (21 Aug 2026)" -> "Acqui-hire · thenextweb.com · 21 Aug 2026". The headline stays in the clause and its source. */
+const shortHold = (h: string) => {
+  const m = h.match(/^(.*?):\s*“.*”\s*\(([^)]+)\)\s*\(([^)]+)\)\s*$/);
+  return m ? `${m[1]} · ${m[2]} · ${m[3]}` : h;
+};
+
 /** The opened rule: its summary and every clause with its state, date math and sources. Full width under the top row. */
 function RuleDetail({ r, ev, onClose }: { r: DossierRule; ev: EvMap; onClose: () => void }) {
   return (
@@ -231,12 +255,14 @@ function RuleDetail({ r, ev, onClose }: { r: DossierRule; ev: EvMap; onClose: ()
         <button className="btn small ghost" onClick={onClose}>Close</button>
       </header>
       <div className="cf-rd-body">
-        {r.summary && <p className="cf-rule-sum">{r.summary}</p>}
+        {r.summary && (r.state === 'held' && r.summary.includes('; ')
+          ? <ul className="cf-rule-sum cf-holds">{r.summary.replace(/^Held:\s*/, '').split('; ').map((h) => <li key={h}>{shortHold(h)}</li>)}</ul>
+          : <p className="cf-rule-sum">{r.summary}</p>)}
         {r.clauses.length > 0 ? (
           <ul className="cf-clauses">
             {r.clauses.map((c) => (
               <li key={c.id} className={`c-${c.state}`}>
-                <span className={CLAUSE[c.state].cls} aria-label={CLAUSE[c.state].label}>{CLAUSE[c.state].sym}</span>
+                <span className={`cf-cs ${CLAUSE[c.state].cls}`}>{CLAUSE[c.state].sym} {CLAUSE[c.state].label}</span>
                 <span>
                   {c.state === 'cant_verify' ? <><span className="struck">{c.text}</span><span className="cant">I can’t verify</span></> : c.text}
                   {c.detail && <span className="cf-clause-d">{prettyDates(c.detail)}</span>}
@@ -325,7 +351,7 @@ function News({ d, ev, name }: { d?: CompanyDossier | null; ev: EvMap; name: str
   const news = rows.filter((r) => r.kind === 'news').length;
   return (
     <section className="panel cf-p" data-testid="file-news">
-      <header><h2>News and checks, dated</h2><span className="faint">{plural(news, 'article')} · {plural(rows.length - news, 'other record')}</span></header>
+      <header><h2>News and checks, dated</h2><span className="faint">{d ? `${plural(news, 'article')} · ${plural(rows.length - news, 'other record')}` : 'unavailable'}</span></header>
       {rows.length ? (
         <ul className="cf-news">
           {rows.map((r) => {
@@ -337,7 +363,7 @@ function News({ d, ev, name }: { d?: CompanyDossier | null; ev: EvMap; name: str
                 <button className="cf-news-row" disabled={!id} onClick={id ? () => openEvidence(id) : undefined}>
                   <span className="mono cf-date">{when(r.date, isMonth(e))}</span>
                   <span className={`cf-kind k-${r.kind}`}>{KIND_LABEL[r.kind] ?? r.kind}</span>
-                  <span className="cf-news-t">{prettyDates(r.summary)}</span>
+                  <span className="cf-news-t">{factLine(r.summary)}</span>
                   <span className="cf-news-src">{host ?? (e ? sourceName(e.source.endpoint, e.source.provider) : 'no source row')}</span>
                 </button>
               </li>

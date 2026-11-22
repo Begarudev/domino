@@ -2,7 +2,7 @@
    lays out the two rows and adds the rule expand. Dense sans, 8px grid, 15px card titles, 36px table rows.
    Motion: one 200 ms ease-out height/opacity expand for rule clauses, nothing else moves on its own. */
 
-.cf { display: flex; flex-direction: column; gap: 16px; min-height: calc(100vh - 52px - 172px); }
+.cf { display: flex; flex-direction: column; gap: 16px; min-height: calc(100vh - 184px); }
 
 /* identity strip */
 .cf-id { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
@@ -28,6 +28,7 @@
 .cf-p > header h2 { font-size: 15px; line-height: 20px; }
 .cf-p > header .faint, .cf-p > header .srclink { font-size: 12px; white-space: nowrap; }
 .cf-top .cf-p { min-height: 200px; }
+.cf-top { align-items: stretch; }
 .cf > .cf-x { margin-top: -16px; }
 .cf > .cf-x.on { margin-top: 0; }
 
@@ -133,3 +134,22 @@ li.cf-empty.sm { padding: 10px 16px; list-style: none; }
 .cf-kind.k-news { color: var(--acc); border-color: var(--acc-line); background: var(--acc-weak); }
 .cf-news-t { grid-area: text; font-size: 14px; line-height: 20px; }
 .cf-news-src { grid-area: src; font-size: 12px; color: var(--ink-3); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+
+.cf-count { font-weight: 600; }
+ul.cf-holds { list-style: none; padding: 0; display: grid; gap: 4px; }
+ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 400; }
+
+/* round 1 council fixes */
+.cf-top.no-fund { grid-template-columns: minmax(0, 1.1fr) minmax(0, .75fr) minmax(0, 1.25fr); }
+.cf-rule-btn { grid-template-areas: 'name st chev' 'tally tally tally' 'fact fact fact'; }
+.cf-rule-fact { grid-area: fact; font-size: 13px; color: var(--ink); font-weight: 500; }
+.cf-rule-tally { font-size: 13px; color: var(--ink-2); }
+.cf-cs { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.cf-open { color: var(--ink-2); }
+.cf-rd .cf-clauses li { grid-template-columns: 76px minmax(0, 1fr); }
+.cf-clause-d { font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.cf-srcs { font-size: 13px; }
+.cf-srcs .srclink { color: var(--ink); }
+.cf-run { font-size: 13px; color: var(--ink-2); }
+.cf-news-src { font-size: 13px; color: var(--ink-2); }
+.cf-why-note { flex-basis: 100%; font-size: 12px; }
