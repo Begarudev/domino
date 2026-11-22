@@ -27,3 +27,13 @@
 
 /* one quiet "what this shows" line above tabs that draw their own header */
 .co-hint { margin: 0 0 12px; font-size: 13px; line-height: 18px; color: var(--ink-2); }
+
+/* p7-color: each step wears its state tone (colors.css). Done = green (met); the last step, Sent once, is teal
+   because teal means DOMINO acted / delivered; waiting on you = amber; not reached = grey. The count text names the state. */
+.is-done .pipe-dot { border-color: var(--h-green-dot); background: var(--h-green-dot); }
+.pipe-sent.is-done .pipe-dot { border-color: var(--h-teal-dot); background: var(--h-teal-dot); }
+.pipe-dot svg { stroke: var(--canvas); }
+.pipe-n.is-done + .pipe-n::before { background: var(--h-green-bd); }
+.is-waiting .pipe-dot { border-color: var(--h-amber-dot); background: var(--h-amber-bg); }
+.is-waiting .pipe-c b { color: var(--h-amber-fg); }
+.is-empty .pipe-dot { border-color: var(--h-grey-bd); background: var(--h-grey-bg); }

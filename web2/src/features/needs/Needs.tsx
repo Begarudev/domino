@@ -14,6 +14,7 @@ import {
 import type { ClaimRow, ClaimState } from '../chains/model.ts';
 import '../chains/chains.css';
 import './verifier.css';
+import './verifier-color.css';
 
 const ORDER: ClaimState[] = ['verified', 'open', 'not_met', 'guard', 'cant', 'removed', 'not_evaluated'];
 const MARK: Record<ClaimState, string> = { verified: '✓', open: '○', not_met: '×', guard: '×', cant: '×', removed: '×', not_evaluated: '–' };
