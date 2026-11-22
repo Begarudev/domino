@@ -74,7 +74,9 @@ function RunChip() {
     const ok = r && r.ok && (r.headers.get('content-type') ?? '').includes('json');
     return { data: ok ? await r.json() : null, source: 'live', evidence: [] };
   });
-  const served = funnel.data?.runId === runId ? funnel.data?.served?.label : undefined;
+  const servedRaw = funnel.data?.runId === runId ? funnel.data?.served?.label : undefined;
+  // "Snapshot · Crustdata read 22 Nov, 14:30–14:34 IST · 0 new credits": never "live" beside "replayed".
+  const served = servedRaw ? servedRaw.replace(/^Live\s+/i, '').replace(/\s*·?\s*replayed from the recorded cache \(0 credits\)/i, ' · 0 new credits') : undefined;
   let how = dataMode === 'cache' ? 'cached live' : dataMode === 'fixture' ? 'fixture' : 'live';
   if (mode === 'sample') how = 'recorded';
   if (mode === 'mock') how = 'mock';
@@ -85,7 +87,7 @@ function RunChip() {
     <a className="runchip" data-testid="run-chip" title={`Run ${runId}. Open its reading log.`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
       onClick={(e) => { e.preventDefault(); if (companyId) navigate({ page: 'company', id: companyId, tab: 'reading' }); }}>
       <span className={`dot${running ? ' run' : ''}`} />
-      {kind} · {served && !running ? served : running ? 'running' : how === 'recorded' ? 'recorded' : how === 'mock' ? 'mock' : how === 'fixture' ? 'fixture' : how === 'cached live' ? 'cached live' : 'live'}
+      {served && !running ? `Snapshot · ${kind} · ${served}` : `${kind} · `}{served && !running ? '' : running ? 'running' : how === 'recorded' ? 'recorded' : how === 'mock' ? 'mock' : how === 'fixture' ? 'fixture' : how === 'cached live' ? 'cached live' : 'live'}
       {!served && created ? ` · ${fmtDate(created)}, ${fmtTime(created)} IST` : ''}
     </a>
   );

@@ -39,7 +39,7 @@ function ReplayEmpty({ locked }: { locked: string | null }) {
   return (
     <div className="replay">
       <section className="panel rp-empty" data-testid="replay-empty">
-        <header><h2>No replay scored on this server yet</h2><span className="st plain">O1 · not replayed</span></header>
+        <header><h2>Awaiting a scored replay</h2><span className="st plain">O1 · not replayed</span></header>
         <div className="pad">
           <p>A replay freezes the data at 1 Sep, runs rule O1 as it was locked{locked ? ` at ${locked}` : ''}, then checks each company for a dated job post or hire in the role family afterwards. Until a replay run is scored, there are no counts to show.</p>
           <ul className="rp-ghost" aria-label="What the scorecard will show">
