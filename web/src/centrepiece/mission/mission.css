@@ -754,3 +754,16 @@
 .mc-ptile { height: 4em; }
 .mc-crash.is-live .mc-crash__text > :nth-child(4) { animation: mc-type 0.01s linear 1.55s both; }
 .mc-crash.is-live .mc-crash__text > :nth-child(5) { animation: mc-type 0.01s linear 1.9s both, mc-blink 1.2s ease-in-out 1.9s infinite; }
+
+/* ui-council round 2 polish */
+.mc-say { overflow: visible; text-overflow: clip; }
+.mc-say.is-live { animation-name: mc-fade; }
+.mc-rail__label { white-space: normal; text-align: center; line-height: 1.1; overflow: visible; }
+.mc-tile--repeat {
+  display: flex; flex-direction: column; justify-content: center; gap: 0.2em; padding: 0.6em 0.9em; border: 0.12em dashed rgba(201, 188, 156, 0.6);
+  background: transparent; box-shadow: none; text-align: left; align-self: center; height: 72%;
+}
+.mc .mc-tile--repeat { color: var(--ivory); }
+.mc-tile--repeat .mc-tile__name { font-size: 1.15em; }
+.mc-tile--repeat .mc-tile__fact { color: var(--muted); font-size: 0.85em; }
+.mc-head__status strong { font-size: 1.35em; }

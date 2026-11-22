@@ -47,9 +47,17 @@ function Stamp({ endpoint, dates, onClick, tone = 'ink' }: { endpoint: string; d
   );
 }
 
-function Tile({ tile, role, delay, selected, dimmed, onSelect }: {
-  tile: ChainTile; role: 'from' | 'to'; delay: number; selected: boolean; dimmed: boolean; onSelect: (s: Selection) => void;
+function Tile({ tile, role, delay, selected, dimmed, onSelect, repeat = false }: {
+  tile: ChainTile; role: 'from' | 'to'; delay: number; selected: boolean; dimmed: boolean; onSelect: (s: Selection) => void; repeat?: boolean;
 }) {
+  if (repeat) {
+    return (
+      <button type="button" className={`mc-tile mc-tile--repeat${selected ? ' is-selected' : ''}`} style={{ ['--d' as string]: `${delay}ms` }} onClick={() => onSelect({ kind: 'node', id: tile.nodeId })}>
+        <span className="mc-tile__name">{tile.name}</span>
+        <span className="mc-tile__fact">as above</span>
+      </button>
+    );
+  }
   return (
     <div
       className={`mc-tile mc-tile--${role}${selected ? ' is-selected' : ''}${dimmed ? ' is-dimmed' : ''}`}
@@ -147,6 +155,7 @@ export function ChainStage({ rows, settledSeq, selection, onSelect, hiringFilter
 }) {
   const shown = rows.slice(0, maxRows);
   let animIndex = 0;
+  const shownTiles = new Set<string>();
   const isSel = (kind: Selection['kind'], id: string) => selection?.kind === kind && selection.id === id;
   return (
     <div className="mc-chains" data-count={shown.length}>
@@ -154,11 +163,15 @@ export function ChainStage({ rows, settledSeq, selection, onSelect, hiringFilter
         const animate = !reducedMotion && row.seq > settledSeq;
         const base = animate ? animIndex++ * 900 : 0;
         const step = 320;
+        const fromRepeat = shownTiles.has(row.from.nodeId);
+        shownTiles.add(row.from.nodeId);
+        const toRepeat = shownTiles.has(row.to.nodeId);
+        shownTiles.add(row.to.nodeId);
         return (
           <div key={row.edge.id} className={`mc-row${animate ? ' is-live' : ' is-settled'}${i === 0 ? ' is-lead' : ''}${row.unverifiable ? ' is-broken' : ''}`}>
-            <Tile tile={row.from} role="from" delay={base} selected={isSel('node', row.from.nodeId)} dimmed={hiringFilterView && !row.from.netNew} onSelect={onSelect} />
+            <Tile tile={row.from} role="from" delay={base} selected={isSel('node', row.from.nodeId)} dimmed={hiringFilterView && !row.from.netNew} onSelect={onSelect} repeat={fromRepeat} />
             <Link row={row} delay={base + step} selected={isSel('edge', row.edge.id)} onSelect={onSelect} label={LINK_VERB[row.edge.mechanism] ?? MECHANISM_LABEL[row.edge.mechanism]} />
-            <Tile tile={row.to} role="to" delay={base + step * 2} selected={isSel('node', row.to.nodeId)} dimmed={hiringFilterView && !row.to.netNew} onSelect={onSelect} />
+            <Tile tile={row.to} role="to" delay={base + step * 2} selected={isSel('node', row.to.nodeId)} dimmed={hiringFilterView && !row.to.netNew} onSelect={onSelect} repeat={toRepeat} />
             <Link row={row} delay={base + step * 3} selected={false} onSelect={onSelect} label="so it may need" />
             <Need row={row} delay={base + step * 4} selected={isSel('target', row.edge.to)} onSelect={onSelect} />
           </div>

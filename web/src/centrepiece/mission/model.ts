@@ -5,18 +5,19 @@ import type {
   RunSnapshot, StepName, StoredEvent, Trigger,
 } from '../../../../shared/types.ts';
 
+// Plain step names, used everywhere a viewer sees a step.
 export const STEP_SHORT: Record<StepName, string> = {
-  parse_request: 'Read request',
-  pull_triggers: 'Pull triggers',
-  resolve_entities: 'Resolve',
-  enrich_companies: 'Enrich',
-  cascade: 'Cascade',
-  rank_targets: 'Rank',
-  find_deciders: 'Deciders',
-  warm_paths: 'Warm paths',
-  draft_messages: 'Draft + verify',
-  approval_gate: 'Approval',
-  score_replay: 'Replay score',
+  parse_request: 'Reading your request',
+  pull_triggers: 'Finding changes',
+  resolve_entities: 'Matching names',
+  enrich_companies: 'Checking companies',
+  cascade: 'Linking companies',
+  rank_targets: 'Ranking accounts',
+  find_deciders: 'Finding who decides',
+  warm_paths: 'Finding a warm intro',
+  draft_messages: 'Writing with sources',
+  approval_gate: 'Your approval',
+  score_replay: 'Were we right?',
 };
 
 export const MECHANISM_LABEL: Record<Mechanism, string> = {
@@ -305,7 +306,15 @@ export function replayView(snap: RunSnapshot, events: StoredEvent[]): ReplayView
 }
 
 export function companyName(snap: RunSnapshot, id: string): string {
-  return snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name ?? id.replace(/^co_/, '');
+  const known = snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name;
+  if (known) return known;
+  const bare = id.replace(/^co_/, '');
+  if (!/^[a-z]+$/.test(bare)) return bare;
+  // Before the snapshot knows the name, find the full name in what was read ("... employer was Orbital Voice").
+  const word = bare.charAt(0).toUpperCase() + bare.slice(1);
+  const re = new RegExp(`\\b${word}(?:\\s+[A-Z][\\w.&'-]*)*`);
+  for (const e of snap.evidence) { const m = e.claim.match(re); if (m && m[0].length > word.length) return m[0]; }
+  return word;
 }
 
 // ---------- the reading desk ----------
@@ -367,7 +376,11 @@ export function deskView(events: StoredEvent[], snap: RunSnapshot): DeskView {
       if (cand && (!bound.has(cand) || bound.get(cand) === id)) { bound.set(cand, id); return cand; }
     }
     if (/[:]|^[a-z0-9_]+$/i.test(known) && !/\s/.test(known) && known.length > 14) return 'Company name unavailable';
-    return known.charAt(0).toUpperCase() + known.slice(1);
+    // Look for the full name anywhere in what was read ("... previous employer was Orbital Voice").
+    const word = known.charAt(0).toUpperCase() + known.slice(1);
+    const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s+[A-Z][\\w.&'-]*)*`);
+    for (const c of claims.values()) { const m = c.match(re); if (m && m[0].length > word.length) return m[0]; }
+    return word;
   };
   const sawSourceRead = events.some((e) => e.event.type === 'source.read');
   const open = new Map<string, { endpoint: string; attempt: number; seq: number }>();

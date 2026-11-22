@@ -36,13 +36,13 @@ if (!only || only.has('live')) {
   await p.click('.hx-go');
   await wait(1500);
   await shot(p, '02a-calling');
-  await stepIs(p, 'Pull triggers', 'done');
+  await stepIs(p, 'Finding changes', 'done');
   await wait(150);
   await shot(p, '02b-reading-desk');
-  await stepIs(p, 'Enrich', 'running');
+  await stepIs(p, 'Checking companies', 'running');
   await wait(1700);
   await shot(p, '02c-desk-signals');
-  await stepIs(p, 'Cascade', 'running');
+  await stepIs(p, 'Linking companies', 'running');
   await wait(500);
   await p.click('.mc-kill');
   await wait(180);
@@ -122,7 +122,7 @@ if (!only || only.has('slot')) {
   await p.close();
   const q = await page('?slot=1&speed=3');
   await q.click('.hx-go');
-  await stepIs(q, 'Rank', 'done');
+  await stepIs(q, 'Ranking accounts', 'done');
   await wait(3500);
   await shot(q, '19-slot-780x540-chain');
   await q.close();
