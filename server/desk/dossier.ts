@@ -26,12 +26,14 @@ export function dossier(snap: RunSnapshot, companyId: string, openings: Opening[
     seenMove.add(key);
     return true;
   });
+  const monthIds = new Set(snap.evidence.filter(row => row.precision === 'month').map(row => row.id));
   const talentFlows: TalentFlow[] = moves.map(row => {
     const person = row.personId ? people.get(row.personId) : undefined;
     // A hire trigger sits on the hiring company; a departure trigger on the company that lost the person.
     const joinedHere = row.kind === 'hire' ? row.companyId === id : row.relatedCompanyId === id;
     return {
       direction: joinedHere ? 'in' : 'out', role: person?.title ?? row.summary, initial: initialOf(person?.name), date: row.date,
+      precision: row.precision ?? (row.evidenceIds.some(id => monthIds.has(id)) ? 'month' : 'day'),
       otherCompanyId: (row.companyId === id ? row.relatedCompanyId : row.companyId) ?? null,
       otherCompanyName: nameOf(row.companyId === id ? row.relatedCompanyId : row.companyId), evidenceIds: row.evidenceIds,
     };

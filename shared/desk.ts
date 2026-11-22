@@ -153,7 +153,7 @@ export interface OpeningForCandidate extends Opening { fit: FitReason[]; matchSc
 export interface DossierEvent { id: string; date: IsoDate; kind: TriggerKind; summary: string; evidenceIds: string[] }
 export interface TalentFlow {
   direction: 'in' | 'out';          // in = joined this company, out = left it
-  role: string; initial: string | null; date: IsoDate;
+  role: string; initial: string | null; date: IsoDate; precision: 'day' | 'month';
   otherCompanyId: string | null; otherCompanyName: string | null; evidenceIds: string[];
 }
 export interface DossierChain { edge: GraphEdge; fromName: string; toName: string; side: 'cause' | 'effect' }

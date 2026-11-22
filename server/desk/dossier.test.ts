@@ -27,7 +27,7 @@ test('dossier lists a move once, as role + initial only, and keeps the cross-com
   } as Partial<RunSnapshot>);
   const result = dossier(snap, 'co_a')!;
   assert.equal(result.talentFlows.length, 1);
-  assert.deepEqual(result.talentFlows[0], { direction: 'out', role: 'Inference Platform Engineer', initial: 'N.', date: '2026-11-12',
+  assert.deepEqual(result.talentFlows[0], { direction: 'out', role: 'Inference Platform Engineer', initial: 'N.', date: '2026-11-12', precision: 'day',
     otherCompanyId: 'co_b', otherCompanyName: 'Kestrel Labs', evidenceIds: ['ev_1'] });
   assert.doesNotMatch(JSON.stringify(result.talentFlows), /Vedral|Niko/);
   assert.equal(result.chains[0].side, 'effect');

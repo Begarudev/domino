@@ -53,6 +53,7 @@ export interface Evidence {
   value?: string | number | null;   // the atomic value the claim rests on
   source: SourceRef;
   observedAt: IsoDate | null;       // when the fact happened / was true. null => undated
+  precision?: 'day' | 'month';      // 'month': observedAt is the 1st of the month and only the month is known ("Oct 2026")
   retrievedAt: IsoDateTime;         // when DOMINO fetched it
   mode: DataMode;                   // live / cache / fixture (synthetic)
   verifiable: boolean;              // false => "I can't verify" (undated or unsourced)
@@ -115,6 +116,7 @@ export interface Trigger {
   date: IsoDate;                    // inside the run window
   summary: string;
   relatedCompanyId?: string | null; // for hires/departures: the other company
+  precision?: 'day' | 'month';      // hires/departures from person profiles are month-level
   personId?: string | null;
   evidenceIds: string[];
 }
