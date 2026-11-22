@@ -161,12 +161,14 @@
 .signin { min-height: calc(100vh - 56px); align-items: center; padding-top: 40px; padding-bottom: 40px; }
 .signin-panel { align-self: center; }
 .dominoes { gap: 16px; padding: 18px; }
-.dom-lane { grid-template-columns: 64px 1fr; align-items: start; row-gap: 8px; }
-.dom-name { display: inline-flex; align-items: center; gap: 6px; padding-top: 8px; }
+.dom-lane { grid-template-columns: minmax(0, 1fr); align-items: start; row-gap: 8px; }
+.dom-lane + .dom-lane { padding-top: 14px; border-top: 1px solid var(--rule-2, var(--rule)); }
+.dom-lane ol { min-width: 0; }
+.dom-name { display: inline-flex; align-items: center; gap: 6px; }
 .dom-chip { width: 8px; height: 8px; border-radius: 50%; background: #0f9488; }
 .dom-chip-sell { background: #d97706; }
 .dom-lane ol { gap: 22px; }
-.dom-lane li { display: flex; gap: 8px; align-items: flex-start; flex: 1 1 0; min-width: 0; padding: 10px; background: var(--surface); }
+.dom-lane li { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; flex: 1 1 0; min-width: 0; padding: 10px; background: var(--surface); }
 .dom-lane li + li::before { left: -21px; width: 16px; height: 1px; background: var(--rule); }
 .dom-lane li + li::after { left: -8px; border-left-color: var(--ink-2); }
 .dom-ic { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: var(--canvas); color: var(--ink-2); border: var(--hair); }
@@ -176,6 +178,6 @@
 .dom-lane li.dom-k2, .dom-lane li.dom-k3 { border-color: var(--acc-line); background: var(--acc-weak); }
 .dom-txt { display: grid; gap: 2px; min-width: 0; color: var(--ink); }
 .dom-txt small { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
-.dom-ex { grid-column: 2; margin: 0; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-2); padding-left: 2px; }
+.dom-ex { grid-column: 1; margin: 0; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-2); padding-left: 2px; }
 .dom-lane li { animation-duration: 360ms; }
 @media (max-width: 1200px) { .dom-lane ol { flex-wrap: wrap; } .dom-lane li { flex-basis: 40%; } }
