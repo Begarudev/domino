@@ -15,6 +15,7 @@ import '../outreach/outreach.css';
 import type { Account, RunRow, StatusKind } from './model.ts';
 import { accounts, draftLabel, isOutbound, readableDates, ruleWords } from './model.ts';
 import './buyers.css';
+import { HowComputed } from './HowComputed.tsx';
 
 type Loaded = { row: RunRow; snap: RunSnapshot };
 type Filter = 'all' | 'ready' | 'sent' | 'blocked';
@@ -109,8 +110,11 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
   const ready = rows.filter((r) => r.status.kind === 'ready' || r.status.kind === 'approved').length;
   const sent = rows.filter((r) => r.status.kind === 'sent').length;
   const blocked = rows.filter((r) => BLOCKED.includes(r.status.kind)).length;
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
   const shown = rows.filter((r) => filter === 'all' || (filter === 'ready' ? r.status.kind === 'ready' || r.status.kind === 'approved'
-    : filter === 'sent' ? r.status.kind === 'sent' : BLOCKED.includes(r.status.kind)));
+    : filter === 'sent' ? r.status.kind === 'sent' : BLOCKED.includes(r.status.kind)))
+    .filter((r) => !needle || [r.name, r.domain ?? '', r.target.mechanisms.map(ruleWords).join(' '), r.status.label].join(' ').toLowerCase().includes(needle));
   const [sel, setSel] = useState<string | null>(null);
   const current = shown.find((r) => r.target.companyId === sel) ?? shown[0] ?? null;
   const ev = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
@@ -161,7 +165,13 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
 
       <div className="by-grid">
         <section className="panel by-accounts">
-          <header><h2>Accounts, ranked</h2><span className="faint">{plural(shown.length, 'account')} · a draft needs 2 verified, dated facts · people as role and initial</span></header>
+          <header><h2>Accounts, ranked<HowComputed endpoint="GET /api/runs (newest 8 outbound), then GET /api/runs/:id"
+            rule="Each target names the rule that fired and its dated trigger. A draft is written only when 2 verified, dated facts back it; otherwise the row is held with the reason."
+            source={`Crustdata company enrich, person search, job search and news; GPT-6 Luna only refines terms and drafts. Run of ${fmtDate(snap.createdAt, true)}.`} /></h2>
+            <span className="faint">{plural(shown.length, 'account')} · a draft needs 2 verified, dated facts · people as role and initial</span></header>
+          {rows.length > 8 && (
+            <div className="tb"><input className="tb-search" type="search" placeholder="Search company, rule, status" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search accounts" data-testid="buyers-search" /></div>
+          )}
           {shown.length ? (
             <table className="t by-t">
               <colgroup><col className="c-co" /><col className="c-rule" /><col className="c-dec" /><col className="c-facts" /><col className="c-st" /></colgroup>

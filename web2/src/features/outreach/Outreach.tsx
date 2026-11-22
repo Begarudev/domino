@@ -14,6 +14,7 @@ import { openEvidence } from '../../shell/ui.ts';
 import type { IntroView, StepKey, StepState } from './model.ts';
 import { STEP_CUR, STEP_LABEL, citationMap, dedupeIntros, draftLabel, isMonthly, markersIn, pieces, tidyClaim } from './model.ts';
 import './outreach.css';
+import { HowComputed } from '../buyers/HowComputed.tsx';
 
 const initialOf = (label: string | null | undefined) => (label?.trim()?.[0] ?? '?').toUpperCase() + '.';
 const ORDER: StepKey[] = ['draft', 'verified', 'approved', 'delivered'];
@@ -251,7 +252,9 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
         </section>
 
         <section className="panel">
-          <header><h2>Deliveries</h2><span className="out-count-l"><span className="out-count" data-testid="deliveries">{deliveries}</span> {deliveries === 1 ? 'delivery' : 'deliveries'} to the team inbox</span></header>
+          <header><h2>Deliveries<HowComputed endpoint="the run snapshot (GET /api/runs/:id) and the team inbox"
+            rule="An approved draft is dispatched once under an idempotency key. If the engine is killed after delivery, resume replays from the checkpoint and the key stops a second send, so this count stays put."
+            source="The local test inbox only; nothing is sent outside the demo." /></h2><span className="out-count-l"><span className="out-count" data-testid="deliveries">{deliveries}</span> {deliveries === 1 ? 'delivery' : 'deliveries'} to the team inbox</span></header>
           <div className="pad">
             {delivered && key ? (
               <Receipt keyId={key} receivedAt={receivedAt} duplicate={duplicate} deliveries={deliveries} attempts={attempts} />
