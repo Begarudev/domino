@@ -84,6 +84,7 @@ interface Attempt<T> {
   mode: LedgerEntry['mode'];
   estimate?: AttemptCost;
   timeoutMs?: number;
+  maxAttempts?: number;
   run: (signal: AbortSignal, report: (cost: AttemptCost) => void) => Promise<T>;
   inject: (raw: unknown) => T;
 }
@@ -216,7 +217,7 @@ export class ToolContext {
   }
 
   private async attempts<T>(call: Call<T>, callId: string): Promise<T> {
-    const { mode, estimate, timeoutMs = 12_000 } = call.attempt;
+    const { mode, estimate, timeoutMs = 12_000, maxAttempts = 3 } = call.attempt;
     const paid = mode === 'live' || mode === 'model';
     const requestHash = hash((call.path ?? call.endpoint) + canonicalJson(call.body));
     const chaos = this.recheck ? {} : decode<ChaosConfig>(this.store.requireRun(this.runId).chaos_json);
@@ -268,6 +269,11 @@ export class ToolContext {
         budgetFailure = error instanceof BudgetError ? error : undefined;
         failure = budgetFailure ? timeoutError : classify(error);
       }
+      // An aborted model request keeps generating, and billing, on the provider side. With no usage to read,
+      // charge the estimate so the ledger and the budget still count it.
+      if (mode === 'model' && !injected && failure?.retry === 'timeout' && !budgetFailure && !cost.usd) {
+        cost.usd = estimate?.usd ?? 0;
+      }
       const latencyMs = Math.round(performance.now() - start);
       const charge = this.store.transaction(() => {
         const cached = mode === 'cache' && !failure;
@@ -284,7 +290,7 @@ export class ToolContext {
       });
       if (charge) throw new BudgetError(charge);
       if (!failure) return output as T;
-      if (!failure.retry || attempt === 3 || (mode === 'cache' && !injected)) throw failure;
+      if (!failure.retry || attempt >= maxAttempts || (mode === 'cache' && !injected)) throw failure;
       const backoffMs = 180 * 2 ** (attempt - 1) + Math.floor(Math.random() * 100);
       this.store.appendEvent(this.runId, {
         type: 'tool.retry', callId, endpoint: call.endpoint, reason: failure.retry, attempt, backoffMs, injected,
