@@ -6,7 +6,10 @@ import { BudgetError, httpError, providerFetch, responseJson, sanitize, ToolErro
 import type { ToolContext } from '../runtime/tool.ts';
 
 // USD per million tokens, cached 2026-11-03. Check provider rate cards before changing models.
+// gpt-6-luna: $0.10 in / $0.50 out, from price aggregators citing OpenAI's pricing page (e.g. developersdigest.tech,
+// apidog.com, 22 Nov 2026); not checked on openai.com itself.
 const prices: Record<string, readonly [number, number]> = {
+  'gpt-6-luna': [0.1, 0.5],
   'claude-opus-5-5': [4, 20],
   'claude-opus-5': [4, 20],
   'claude-opus-4-8': [5, 25],
@@ -54,6 +57,8 @@ export interface Completion { text: string; model: string }
 export function openaiReasoning(model: string): { reasoning_effort?: string } {
   const override = process.env.OPENAI_REASONING_EFFORT?.trim();
   if (override) return override === 'off' ? {} : { reasoning_effort: override };
+  // GPT-6 models accept none|low|medium|high|xhigh (not 'minimal'); 'none' drafts a cited sentence in ~1.7s.
+  if (/^gpt-6/.test(model)) return { reasoning_effort: 'none' };
   if (/^gpt-5(?:-|$)/.test(model)) return { reasoning_effort: 'minimal' };
   if (/^(?:gpt-5\.|o\d)/.test(model)) return { reasoning_effort: 'low' };
   return {};
