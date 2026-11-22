@@ -5,7 +5,8 @@ import type { Backend, StartRequest } from './api.ts';
 import type { Selection } from './centrepiece/contract.ts';
 import { pickCentrepiece } from './centrepiece/registry.ts';
 import { RequestBar, StatusLine } from './components/Header.tsx';
-import { Landing, Reel } from './components/Shell.tsx';
+import { Reel } from './components/Shell.tsx';
+import { Landing, landingWanted } from './features/landing/Landing.tsx';
 import { Timeline } from './components/Timeline.tsx';
 import { EvidenceDrawer } from './components/Evidence.tsx';
 import { TargetsStrip } from './components/Targets.tsx';
@@ -39,10 +40,11 @@ export function App() {
   const [requestText, setRequestText] = useState('');
   const [editing, setEditing] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [landing, setLanding] = useState(landingWanted);
 
   // First load: reattach to ?run=ID, else the newest run; in mock mode, start the recorded run.
   useEffect(() => {
-    if (!backend) return;
+    if (!backend || landing) return;
     const params = new URLSearchParams(location.search);
     const id = params.get('run');
     if (backend.mock) {
@@ -117,18 +119,18 @@ export function App() {
     </div>
   );
 
-  // Before any run: a title card with the request box. After Run: the theatre takes the screen.
-  if (!hasRun) {
-    return (
-      <div className="app app-landing">
-        {errorBanner}
-        <Landing requestBar={requestBar} source={statusLine} />
-      </div>
-    );
-  }
+  // Before any run: the landing (request box, then the real plan, cap and window). It hands off to the
+  // theatre, which mounts underneath as soon as the run exists so the landing can dissolve onto it.
+  const landingCard = (landing || !hasRun) && (
+    <Landing snap={snap} runId={runId} error={error} dataMode={backend?.health?.dataMode ?? null} reducedMotion={reducedMotion}
+      onStart={onRun} onDone={() => setLanding(false)} />
+  );
+  if (!hasRun) return <>{landingCard}</>;
 
   return (
-    <div className={`app app-run${tab ? ' has-tab' : ''}${drawerOpen ? ' has-drawer' : ''}`}>
+    <>
+    {landingCard}
+    <div aria-hidden={landing || undefined} className={`app app-run${tab ? ' has-tab' : ''}${drawerOpen ? ' has-drawer' : ''}`}>
       <header className="bar">
         <span className="wordmark" aria-label="DOMINO">DOMINO</span>
         <div className={`bar-request${editing ? ' is-editing' : ''}`}>
@@ -204,5 +206,6 @@ export function App() {
         )}
       </section>
     </div>
+    </>
   );
 }
