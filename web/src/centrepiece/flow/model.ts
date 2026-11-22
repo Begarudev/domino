@@ -2,8 +2,8 @@
 // so the renderer is a pure function of s. Scrubbing, screenshots and replays all fall out of that.
 import type { Draft, Evidence, GraphEdge, Mechanism, RunSnapshot } from '../../../../shared/types.ts';
 
-export const SERVING_RE = /inferenc|serving|ml platform|gpu|ml infra|model serv|triton|vllm|cuda/i;
-export const RIVER_MIN = 3;          // moves between one pair before the stream becomes a river
+export const SERVING_RE = /inferenc|serving|ml platform|mlops|gpu|ml infra|model serv|triton|vllm|cuda|llm/i;
+export const RIVER_MIN = 2;          // rule O1: 2+ dated departures in one role family
 export const FLIGHT = 1.35;          // story seconds a move particle is in the air
 
 // story segments (seconds)
@@ -21,10 +21,10 @@ export type Phase = 'intro' | 'see' | 'freeze' | 'forward' | 'score' | 'zoom' | 
 
 export interface FlowCompany { id: string; name: string; headcount: number; x: number; y: number; seed: number }
 export interface FlowMove { id: string; day: number; from: string; to: string; title: string; serving: boolean; afterFreeze: boolean; sArrive: number }
-export interface FlowRiver { key: string; from: string; to: string; moves: FlowMove[]; sForm: number; edgeId: string | null; label: string }
+export interface FlowRiver { key: string; from: string; to: string; moves: FlowMove[]; sForm: number; edgeId: string | null; label: string; family: string; predicted: boolean; replacedDay: number | null }
 export interface FlowNeed {
   companyId: string; need: string; mechanism: Mechanism; confidence: number | null; sBloom: number;
-  dated: number; undated: number; crack: boolean; netNew: boolean; weak: boolean;
+  dated: number; undated: number; crack: boolean; netNew: boolean; weak: boolean; departures: number;
 }
 export interface FlowLink { edgeId: string; from: string; to: string; mechanism: Mechanism; sAppear: number; label: string }
 export interface FlowShock { companyId: string; s: number; label: string }
@@ -79,12 +79,20 @@ function hash(str: string): number {
   return (h >>> 0) / 4294967296;
 }
 
+/** Role family of a set of job titles, for labels ("inference", "ML platform"). */
+export function familyOf(titles: string[]): string {
+  const t = titles.join(' ').toLowerCase();
+  const inf = (t.match(/inferenc|serving|llm/g) ?? []).length, plat = (t.match(/platform|mlops|ml infra/g) ?? []).length;
+  if (inf === 0 && plat === 0) return /gpu|cuda/.test(t) ? 'GPU infrastructure' : 'engineering';
+  return inf >= plat ? 'inference' : 'ML platform';
+}
+
 export function shortNeed(need: string): string {
   const head = need.split(/[:;,(]/)[0].trim();
   return head.length > 44 ? `${head.slice(0, 42)}…` : head;
 }
 
-export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number; y: number }>): FlowModel {
+export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number; y: number }>, opts: { letter?: boolean } = {}): FlowModel {
   const evById = new Map(snap.evidence.map((e) => [e.id, e]));
   const edgeById = new Map(snap.graph.edges.map((e) => [e.id, e]));
   const replay = snap.intent?.runKind === 'replay' || !!snap.replay;
@@ -130,6 +138,9 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
     for (let i = RIVER_MIN - 1; i < days.length; i++) if (days[i] - days[i - RIVER_MIN + 1] <= 90) return days[i];
     return drainEdge(from, to) && days.length >= 2 ? days[days.length - 1] : null;
   };
+  // a pair is a prediction only when the graph says so (a non-weak node at the losing company), or, with no graph, by count
+  const graphHasNeeds = snap.graph.nodes.some((n) => n.need);
+  const predictedAt = (id: string) => graphHasNeeds ? snap.graph.nodes.some((n) => n.id === id && n.need && n.status !== 'unverifiable' && n.mechanisms.includes('TALENT_DRAIN')) : true;
   let drainKey: string | null = null;
   let dDrain: number | null = null;
   {
@@ -137,8 +148,9 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
     for (const m of moves) if (m.serving && m.day <= dFreeze) byPair.set(`${m.from}>${m.to}`, [...(byPair.get(`${m.from}>${m.to}`) ?? []), m.day]);
     for (const [key, days] of byPair) {
       const [from, to] = key.split('>');
-      const fd = formDayOf(from, to, days);
-      if (fd === null || fd <= d0) continue;
+      const fd0 = formDayOf(from, to, days);
+      if (fd0 === null || fd0 <= d0 || !predictedAt(from)) continue;
+      const fd = days[days.length - 1];   // the beat lands on the last departure before the freeze
       const better = dDrain === null || (from === focusGuess && !drainKey?.startsWith(`${focusGuess}>`)) || (fd < dDrain && !drainKey?.startsWith(`${focusGuess}>`));
       if (better) { drainKey = key; dDrain = fd; }
     }
@@ -194,8 +206,12 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
       if (ms[i].day - ms[i - RIVER_MIN + 1].day <= 90) { sForm = ms[i].sArrive; break; }
     }
     if (edge && sForm === Infinity && ms.length >= 2) sForm = ms[ms.length - 1].sArrive;
-    const span = ms[ms.length - 1].day - ms[0].day;
-    rivers.push({ key, from, to, moves: ms, sForm, edgeId: edge?.id ?? null, label: edge?.label ?? `${ms.length} serving engineers in ${span} days` });
+    const predicted = predictedAt(from);
+    if (!predicted) sForm = Infinity;
+    const last = ms.filter((mv) => mv.day <= dFreeze).at(-1)?.day ?? ms[ms.length - 1].day;
+    const repl = snap.triggers.find((t) => t.companyId === from && t.kind === 'job_post' && SERVING_RE.test(t.summary) && dayOf(t.date) >= ms[0].day && dayOf(t.date) <= last + 30);
+    const family = familyOf(ms.map((mv) => mv.title));
+    rivers.push({ key, from, to, moves: ms, sForm, edgeId: edge?.id ?? null, label: edge?.label ?? `${ms.length} ${family} engineers left`, family, predicted, replacedDay: repl ? dayOf(repl.date) : null });
   }
 
   // ---- needs ----
@@ -213,7 +229,8 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
     needs.push({
       companyId: n.id, need: shortNeed(n.need), mechanism: cross[0], confidence: n.confidence,
       sBloom: Math.min(sBloom, sFreeze - 0.1), dated: datedRows.length, undated: rows.length - datedRows.length,
-      crack: cross.includes('TALENT_DRAIN'), netNew: n.netNew, weak: n.status === 'unverifiable',
+      crack: cross.includes('TALENT_DRAIN') && n.status !== 'unverifiable', netNew: n.netNew, weak: n.status === 'unverifiable',
+      departures: validMoves.filter((mv) => mv.from === n.id && mv.serving && mv.day <= dFreeze).length,
     });
   }
 
@@ -258,7 +275,7 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
   // ---- letter ----
   const focusId = draft?.companyId ?? top?.companyId ?? needs[0]?.companyId ?? null;
   let letter: FlowLetter | null = null;
-  if (focusId && byId.has(focusId)) {
+  if (opts.letter && focusId && byId.has(focusId)) {
     const tgt = snap.targets.find((t) => t.companyId === focusId);
     let t = sLetter + 0.25;
     const mk = (text: string, status: FlowSentence['status'], evidence: Evidence[], note?: string): FlowSentence => {
@@ -281,7 +298,7 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
     const endS = (letter.sentences.at(-1)?.sLand ?? sLetter) + TAIL;
     return finish(endS);
   }
-  return finish(sLetter + TAIL);
+  return finish(opts.letter ? sLetter + TAIL : sZoom + 1.5);
 
   function finish(total: number): FlowModel {
     return {
@@ -306,13 +323,13 @@ export function sAtDay(m: FlowModel, day: number): number {
 
 /** Chapter (1-based) and chapter count for the narrative caption. */
 export function chapterAt(m: FlowModel, s: number): { n: number; of: number } {
-  const of = m.mode === 'replay' ? 5 : 3;
+  const of = (m.mode === 'replay' ? 4 : 2) + (m.letter ? 1 : 0);
   const c2 = m.sDrain0 !== null ? m.sDrain0 - 0.15 : m.sFreeze;
   if (s < c2) return { n: 1, of };
   if (s < m.sFreeze) return { n: 2, of };
-  if (m.mode === 'live') return { n: s < m.sZoom ? 2 : 3, of };
+  if (m.mode === 'live') return { n: m.letter && s >= m.sZoom ? 3 : 2, of };
   if (s < m.sForward0) return { n: 3, of };
-  if (s < m.sZoom) return { n: 4, of };
+  if (s < m.sZoom || !m.letter) return { n: 4, of };
   return { n: 5, of };
 }
 

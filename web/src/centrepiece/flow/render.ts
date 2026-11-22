@@ -190,8 +190,8 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
 
   // ---- camera ----
   const zt = clamp((s - m.sZoom) / (m.sLetter - m.sZoom));
-  const ez = easeInOut(zt);
-  const focus = m.focusId ? m.byId.get(m.focusId) : undefined;
+  const ez = m.letter ? easeInOut(zt) : 0;   // no letter beat, no zoom: the field stays whole for the score
+  const focus = m.letter && m.focusId ? m.byId.get(m.focusId) : undefined;   // the camera zooms only for the letter beat
   const drift = 0.04 * easeInOut(clamp((s - m.sSee0) / (m.sFreeze - m.sSee0)));   // slow push-in while history plays
   const Z = (1 + drift) * (1 - ez) + (1 + 1.15) * ez;
   frame.zoom = Z;
@@ -284,14 +284,15 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       g.strokeStyle = rgba(C.ember, (0.12 + 0.12 * arrived) * dim);
       g.lineWidth = (1 + arrived * 0.8) * k;
       g.stroke();
-      if (arrived >= 2) {
-        const [mx, my] = pts[24];
+      if (arrived >= 2 && !r.predicted) {
+        const [mx, my] = pts[14];   // near the losing company, low on the line: clear of the score panel's footnote
         g.globalCompositeOperation = 'source-over';
         g.globalAlpha = 0.9 * dim;
         const side = mx < cx ? -1 : 1;
         const al: CanvasTextAlign = side < 0 ? 'right' : 'left';
-        text(g, `${arrived} serving moves`, mx + side * 12 * k, my - 8 * k, `650 ${12 * k}px ${FONT}`, rgba(C.ember, 0.95), al);
-        text(g, `the rule needs ${RIVER_MIN} to call a drain`, mx + side * 12 * k, my + 8 * k, `450 ${11.5 * k}px ${FONT}`, rgba(C.slate, 0.95), al);
+        const repl = r.replacedDay !== null && r.replacedDay <= day;
+        text(g, `${arrived} ${r.family} engineers left`, mx + side * 12 * k, my - 8 * k, `650 ${12.5 * k}px ${FONT}`, rgba(C.ember, 0.95), al);
+        text(g, repl ? `replacement posted ${fmtDay(r.replacedDay!)}: no prediction` : 'no prediction yet', mx + side * 12 * k, my + 9 * k, `450 ${12 * k}px ${FONT}`, rgba(C.slate, 0.95), al);
         PILLS.push({ x: mx + side * (12 * k + 85 * k), y: my, w: 180 * k, h: 36 * k });
         g.globalAlpha = 1;
         g.globalCompositeOperation = 'lighter';
@@ -337,9 +338,10 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       const nx = mx - cx, ny = my - cy, nl = Math.hypot(nx, ny) || 1;   // points away from the bow's control point
       const ox = mx - (nx / nl) * (fsA + 14 * k), oy = my - (ny / nl) * (fsA + 14 * k);   // outer side of the bow, clear of the glow
       const fromN = m.byId.get(r.from)!.name, toN = m.byId.get(r.to)!.name;
-      const label = `${arrived} serving engineers: ${fromN} → ${toN}`;
+      const label = `${arrived} ${r.family} engineers left: ${fromN} → ${toN}`;
       const after = r.key === m.drainKey ? clamp((s - m.sFreeze - 0.4) / 0.6) : 1;   // explained in chapter 2, then it steps aside
-      g.globalAlpha = e * (big ? 1 : v.compact ? 0 : 0.6) * (1 - ez) * (r.key === m.drainKey ? 1 - after : 1);
+      // only the explained river is labelled on the arc; the others carry their counts under the company name
+      g.globalAlpha = r.key === m.drainKey && !v.compact ? e * (1 - ez) * (1 - after) : 0;
       text(g, label, ox, oy, `700 ${fsA}px ${FONT}`, big ? C.emberHot : rgba(C.ember, 0.95));
       g.font = `700 ${fsA}px ${FONT}`;
       if (big) PILLS.push({ x: ox, y: oy, w: g.measureText(label).width + 10 });
@@ -493,15 +495,20 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       const bt = clamp((s - need.sBloom) / 0.5);
       if (bt > 0) {
         g.globalAlpha = la * bt;
-        const pct = need.confidence !== null ? ` · ${Math.round(need.confidence * 100)}%` : '';
+        // a percentage only when it is the engine's own number, never on fixture data
+        const pct = need.confidence !== null && !m.fixture ? ` · ${Math.round(need.confidence * 100)}%` : '';
         const nd = /^[A-Z][a-z]/.test(need.need) ? need.need[0].toLowerCase() + need.need.slice(1) : need.need;
-        const nl2 = need.weak ? `Maybe: ${nd}` : `${v.compact ? 'Needs' : 'Likely needs'}: ${nd}${pct}`;
+        const nl2 = need.weak ? `Not yet: ${nd}` : `${v.compact ? 'Opening' : 'Predicted opening'}: ${nd}${pct}`;
         text(g, nl2, n.x, line, `700 ${fs * 0.92}px ${FONT}`, need.weak ? rgba(C.wound, 0.62) : C.wound);
         g.font = `700 ${fs * 0.92}px ${FONT}`;
         PILLS.push({ x: n.x, y: line, w: g.measureText(nl2).width + 8 });
         line += fs * 1.2;
-        if (need.weak && !v.compact) {
-          text(g, `${need.dated} dated fact; DOMINO needs 2 to act`, n.x, line, `450 ${fs * 0.82}px ${FONT}`, rgba(C.slate, 0.95));
+        if (!v.compact) {
+          const d = need.departures;
+          const sub = need.weak ? `${d} departure; the rule needs ${RIVER_MIN}` : `${d} departure${d === 1 ? '' : 's'} · no replacement posted`;
+          text(g, sub, n.x, line, `450 ${fs * 0.84}px ${FONT}`, rgba(C.slate, 0.98));
+          g.font = `450 ${fs * 0.84}px ${FONT}`;
+          PILLS.push({ x: n.x, y: line, w: g.measureText(sub).width + 8 });
           line += fs * 1.15;
         }
       }

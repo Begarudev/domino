@@ -7,6 +7,8 @@ import './flow.css';
 
 export interface TalentFlowExtra {
   layoutHints?: Record<string, { x: number; y: number }>;
+  /** finish with the drafted message (off by default: the v2 desk owns outreach) */
+  withLetter?: boolean;
   /** start paused at this story second (screenshots) */
   initialS?: number;
   autoPlay?: boolean;
@@ -20,31 +22,33 @@ const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t 
 function chapterText(m: FlowModel, n: number): string {
   const asOf = fmtDay(m.dFreeze).replace(' ', '\u00a0');
   const drain = m.rivers.find((r) => r.key === m.drainKey);
-  const need = m.needs.find((x) => x.companyId === drain?.from);
-  const ch2 = drain
-    ? `${m.byId.get(drain.to)!.name} hired ${drain.moves.filter((mv) => mv.day <= m.dFreeze).length} of ${m.byId.get(drain.from)!.name}'s serving engineers. ${m.byId.get(drain.from)!.name} may now need ${(need?.need ?? 'managed inference').toLowerCase()}.`
-    : 'DOMINO marks the companies whose dated changes point to a need for GPU inference.';
-  const focus = m.focusId ? m.byId.get(m.focusId)?.name ?? '' : '';
-  const ch1 = 'DOMINO looks for AI companies that may soon need managed GPU inference. Big lights are companies; each moving spark is one person changing jobs.';
-  if (m.mode === 'live') {
-    return [ch1, ch2, m.letter?.kind === 'draft' ? `DOMINO drafted this message to ${focus} from dated facts. It waits for your approval.` : `Why DOMINO picked ${focus}, from dated facts.`][n - 1];
+  const ch1 = "DOMINO predicts job openings before they're posted. Big lights are companies; each spark is one person changing jobs.";
+  let ch2 = 'DOMINO marks companies that lost two or more people in one role family and have not posted a replacement.';
+  if (drain) {
+    const from = m.byId.get(drain.from)!.name, to = m.byId.get(drain.to)!.name;
+    const n2 = drain.moves.filter((mv) => mv.day <= m.dFreeze).length;
+    const fam = drain.family;
+    ch2 = `${n2} of ${from}'s ${fam} engineers left for ${to}, and no replacement has been posted. ${from} will likely open ${/^[aeiou]/i.test(fam) ? 'an' : 'a'} ${fam} role.`;
   }
+  const focus = m.focusId ? m.byId.get(m.focusId)?.name ?? '' : '';
+  const ch5 = m.letter?.kind === 'draft' ? 'The intro: a sourced message matching an opted-in candidate to the predicted opening.' : `Why DOMINO predicted an opening at ${focus}: only records dated on or before ${asOf}.`;
+  if (m.mode === 'live') return [ch1, ch2, ch5][n - 1];
   return [
     ch1,
     ch2,
     `${asOf}: predictions locked. Nothing dated after this is used.`,
-    'Playing forward: a ring turns solid when the company really posts an inference job or hire.',
-    m.letter?.kind === 'draft' ? `Replay draft: written only from records dated on or before ${asOf}.` : `Why DOMINO picked ${focus}: only records dated on or before ${asOf}.`,
+    'Playing forward: a ring turns solid when the company really posts that job or hires for it.',
+    ch5,
   ][n - 1];
 }
 
 type Mark = 'ember' | 'slate' | 'size' | 'river' | 'wound' | 'tide-d' | 'tide' | 'filter';
 function legendFor(m: FlowModel, n: number): [Mark, string][] {
-  if (n === 1) return [['size', 'company (size = headcount)'], ['slate', 'spark = one job move'], ['ember', 'amber = serving engineer']];
-  if (n === 2) return [['river', `${3}+ serving engineers to one company`], ['wound', 'likely need, with its evidence dots']];
+  if (n === 1) return [['size', 'company (size = headcount)'], ['slate', 'spark = one job move'], ['ember', 'amber = inference or ML platform role']];
+  if (n === 2) return [['river', '2+ people in one role family leaving'], ['wound', 'predicted opening (dots = dated evidence)']];
   if (m.mode === 'live') return [];
-  if (n === 3) return [['tide-d', 'DOMINO prediction'], ['filter', 'hiring-filter pick (from job posts)']];
-  if (n === 4) return [['tide', 'came true: a dated job post or hire'], ['tide-d', 'not yet']];
+  if (n === 3) return [['tide-d', 'predicted opening, locked 1 Sep'], ['filter', 'job-post filter pick']];
+  if (n === 4) return [['tide', 'came true: the job was posted or filled'], ['tide-d', 'not yet']];
   return [];
 }
 
@@ -72,7 +76,7 @@ function offsetTo(el: HTMLElement, root: HTMLElement) {
 
 export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Element {
   const { snapshot, width, height, reducedMotion } = props;
-  const model = useMemo(() => buildModel(snapshot, props.layoutHints), [snapshot, props.layoutHints]);
+  const model = useMemo(() => buildModel(snapshot, props.layoutHints, { letter: props.withLetter }), [snapshot, props.layoutHints, props.withLetter]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -166,7 +170,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
       const cap = p.running ? 'DOMINO is pulling dated job moves. The replay plays when the run finishes.' : !model.companies.length ? 'No companies yet. Run a request to see the job moves between them.' : chapterText(model, ch.n);
       if (cap !== lastCap && capRef.current) { capRef.current.textContent = cap; lastCap = cap; }
       rootRef.current?.setAttribute('data-chapter', String(ch.n));
-      rootRef.current?.setAttribute('data-phase', s >= model.sZoom ? 'letter' : 'field');
+      rootRef.current?.setAttribute('data-phase', model.letter && s >= model.sZoom ? 'letter' : 'field');
 
       // date riding the playhead
       const dayNow = dayAt(model, s);
@@ -191,7 +195,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
         const fh = s >= model.sEnd ? model.score.filter.hits : model.predictions.filter((q) => q.by === 'filter' && q.sLand !== null && s >= q.sLand).length;
         if (dh !== lastD && domRef.current) { domRef.current.textContent = String(dh); if (lastD >= 0 && dh > lastD) bump(domRef.current); lastD = dh; }
         if (fh !== lastF && filRef.current) { filRef.current.textContent = String(fh); if (lastF >= 0 && fh > lastF) bump(filRef.current); lastF = fh; }
-        const vis = clamp((s - model.sFreeze - 0.4) / 0.5) * (1 - clamp((s - model.sZoom) / 0.6));
+        const vis = clamp((s - model.sFreeze - 0.4) / 0.5) * (model.letter ? 1 - clamp((s - model.sZoom) / 0.6) : 1);
         scoreRef.current.style.opacity = String(vis);
         scoreRef.current.style.visibility = vis > 0 ? 'visible' : 'hidden';
         scoreRef.current.setAttribute('data-done', s >= model.sEnd ? '1' : '0');
@@ -324,19 +328,19 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
 
       {sc && (
         <aside ref={scoreRef} className="tf-score" aria-label="Replay score" style={{ visibility: 'hidden' }}>
-          <div className="tf-score-title">Which picks later posted an inference job or hired?</div>
+          <div className="tf-score-title">Which predicted openings were later posted or filled?</div>
           <div className="tf-row tf-row-domino">
             <span className="tf-who">DOMINO</span>
             <span className="tf-num"><span ref={domRef}>0</span><span className="tf-of"> of {sc.domino.predicted} {sc.domino.predicted === 1 ? 'pick' : 'picks'}</span></span>
           </div>
           <div className="tf-row tf-row-filter">
-            <span className="tf-who">Hiring filter<small>picks from job posts</small></span>
+            <span className="tf-who">Job-post filter<small>any job post in the last 30 days</small></span>
             <span className="tf-num"><span ref={filRef}>0</span><span className="tf-of"> of {sc.filter.predicted} {sc.filter.predicted === 1 ? 'pick' : 'picks'}</span></span>
           </div>
           <div className="tf-checked">Predictions locked {fmtDay(model.dFreeze)} · checked through <span ref={thruRef} /></div>
-          <div className="tf-result">{sc.netNewHits === 1 ? '1 company picked only by DOMINO later posted an inference job' : `${sc.netNewHits} companies picked only by DOMINO later posted inference jobs`}</div>
+          <div className="tf-result">{sc.netNewHits === 1 ? '1 predicted opening came true at a company the job-post filter never picked' : `${sc.netNewHits} predicted openings came true at companies the job-post filter never picked`}</div>
           <div className="tf-foot">
-            {sc.leaks} facts dated after {fmtDay(model.dFreeze)} were used. A +30% headcount filter: {sc.headcount.hits} of {sc.headcount.predicted}.
+            {sc.leaks} facts dated after {fmtDay(model.dFreeze)} were used. Headcount +30% filter: {sc.headcount.hits} of {sc.headcount.predicted}.
             {snapshot.replay?.snapshotLabel ? ` ${snapshot.replay.snapshotLabel}` : ''}
           </div>
         </aside>
