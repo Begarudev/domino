@@ -78,6 +78,8 @@ test('a credit ceiling blocks the fetch and marks the run budget_exhausted', asy
   assert.equal(store.requireRun(ctx.runId).status, 'budget_exhausted');
   assert.equal(store.budget(ctx.runId).exhausted, 'credits');
   assert.deepEqual(store.getLedger(ctx.runId).map(row => [row.status, row.credits]), [['budget_blocked', 0]]);
+  const note = store.sql.prepare('SELECT error FROM ledger WHERE run_id = ?').get(ctx.runId) as { error: string };
+  assert.match(note.error, /^Blocked before spend · cap credits 1 · would have cost /);
 });
 
 test('a limit lowered during an attempt blocks a paid retry', async t => {
