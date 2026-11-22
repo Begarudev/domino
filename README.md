@@ -159,7 +159,14 @@ Source: [`docs/architecture.mmd`](docs/architecture.mmd). Build contract: [`docs
 - **Caveat shown on screen:** not point-in-time. It is today's Crustdata index filtered by fact dates, so records that
   changed or disappeared since 1 Sep can't be seen.
 
-### Results
+### Live yield check (13:43 IST)
+
+On live Crustdata data, 1,200 real infra/serving departures since 24 Aug came from 118 companies with up to 5,000
+staff; 2 companies lost two people (Poolside, Abacus.AI) and none lost three, so the talent-drain rule fires on **0**
+accounts this quarter. The threshold stays; 2-of-3 accounts go on a watchlist and are never drafted. Full funnel:
+[`docs/YIELD.md`](docs/YIELD.md).
+
+### Replay results
 
 _Filled in from the replay run; nothing above changes after outcomes are seen._
 
