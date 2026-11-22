@@ -39,6 +39,8 @@ export function Reading({ desk }: { desk: CompanyDesk }) {
   }, [funnel, live]);
   const view = missing ? READS : picked ?? defaultView;
   const pick = (id: string) => { setPicked(id); setFilter('all'); };
+  // A run that streamed into the read log stays there when it finishes, rather than jumping to a funnel stage.
+  useEffect(() => { if (live && picked == null) setPicked(READS); }, [live, picked]);
 
   // ---------------------------------------------------------------- run desk
   const [act, setAct] = useState<{ state: 'idle' | 'scan' | 'buyers'; error: string | null }>({ state: 'idle', error: null });
@@ -212,9 +214,12 @@ function DecisionTable({ funnel, view, filter, onFilter, domainOf, runLabel, liv
   const shown = sv ? filtered.slice(0, limit) : filtered.slice(-WINDOW);
   const of = filter === 'all' ? all.length : filtered.length;
 
+  const inGroups = stage?.id === 'groups' ? t.kept + t.inconclusive : 0;
   const title = stage
-    ? <>{fmtInt(stage.count)} {shortLabel(stage)}</>
+    ? <>{fmtInt(stage.count)} {shortLabel(stage)}{inGroups ? `, from ${fmtInt(inGroups)} departures` : ''}</>
     : <>{fmtInt(readRows.length)} records {runLabel || 'this run'} read</>;
+  // The scan pages through every job move but itemises only some: say how many of the funnel's first count are listed.
+  const reported = funnel && funnel.stages[0]?.id === 'profiles' ? funnel.stages[0].count : 0;
   const decisionStage = !!stage && DECISION_STAGES.has(stage.id);
   const unit = decisionStage ? 'companies' : 'rows';
   const subs = decisionStage ? all.filter((r) => r.sub).length : 0;
@@ -257,6 +262,7 @@ function DecisionTable({ funnel, view, filter, onFilter, domainOf, runLabel, liv
         </p>
       )}
       <footer className="rd-foot">
+        {!stage && reported > 0 && readRows.length > 0 && <span data-testid="reads-itemised">Crustdata reported {fmtInt(reported)} job moves; this log lists the {fmtInt(readRows.length)} records the run itemised, kept or discarded.</span>}
         {sv && sv.unlisted > 0 && <span>{fmtInt(sv.unlisted)} job moves dropped at this step aren’t itemised by the scan; the {fmtInt(stage!.count)} that passed are listed.</span>}
         {all.some((r) => r.monthLevel) && <span>A date shown as a month (Oct 2026) is a month-level date: the source gives no day.</span>}
         {sv && filtered.length > shown.length && (
