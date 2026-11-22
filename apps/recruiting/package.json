@@ -1,0 +1,35 @@
+{
+  "name": "domino-recruiting",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "convex:dev": "convex dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:local": "bun --env-file=.env.local --env-file=.env.demo scripts/test-local.ts",
+    "demo:setup": "bun scripts/demo-auth.ts",
+    "providers:local": "bun scripts/configure-providers.ts"
+  },
+  "dependencies": {
+    "convex": "1.51.0",
+    "google-auth-library": "11.3.4",
+    "next": "16.4.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "convex-test": "0.0.73",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  }
+}

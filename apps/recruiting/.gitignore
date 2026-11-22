@@ -1,0 +1,3 @@
+.convex/
+*.tsbuildinfo
+next-env.d.ts
