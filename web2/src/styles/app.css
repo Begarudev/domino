@@ -233,3 +233,31 @@ table.t .num { text-align: right; }
 .loading-line { margin: 8px 0; font-size: 14px; color: var(--ink-2); }
 /* projector floor: secondary text never below 13px or the tertiary token for deciding states */
 .st.held, .st.plain, .cant { color: var(--ink); }
+
+/* ---------------------------------------------------------------- Attio layer (Garud 17:05): shape, type, grid, nav.
+   Shared tokens only; features inherit through .panel / .btn / table.t / .st / .tag / .side / .crumbs. */
+.panel, .surface, .empty-act, .placeholder, .ghost-rows span { border-radius: var(--r-lg); }
+.panel > header { min-height: 48px; padding: 12px var(--cell-x-edge); }
+.panel > header h2, .h-sec { font-size: var(--fs-ui); font-weight: var(--w-semi); letter-spacing: var(--track-snug); }
+.ph { margin-bottom: var(--s5); }
+.ph h1, .h-page { font-size: var(--fs-page); line-height: var(--lh-page); font-weight: var(--w-semi); letter-spacing: var(--track-tight); }
+.ph p, .lede { color: var(--ink-2); font-size: var(--fs-body); line-height: var(--lh-body); margin-top: 6px; }
+.btn { height: 32px; border-radius: var(--r-ctl); font-weight: var(--w-med); padding: 0 12px; }
+.btn.small, .btn.sm { height: 28px; border-radius: var(--r); }
+.field { border-radius: var(--r-ctl); height: 36px; }
+.st, .tag, .llm, .cant { border-radius: var(--r); font-size: var(--fs-ui); line-height: 20px; padding: 0 8px; }
+.sample-tag { border-radius: var(--r-sm); }
+.receipt, .banner { border-radius: var(--r-ctl); }
+.acct-menu { border-radius: var(--r-ctl); }
+.acct-item, .acct-btn { border-radius: var(--r); }
+.acct-av { border-radius: var(--r); }
+.runchip { border-radius: var(--r-ctl); height: 28px; line-height: 18px; }
+/* data grid: 36px header, 40px rows, hairline dividers */
+table.t th { height: var(--head-h); padding-top: 0; padding-bottom: 0; vertical-align: middle; }
+table.t td { padding: 10px var(--cell-x); }
+table.t th:first-child, table.t td:first-child { padding-left: var(--cell-x-edge); }
+table.t th:last-child, table.t td:last-child { padding-right: var(--cell-x-edge); }
+table.t tbody tr:hover { background: var(--row-hover); }
+/* nav: the active item is a subtle filled pill */
+.bar-tabs a { height: var(--nav-h); display: inline-flex; align-items: center; border-radius: var(--r); }
+.bar-tabs a[aria-current='page'] { background: var(--hover); color: var(--ink); font-weight: var(--w-semi); }
