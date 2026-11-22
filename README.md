@@ -72,7 +72,7 @@ A persona switcher in the top bar moves between the two sides.
 **Company (`/company/:id`)**
 
 - **Talent-drain monitor:** who left, for where, and when, shown as role, initial and date, never as a full name.
-- **Predicted openings:** role family, why, evidence with dates, and status (open, watch, held).
+- **Predicted openings:** role family, why, evidence with dates, and status (open, provisional, watch, held).
 - **Matched candidates:** opted-in candidates only. Each fit reason cites the candidate's consented profile field and
   the opening's evidence. Items DOMINO can't verify are struck through.
 - **Outreach:** a sourced intro draft, approved by a person and delivered once to the team inbox. A retry shows
@@ -185,7 +185,7 @@ flowchart LR
     P["Candidate profile<br/>live person enrich → model parse → confirm"]
     D["Departures in the cohort<br/>role family, from → to, dated"]
     R["Entity resolution<br/>merge on id/domain, keep namesakes apart"]
-    O["Rule O1 + guards<br/>open · watch · held"]
+    O["Rule O1 + guards<br/>open · provisional · watch · held"]
     M["Match<br/>role family + skills, every reason cited"]
     W["Intro draft<br/>model writes from numbered claims<br/>verifier deletes uncited sentences"]
     S["Replay scorer<br/>as of 1 Sep, 0 later facts"]
@@ -256,12 +256,26 @@ drafted:
 - Shared parent, related domains or a configured company family (an internal transfer, not a loss).
 - More than 40% of A's headcount moving at once (a team lift or a data error).
 - An ambiguous company identity (several candidate records).
-- Month-only dates that can't settle the 90- or 30-day window. Crustdata role dates are month-precision, so a month
-  that straddles a boundary is held rather than guessed.
+- Departures whose month-only dates straddle the 90-day drain window (see date precision below).
 - Unrecognised titles.
 
-**Statuses:** *open* (O1 fires), *watch* (one conclusive departure, or a replacement may be in progress), *held* (a
-guard tripped).
+**Date precision.** Every Crustdata role date is month-level: `2026-10-01` means "some day in October". DOMINO treats a
+month-only date as an interval from the 1st to the last day of the month. A condition counts as *settled* only if it
+holds for every possible day in those intervals:
+
+- If the departures may or may not fall inside the 90-day drain window, the prediction is **held**.
+- If the 30-day no-replacement window can't be settled yet (it might still be open), DOMINO shows a **predicted
+  opening (provisional), window closes by &lt;date&gt;**, where the date is the last possible day of the window. It
+  becomes *open* once that date passes with no dated replacement hire or job post. If one appears, the prediction is
+  withdrawn.
+
+This guard was refined from a strict "any month-only date near a boundary → hold" at **14:14 IST**, after seeing the
+live departure counts and before looking at any replay outcomes. The reason: on month-level data the strict reading
+holds almost everything, which makes the rule vacuous.
+
+**Statuses:** *open* (O1 fires and every window is settled), *provisional* (O1 fires but the no-replacement window
+closes on a stated date), *watch* (one conclusive departure, or a replacement may be in progress), *held* (a guard
+tripped, shown with its reason).
 
 **Confidence** is written out on every prediction: `base × (1 − 0.5^n) × 2^(−age/30)`, clamped to 0.05–0.95, where
 *n* counts the distinct dated rows and *age* is the number of days since the newest row.
@@ -377,8 +391,12 @@ or post appears within 30 days and no guard trips.
 
 ### 2. O1 on the live cohort
 
+Early live reading (14:14 IST, to be confirmed by the 16:30 run): **Abacus.AI**, with 2 ML-platform engineers gone
+(Oct and Nov 2026) and no dated replacement seen, is a *predicted opening (provisional), window closes by 30 Nov 2026*.
+
 *To fill at 16:30 from the live run:* departures counted, companies with 2 or more conclusive departures, openings
-*open* / *watch* / *held* (with the reasons for each hold), and the openings matched to the demo candidate.
+*open* / *provisional* / *watch* / *held* (with the reason for each hold, including Poolside's), and the openings
+matched to the demo candidate.
 
 ### 3. Replay from 1 September
 
@@ -423,7 +441,8 @@ or post appears within 30 days and no guard trips.
   company may decide not to backfill. Every prediction shows that competing explanation, and nothing goes out without
   a person's approval.
 - **Late profile updates.** People change their profiles weeks after they move, so live windows miss some moves and
-  replay adds a 30-day lag. Month-only dates near a boundary are held rather than guessed.
+  replay adds a 30-day lag. Month-only dates are treated as intervals: a drain that may fall outside its window is
+  held, and an unsettled no-replacement window is shown as provisional with its closing date, never as certain.
 - **Replacements we can't see.** A replacement hired through a referral, or a role filled internally, may not show up
   in public data, so O1 could predict an opening that was already filled.
 - **Thin signal.** Drains of several people in one role family are rare in public data (2 companies at 2 departures in
