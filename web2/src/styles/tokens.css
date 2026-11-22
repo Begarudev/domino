@@ -1,7 +1,7 @@
 /*
   DOMINO v2 tokens: the approved design mock (~/Documents/domino-design/index.html, Garud 14:50). This is the one
-  source of truth for web2. Light is the default; dark applies by system preference unless data-theme="light", or
-  always with data-theme="dark". The accent is used ONLY for state (provisional, verified, delivered).
+  source of truth for web2. Light is the only active theme (Garud 17:17); dark tokens stay, scoped to
+  data-theme="dark", which the app never sets. The accent is used ONLY for state (provisional, verified, delivered).
   Note: the mock's canvas token is called --canvas here, because --paper keeps its older meaning (primary text)
   for code written against the first palette. New code: use --canvas / --surface / --ink / --rule / --acc.
 */
@@ -16,19 +16,8 @@
   --err: #B42318; --err-weak: #FDECEA;
   --serif-w: 600;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme=light]) {
-    color-scheme: dark;
-    --canvas: #0E1013; --surface: #15181D; --raised: #1C2026; --hover: #1F2329; --row-hover: #191C21; --sel: #1A1E23;
-    --ink: #E7E9EC; --ink-2: #A8AEB8; --ink-3: #808792; --on-ink: #0E1013; --ink-hover: #FFFFFF;
-    --rule: #2A2F37; --rule-2: #21252B;
-    --acc: #3DBFA6; --acc-2: #5ED0BA; --acc-weak: #112C27; --acc-line: #235C51; --on-acc: #06201B;
-    --hatch: rgba(168, 174, 184, .22); --sample-a: #22262D; --sample-b: #15181D;
-    --shadow: none;
-    --err: #F97066; --err-weak: #2A1715;
-    --serif-w: 600;
-  }
-}
+/* Garud 17:17: light only. Dark tokens are kept but apply ONLY with an explicit data-theme="dark" (never set by the
+   app); the system dark preference is ignored. */
 :root[data-theme=dark] {
   color-scheme: dark;
   --canvas: #0E1013; --surface: #15181D; --raised: #1C2026; --hover: #1F2329; --row-hover: #191C21; --sel: #1A1E23;
@@ -55,7 +44,9 @@
   /* rhythm: 4px base, 8px steps */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   /* shape: small control radii, softer cards, 1px hairlines, one popover elevation */
-  --r-sm: 4px; --r: 6px; --r-ctl: 8px; --r-lg: 10px; --r-pill: 999px;
+  /* Attio SPEC: cards and panels 8px, controls 8-10px (8 here: 32px-tall controls read bubbly at 10), tiles 12px */
+  --r-sm: 4px; --r: 6px; --r-ctl: 8px; --r-lg: 8px; --r-xl: 12px; --r-pill: 999px;
+  --track-ui: -0.005em;
   --hair: 1px solid var(--rule); --hair-2: 1px solid var(--rule-2);
   /* data grid */
   --row-h: 40px; --row-h-compact: 36px; --head-h: 36px; --cell-x: 12px; --cell-x-edge: 16px;
