@@ -126,9 +126,9 @@ function nodeChange(n: GraphNode, snap: RunSnapshot, evById: Map<string, Evidenc
 
 function Tile(props: {
   p: Placed; snap: RunSnapshot; evById: Map<string, Evidence>; fireAt: number | null; selected: boolean;
-  dimmed: boolean; stamp: boolean; onSelect: () => void; reducedMotion: boolean; mechW: number;
+  dimmed: boolean; stamp: boolean; onSelect: () => void; reducedMotion: boolean; mechW: number; linked: boolean;
 }) {
-  const { p, snap, evById, fireAt, selected, dimmed, stamp, onSelect, reducedMotion, mechW } = props;
+  const { p, snap, evById, fireAt, selected, dimmed, stamp, onSelect, reducedMotion, mechW, linked } = props;
   const n = p.node;
   const unverifiable = n.status === 'unverifiable';
   const change = nodeChange(n, snap, evById);
@@ -140,7 +140,7 @@ function Tile(props: {
     '--tip': `${unverifiable ? 0 : TIP_DEG}deg`,
     transformOrigin: `${p.x + W}px ${p.y + H}px`,
   } as CSSProperties;
-  const cls = ['tile', fired ? 'is-fired' : 'is-standing', unverifiable ? 'is-hollow' : '', selected ? 'is-selected' : '', dimmed ? 'is-dimmed' : '', reducedMotion ? 'no-motion' : ''].join(' ');
+  const cls = ['tile', fired ? 'is-fired' : 'is-standing', unverifiable ? 'is-hollow' : '', selected ? 'is-selected' : '', dimmed ? 'is-dimmed' : '', linked ? 'is-linked' : '', reducedMotion ? 'no-motion' : ''].join(' ');
   const label = `${n.name}. ${change.text}, ${change.date}. ${n.need ?? 'Trigger company'}${conf != null ? `, confidence ${Math.round(conf * 100)}%` : ''}${unverifiable ? ", can't verify" : ''}`;
   return (
     <g className={cls}>
@@ -335,6 +335,7 @@ function TableCentrepiece(props: CentrepieceProps) {
               stamp={hiringFilterView && !inBaseline && isTargetish}
               onSelect={() => onSelect({ kind: 'node', id: n.id })}
               mechW={mechW.get(n.id) ?? W}
+              linked={!!hotEdge && (hotEdge.from === n.id || hotEdge.to === n.id)}
             />
           );
         })}
