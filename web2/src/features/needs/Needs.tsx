@@ -91,7 +91,7 @@ function ClaimTr({ r, ev }: { r: ClaimRow; ev: Map<string, Evidence> }) {
         <span className={struck ? 'struck' : undefined}>{r.text}</span>
         {r.reason && <span className="ver-reason">{r.reason}</span>}
       </td>
-      <td>{r.state === 'cant' ? <span className="cant">I can’t verify</span> : <span className={`ver-st s-${r.state}`}>{CLAIM_LABEL[r.state]}</span>}</td>
+      <td>{r.state === 'cant' ? <span className="cant">I can’t verify</span> : <span className={`ver-st ver-stp s-${r.state}`}><i aria-hidden />{CLAIM_LABEL[r.state]}</span>}</td>
       <td className="ver-date">{date}{/^[A-Z][a-z]{2} \d{4}$/.test(date) && <span className="ver-month">month-level</span>}</td>
       <td className="ver-src" title={source}><span>{source}</span>{more > 0 && <span className="faint"> +{more}</span>}</td>
     </tr>
