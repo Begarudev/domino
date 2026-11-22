@@ -1,13 +1,12 @@
 # DOMINO
 
-**One product, two parts, built on one signal: dated moves between companies.**
+**DOMINO predicts what a company needs next from the domino effects between companies, and helps it act: hire the
+right people and reach the right buyers, with proof.**
 
-1. **Hiring: a search desk that predicts job openings before they're posted, and makes the match with dated proof.**
-   When a company loses two of its inference engineers in a quarter and hasn't posted a replacement, it is about to
-   hire. DOMINO tells an opted-in candidate "this company is likely hiring for you, and here is why", and gives the
-   company a matched candidate whose fit is cited line by line.
-2. **Company analysis: what changed at a company, and what it will need next.** News, talent flows, cross-company
-   chains (talent drain, contagion, displacement), predicted needs, and verified outreach to the person who decides.
+A dated move at one company (engineers leaving, a provider acquired, a peer building out infrastructure) creates a
+need at another. DOMINO's rules turn those moves into predictions (openings, capability needs, rival gaps), each shown
+as the rule's clauses with dated sources, and into actions a person approves: candidate intros and buyer or partner
+outreach, delivered once.
 
 Every claim cites a dated source. Nothing goes out until a person approves it, and then it goes **once**.
 
