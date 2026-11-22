@@ -14,8 +14,12 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   const api = new Hono();
   // Start an openings scan: { request?: string, replay?: { asOf } } -> { runId }
   api.post('/openings/scan', async c => {
-    const body = await c.req.json().catch(() => ({})) as { request?: string };
-    const runId = launch('openings', body.request?.trim() || 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles');
+    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string } };
+    const asOf = /^\d{4}-\d{2}-\d{2}$/.test(body.replay?.asOf ?? '') ? body.replay!.asOf : null;
+    const request = (body.request?.trim() || 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles') +
+      (asOf ? `, replay as of ${asOf}` : '');
+    // A full cohort pull is 8–13 person-search pages paced for the rate limit (about 4 minutes and 300–600 credits).
+    const runId = launch('openings', request, { limits: { maxCredits: 1500, maxSeconds: asOf ? 1200 : 900 } });
     return c.json({ runId }, 201);
   });
   api.get('/companies', c => c.json([]));

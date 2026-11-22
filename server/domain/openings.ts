@@ -5,7 +5,7 @@
 // replacement hire or job post for F at A within 30 days of the last departure -> predicted opening for F at A.
 // Crustdata role dates are month-level, so every date is an interval [first, last] and a condition holds only when it
 // holds for every day in the interval.
-import type { IsoDate } from '../../shared/types.ts';
+import type { IsoDate, ReplayOutcome, ReplayScore } from '../../shared/types.ts';
 import type { Opening, OpeningReason, RoleFamily } from '../../shared/desk.ts';
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import { companyNameKey, daysBetween, relatedDomains, shiftDays, stableId } from './facts.ts';
@@ -254,7 +254,8 @@ export function detectOpenings(input: O1Input): O1Result {
       label: `No ${familyLabel} job post or hire at ${name} since ${dayLabel(lastLeftStart)} (checked ${dayLabel(check.checkedAt)})` +
         (provisional ? `; replacement window closes by ${dayLabel(closes)}` : ''),
     });
-    finish({ status: 'open', confidence: confidence(group.conclusive.length, provisional), reasons });
+    finish({ status: 'open', confidence: confidence(group.conclusive.length, provisional), reasons,
+      provisional, windowClosesBy: provisional ? closes : null });
   }
   const order = { open: 0, watch: 1, held: 2 };
   openings.sort((a, b) => order[a.status] - order[b.status] || b.confidence - a.confidence || a.companyName.localeCompare(b.companyName));
@@ -262,5 +263,61 @@ export function detectOpenings(input: O1Input): O1Result {
 }
 
 /** A predicted opening is provisional while its no-replacement window is still open. */
-export const isProvisional = (opening: Opening) =>
-  opening.reasons.some(reason => reason.kind === 'no_replacement' && /replacement window closes by/.test(reason.label));
+export const isProvisional = (opening: Opening) => Boolean(opening.provisional);
+
+export interface ScoreInput {
+  asOf: IsoDate;
+  openings: Opening[];
+  universe: { id: string; name: string }[];           // companies 20–5,000 staff on asOf with a family departure
+  outcomes: { companyId: string; roleFamily: RoleFamily | null; kind: 'job_post' | 'hire'; date: IsoDate; title: string; evidenceId: string }[];
+  anyPostIds: string[];                                 // baseline: any job post in (asOf − 30, asOf]
+  headcountIds: string[];                               // baseline: monthly headcount growth >= 30% as of asOf
+  snapshotLabel: string;
+}
+
+/** Raw-count replay: outcome = a dated post or hire for the family at the company within 60 days after asOf. */
+export function scoreOpenings(input: ScoreInput): ReplayScore {
+  const horizonEnd = shiftDays(input.asOf, OUTCOME_DAYS);
+  const inHorizon = input.outcomes.filter(o => o.date > input.asOf && o.date <= horizonEnd);
+  const first = (companyId: string, family?: RoleFamily) => inHorizon
+    .filter(o => o.companyId === companyId && o.roleFamily && (!family || o.roleFamily === family))
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const lead = (date: IsoDate) => daysBetween(input.asOf, date);
+  const median = (values: number[]) => values.length ? values.sort((a, b) => a - b)[Math.floor((values.length - 1) / 2)] : null;
+  const arm = (hits: ({ date: IsoDate } | undefined)[], predicted: number) => {
+    const found = hits.filter((hit): hit is { date: IsoDate } => Boolean(hit));
+    return { predicted, hits: found.length, precision: predicted ? Math.round((found.length / predicted) * 100) / 100 : 0,
+      medianLeadDays: median(found.map(hit => lead(hit.date))) };
+  };
+  const open = input.openings.filter(o => o.status === 'open');
+  const settled = open.filter(o => !o.provisional);
+  const dominoHits = open.map(o => first(o.companyId, o.roleFamily));
+  const outcomes: ReplayOutcome[] = [];
+  const byCompany = new Map<string, Set<ReplayOutcome['predictedBy']>>();
+  const tag = (id: string, by: ReplayOutcome['predictedBy']) => byCompany.set(id, (byCompany.get(id) ?? new Set()).add(by));
+  for (const o of open) tag(o.companyId, 'domino');
+  for (const id of input.anyPostIds) tag(id, 'baseline_first_order');
+  for (const id of input.headcountIds) tag(id, 'baseline_headcount');
+  for (const [companyId, arms] of byCompany) {
+    const opening = open.find(o => o.companyId === companyId);
+    const hit = first(companyId, opening?.roleFamily) ?? (opening ? undefined : first(companyId));
+    outcomes.push({ companyId, predictedBy: arms.size > 1 ? 'both' : [...arms][0], hit: Boolean(hit), outcomeDate: hit?.date ?? null,
+      outcome: hit ? `${hit.kind === 'hire' ? 'hired' : 'posted'} “${hit.title}” ${hit.kind === 'hire' ? 'starting' : 'on'} ${dayLabel(hit.date)}` : 'no dated post or hire for the role family by ' + dayLabel(horizonEnd),
+      evidenceIds: hit ? [hit.evidenceId] : [] });
+  }
+  const held = input.openings.filter(o => o.status === 'held').length;
+  const base = input.universe.filter(company => first(company.id)).length;
+  const domino = arm(dominoHits, open.length);
+  return {
+    asOf: input.asOf, horizonEnd, factsAfterAsOfUsed: 0,
+    domino, baselineFirstOrder: arm(input.anyPostIds.map(id => first(id)), input.anyPostIds.length),
+    baselineHeadcount: arm(input.headcountIds.map(id => first(id)), input.headcountIds.length),
+    outcomes,
+    note: `O1 predicted ${open.length} openings (${settled.length} settled, ${open.length - settled.length} provisional; ${held} held) and ${domino.hits} had a dated post or hire for the role family by ${dayLabel(horizonEnd)}. ` +
+      `"Any job post in the last 30 days": ${input.anyPostIds.length} picks, ${input.anyPostIds.filter(id => first(id)).length} hits. ` +
+      `"Headcount +30%": ${input.headcountIds.length} picks, ${input.headcountIds.filter(id => first(id)).length} hits. ` +
+      `Base rate: ${base} of ${input.universe.length} cohort companies.` + (open.length === 0 ? ' O1 made no prediction at this cutoff, so it cannot beat a baseline here.' : ''),
+    snapshotLabel: input.snapshotLabel,
+    outcomeDefinition: 'A dated job post or hire whose title is in the predicted role family at the company within 60 days after the cutoff (baselines: any infra/serving family). Fixed 14:14 IST before outcomes were read.',
+  };
+}

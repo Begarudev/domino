@@ -27,9 +27,9 @@ const specs = [
   deps.newsAcquihireSearch, deps.newsAcquihireResolve, deps.newsAcquihireFetch,
 ];
 
-export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, SourceResult>, input: I, time: SourceTime) {
+export async function readSource<I, O extends SourceResult = SourceResult>(ctx: ToolContext, spec: EndpointSpec<I, O>, input: I, time: SourceTime) {
   let observation: CrustReadMeta | undefined;
-  const raw = await ctx.crust(spec, input, time, deps.fixtureFor, () => ({ evidence: [] }),
+  const raw = await ctx.crust(spec, input, time, deps.fixtureFor, () => ({ evidence: [] }) as unknown as O,
     read => { observation = read; });
   const previous = ctx.store.sql.prepare(`SELECT evidence.id, json_extract(evidence.json, '$.mode') AS mode,
     json_extract(evidence_sources.json, '$.rawId') AS rawId FROM evidence JOIN evidence_sources USING (id)

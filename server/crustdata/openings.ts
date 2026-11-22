@@ -197,7 +197,7 @@ const enrichResponse = z.array(z.object({ matches: z.array(z.object({ company_da
   headcount: z.object({ total: int, timeseries: z.array(z.object({ date: str, employee_count: int }).passthrough()).nullish() }).passthrough().nullish(),
 }).passthrough().nullish() }).passthrough()).nullish() }).passthrough());
 
-export interface HeadcountFact { crustdataId: number; headcount: number | null; change90d: number | null; evidenceId: string | null }
+export interface HeadcountFact { crustdataId: number; headcount: number | null; change90d: number | null; change30d?: number | null; evidenceId: string | null }
 
 /** Company enrich for size (as of the cutoff) and the 90-day headcount change behind the restructure guard. */
 export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: number[] }, { facts: HeadcountFact[]; evidence: Evidence[] }> = {
@@ -218,6 +218,11 @@ export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: numbe
         return days >= 80 && days <= 100;
       }).at(-1);
       const change = last && earlier?.employee_count ? (last.employee_count! / earlier.employee_count - 1) * 100 : null;
+      const month = last && series.filter(point => {
+        const days = (Date.parse(last.date!) - Date.parse(point.date!)) / 86_400_000;
+        return days >= 28 && days <= 35;
+      }).at(-1);
+      const change30d = last && month?.employee_count ? (last.employee_count! / month.employee_count - 1) * 100 : null;
       const headcount = last?.employee_count ?? (meta.mode === 'fixture' || asOf >= (meta.retrievedAt ?? '').slice(0, 10) ? company.headcount?.total ?? null : null);
       let evidenceId: string | null = null;
       if (last) {
@@ -229,9 +234,72 @@ export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: numbe
         evidence.push(row);
         evidenceId = row.id;
       }
-      facts.push({ crustdataId: id, headcount, change90d: change, evidenceId });
+      facts.push({ crustdataId: id, headcount, change90d: change, change30d, evidenceId });
     }
     return { facts, evidence };
   },
   estimateCredits: (_raw, { crustdataIds }) => 2 * crustdataIds.length,
+};
+
+export interface OutcomeRow { crustdataId: number; kind: 'job_post' | 'hire'; date: IsoDate; title: string; roleFamily: RoleFamily | null; evidenceId: string }
+export interface OutcomeInput { crustdataIds: number[]; after: IsoDate; through: IsoDate; familyOnly: boolean; cursor?: string; label: string }
+const allFamilyPhrases = [...new Set((['inference', 'ml_platform', 'mlops', 'gpu_llm_infra'] as RoleFamily[]).flatMap(family => FAMILY_PHRASES[family]))];
+
+/** Replay outcome and baseline reads: dated job posts at the given companies in (after, through]. */
+export const jobOutcomes: EndpointSpec<OutcomeInput, { rows: OutcomeRow[]; evidence: Evidence[]; nextCursor: string | null }> = {
+  name: 'job_outcomes', path: '/job/search', method: 'POST',
+  build: ({ crustdataIds, after, through: end, familyOnly, cursor }) => ({
+    filters: group('and', [condition('company.basic_info.company_id', 'in', crustdataIds),
+      condition('metadata.date_added', '>', after), condition('metadata.date_added', '<', through(end)),
+      ...(familyOnly ? [group('or', allFamilyPhrases.map(phrase => condition('job_details.title', '[.]', phrase)))] : [])]),
+    sorts: [{ field: 'metadata.date_added', order: 'desc' }], limit: 1000,
+    fields: ['crustdata_job_id', 'job_details.title', 'job_details.url', 'company.basic_info.crustdata_company_id', 'company.basic_info.name', 'metadata.date_added'],
+    ...(cursor ? { cursor } : {}),
+  }),
+  parse(raw, { after, through: end }, meta) {
+    const body = validate(jobResponse.extend({ next_cursor: str }), raw);
+    const rows: OutcomeRow[] = [];
+    const evidence: Evidence[] = [];
+    for (const job of body.job_listings) {
+      const day = job.metadata?.date_added?.slice(0, 10);
+      const title = job.job_details?.title;
+      const id = job.company?.basic_info?.crustdata_company_id;
+      if (!day || !title || id == null || day <= after || day > end) continue;
+      const row = evidenceRow(meta, String(job.crustdata_job_id ?? `${id}:${title}:${day}`), '$.job_details.title',
+        `${job.company?.basic_info?.name ?? 'The company'} posted “${title}” on ${day}.`, day, title, job.job_details?.url);
+      evidence.push(row);
+      rows.push({ crustdataId: id, kind: 'job_post', date: day, title, roleFamily: roleFamily(title), evidenceId: row.id });
+    }
+    return { rows, evidence, nextCursor: body.next_cursor ?? null };
+  },
+  estimateCredits: raw => 0.03 * ((raw as { job_listings?: unknown[] } | null)?.job_listings?.length ?? 100),
+};
+
+/** Replay outcome read: hires into an infra/serving family at the given companies, starting in (after, through]. */
+export const hireOutcomes: EndpointSpec<OutcomeInput, { rows: OutcomeRow[]; evidence: Evidence[]; nextCursor: string | null }> = {
+  name: 'hire_outcomes', path: '/person/search', method: 'POST',
+  build: ({ crustdataIds, after, through: end, cursor }) => ({
+    filters: group('and', [condition(ROLE + 'current.company_id', 'in', crustdataIds),
+      condition(ROLE + 'current.start_date', '>', after), condition(ROLE + 'current.start_date', '=<', end),
+      group('or', allFamilyPhrases.map(phrase => condition(ROLE + 'current.title', '[.]', phrase)))]),
+    limit: 200, fields: ['crustdata_person_id', ...['title', 'start_date', 'crustdata_company_id', 'name'].map(field => ROLE + 'current.' + field)],
+    ...(cursor ? { cursor } : {}),
+  }),
+  parse(raw, { crustdataIds, after }, meta) {
+    const body = validate(peopleResponse, raw);
+    const rows: OutcomeRow[] = [];
+    const evidence: Evidence[] = [];
+    for (const person of body.profiles) for (const current of person.experience?.employment_details?.current ?? []) {
+      if (current.crustdata_company_id == null || !crustdataIds.includes(current.crustdata_company_id) || !current.start_date) continue;
+      const started = monthInterval(current.start_date);
+      if (started[0] <= after) continue;                    // the whole month must be after the cutoff
+      const row = evidenceRow(meta, `${person.crustdata_person_id}:${current.crustdata_company_id}:${current.start_date.slice(0, 7)}`,
+        '$.experience.employment_details.current[].start_date',
+        `${current.name} hired a ${current.title} who started in ${monthName(started[0])} (month precision).`, started[0], current.title!);
+      evidence.push(row);
+      rows.push({ crustdataId: current.crustdata_company_id, kind: 'hire', date: started[0], title: current.title!, roleFamily: roleFamily(current.title), evidenceId: row.id });
+    }
+    return { rows, evidence, nextCursor: body.next_cursor ?? null };
+  },
+  estimateCredits: raw => 0.23 * ((raw as { profiles?: unknown[] } | null)?.profiles?.length ?? 50),
 };

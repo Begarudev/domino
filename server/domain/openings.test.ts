@@ -45,6 +45,7 @@ test('Abacus.AI: two settled October departures and no replacement yet -> open, 
   assert.equal(opening.status, 'open');
   assert.equal(opening.roleFamily, 'ml_platform');
   assert.ok(isProvisional(opening));
+  assert.equal(opening.windowClosesBy, '2026-11-30');
   assert.match(opening.reasons.find(r => r.kind === 'no_replacement')!.label, /replacement window closes by 30 Nov 2026/);
   assert.match(opening.reasons[0].label, /^2 ML platform \/ ML infrastructure people left Oct 2026 \(to Arcfront, Bravebird\); 1 more/);
   assert.equal(opening.confidence, 0.52);
@@ -124,4 +125,25 @@ test('replay: a move counts only once the profile lag has passed, so nothing aft
     left('Clarifai', 'MLOps Engineer', '2026-07-01', '2026-08-01', 'Y'),   // new start in August is not known by 2 Aug
   ] });
   assert.equal(groups[0].conclusive.length, 1);
+});
+
+test('replay scoring: raw counts per arm, family-specific hits for O1, provisional counted separately', async () => {
+  const { scoreOpenings } = await import('./openings.ts');
+  const { openings } = detectOpenings(input(abacus(), { asOf: '2026-11-22' }));
+  const score = scoreOpenings({
+    asOf: '2026-11-22', openings, snapshotLabel: 'test',
+    universe: [{ id: 'Abacus.AI', name: 'Abacus.AI' }, { id: 'Poolside', name: 'Poolside' }, { id: 'X', name: 'X' }],
+    outcomes: [
+      { companyId: 'Abacus.AI', roleFamily: 'ml_platform', kind: 'job_post', date: '2026-12-10', title: 'ML Platform Engineer', evidenceId: 'e1' },
+      { companyId: 'Poolside', roleFamily: 'inference', kind: 'hire', date: '2026-12-01', title: 'Inference Engineer', evidenceId: 'e2' },
+      { companyId: 'X', roleFamily: 'mlops', kind: 'job_post', date: '2027-03-01', title: 'MLOps Engineer', evidenceId: 'e3' },  // after 60 days
+    ],
+    anyPostIds: ['Poolside', 'X'], headcountIds: [],
+  });
+  assert.deepEqual([score.domino.predicted, score.domino.hits], [1, 1]);
+  assert.deepEqual([score.baselineFirstOrder.predicted, score.baselineFirstOrder.hits], [2, 1]);
+  assert.deepEqual([score.baselineHeadcount.predicted, score.baselineHeadcount.hits], [0, 0]);
+  assert.equal(score.horizonEnd, '2027-01-21');
+  assert.equal(score.factsAfterAsOfUsed, 0);
+  assert.match(score.note, /1 openings \(0 settled, 1 provisional; 0 held\)/);
 });
