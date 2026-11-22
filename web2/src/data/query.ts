@@ -21,6 +21,18 @@ const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((f) => f());
 const EMPTY: QueryState<never> = { data: null, source: null, error: null, loading: true, evidence: [] };
 
+/** Find an evidence row in any loaded query (desk responses carry their evidence) or the current run snapshot. */
+export function findEvidence(id: string, runEvidence: Sourced<unknown>['evidence'] = []) {
+  for (const q of cache.values()) {
+    const hit = q.evidence?.find((e) => e.id === id);
+    if (hit) return hit;
+    const nested = (q.data as { evidence?: Sourced<unknown>['evidence'] } | null)?.evidence;
+    const hit2 = Array.isArray(nested) ? nested.find((e) => e.id === id) : undefined;
+    if (hit2) return hit2;
+  }
+  return runEvidence.find((e) => e.id === id) ?? null;
+}
+
 /** Everything every query has reported, for the top bar's data pill. */
 export function allSources(): Provenance[] {
   return [...cache.values()].map((q) => q.source).filter((s): s is Provenance => !!s);

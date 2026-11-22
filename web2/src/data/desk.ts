@@ -137,14 +137,27 @@ export interface DeskApi {
 
 export class NotLive extends Error {}
 
+// An endpoint family that answered 404 once isn't built on this server: don't call it again this session (keeps the
+// console clean and avoids a round trip per tab). A route key replaces ids with ':id'.
+const missing = new Set<string>();
+const routeKey = (url: string, method = 'GET') => `${method} ${url.split('?')[0].replace(/\/(co|cand|run|op|intro)_[^/]+/g, '/:id').replace(/\/companies\/[^/]+/, '/companies/:id').replace(/\/candidates\/[^/]+/, '/candidates/:id')}`;
+
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const key = routeKey(url, init?.method);
+  if (missing.has(key)) throw new NotLive(url);
   let res: Response;
   try {
     res = await fetch(url, init);
   } catch {
     throw new NotLive(url);
   }
-  if (res.status === 404 || res.status === 405 || res.status === 501) throw new NotLive(url);
+  if (res.status === 404 || res.status === 405 || res.status === 501) {
+    // A 404 with a JSON error body for a real route (unknown company) is a real answer, not a missing endpoint.
+    const body = res.headers.get('content-type')?.includes('json') ? await res.clone().json().catch(() => null) as { error?: string } | null : null;
+    if (body?.error && !/not found|no route|cannot/i.test(body.error)) throw new Error(body.error);
+    missing.add(key);
+    throw new NotLive(url);
+  }
   const type = res.headers.get('content-type') ?? '';
   if (!type.includes('json')) throw new NotLive(url); // the SPA fallback answered: endpoint not built yet
   if (!res.ok) {
@@ -213,7 +226,12 @@ export function createDeskApi(opts: { fixtureOnly: boolean }): DeskApi {
         return fx(req);
       }, f),
     companies: () => liveOr(
-      async () => unwrap<CompanySummary[]>(await getJson('/api/companies'), 'companies'),
+      async () => {
+        const r = unwrap<CompanySummary[]>(await getJson('/api/companies'), 'companies');
+        // Companies with a rule decision first, then by departures; the rest stay reachable through search.
+        const rank = (c: CompanySummary) => (c.openings ? 1000 : 0) + ((c.held ?? 0) ? 500 : 0) + c.departures90d;
+        return { ...r, data: [...r.data].sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name)) };
+      },
       () => fx<CompanySummary[]>([
         { id: ABACUS.id, name: ABACUS.name, domain: ABACUS.domain, headcount: 288, openings: 1, held: 0, departures90d: 2 },
         { id: POOLSIDE.id, name: POOLSIDE.name, domain: POOLSIDE.domain, headcount: 302, openings: 0, held: 1, departures90d: 2 },

@@ -1,16 +1,44 @@
-/* Page-level layout shared by the candidate and company pages. Feature CSS lives next to each feature. */
-.cohort { display: grid; gap: var(--s2); }
-.cohort-row {
-  display: grid; grid-template-columns: 1.4fr 1fr 1.4fr 0.8fr; align-items: center; gap: var(--s4);
-  padding: var(--s4) var(--s5); color: var(--paper); font-size: var(--fs-body);
-}
-.cohort-row:hover { text-decoration: none; border-color: var(--line); background: var(--panel-2); }
-.cohort-row b { font-size: var(--fs-lead); }
-.cohort-row > span:nth-child(3) { display: flex; gap: 8px; flex-wrap: wrap; }
-.cohort-row > span:last-child { text-align: right; color: var(--paper-2); }
-.cohort-name { font-size: var(--fs-lead); font-weight: 700; display: grid; }
-.cohort-name small { font-size: var(--fs-cap); color: var(--paper-3); font-weight: 500; }
+/* Page layouts (design mock). Feature CSS lives next to each feature. */
 
-.co-head { margin-bottom: var(--s4); }
-.crumb { font-size: var(--fs-ui); color: var(--paper-2); display: inline-block; margin-bottom: var(--s2); }
-.co-sub { margin: 0; color: var(--paper-2); font-size: var(--fs-lead); }
+/* company: 216px sidebar + main */
+.co { display: flex; min-height: 100%; }
+.side {
+  width: 216px; flex: none; border-right: 1px solid var(--rule); padding: 16px 10px; background: var(--surface);
+  display: flex; flex-direction: column; gap: 1px; position: sticky; top: 0; height: calc(100vh - 52px); overflow-y: auto;
+}
+.side-grp { display: flex; flex-direction: column; gap: 1px; }
+.side .grp { font-size: 12px; color: var(--ink-3); padding: 14px 10px 6px; }
+.side-grp:first-child .grp { padding-top: 0; }
+.side a { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 4px; color: var(--ink-2); font-weight: 500; transition: background 150ms var(--ease); }
+.side a:hover { background: var(--hover); }
+.side a[aria-current='page'] { background: var(--hover); color: var(--ink); }
+.side a .c { color: var(--ink-3); font-weight: 400; }
+.side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 12px; color: var(--ink-3); line-height: 18px; }
+.co-main { flex: 1; padding: 28px 32px 48px; min-width: 0; max-width: 1240px; }
+@media (min-width: 1800px) { .co-main { max-width: 1480px; } }
+
+.reading-panel { min-height: 60vh; display: grid; }
+.reading-panel .rail { min-height: 60vh; }
+
+/* cohort list */
+.cohort-row {
+  display: grid; grid-template-columns: 1.4fr 1fr 1.2fr .6fr; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--rule-2);
+  transition: background 150ms var(--ease);
+}
+.cohort-row:last-child { border-bottom: 0; }
+.cohort-row:hover { background: var(--row-hover); }
+.cohort-name b { font-weight: 600; }
+.cohort-name small { color: var(--ink-3); margin-left: 8px; font-size: 12px; }
+.cohort-row > span:nth-child(3) { display: flex; gap: 8px; flex-wrap: wrap; }
+.cohort-row > span:last-child { text-align: right; }
+
+/* interim recruitment rows (replaced by the Recruitment feature) */
+.op-list { display: grid; gap: 12px; }
+.op-row { padding: 16px; display: grid; gap: 12px; }
+.op-top { display: grid; gap: 8px; justify-items: start; }
+.op-role { margin: 0; font-family: var(--serif); font-weight: var(--serif-w); font-size: 24px; line-height: 30px; }
+.op-hold { margin: 0; color: var(--ink-2); font-weight: 600; }
+.op-chips { display: grid; gap: 0; border-top: 1px solid var(--rule-2); }
+.op-chip { display: grid; grid-template-columns: 1fr auto; gap: 16px; text-align: left; padding: 9px 0; border: 0; border-bottom: 1px solid var(--rule-2); background: none; }
+.op-chip small { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.op-chip:hover:not(:disabled) span { text-decoration: underline; text-decoration-color: var(--ink-3); }

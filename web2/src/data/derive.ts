@@ -90,6 +90,21 @@ export const ENDPOINT_NOUN: Record<string, string> = {
   company_enrich: 'company profiles', company_posts: 'company posts', web_search: 'news articles', person_search: 'people records',
 };
 
+/**
+ * People appear only as role + initial. Search results whose title is just a person's name ("Rohan Paul",
+ * "Rohan Paul - LinkedIn") are shown without the name. Company and headline titles pass through.
+ */
+const PERSONISH = /^([A-Z][a-z'’.-]+)(\s+[A-Z][a-z'’.-]*){1,2}(\s*[-|·–—]\s*(LinkedIn|Crunchbase|X|Twitter|Profile).*)?$/;
+const NOT_A_NAME = /\b(AI|Labs?|Inc|Ltd|LLC|Technologies|Systems|Capital|Ventures|Group|Health|Bank|Cloud|Engineer|Manager|Director|Head|VP|CEO|CTO|Founder|Deal|Raises|Licenses|Strikes|Nvidia|NVIDIA)\b/;
+export function redactPerson(title: string, kind: SourceKind): string {
+  const t = title.trim();
+  if ((kind === 'news' || kind === 'decider' || kind === 'job_move') && PERSONISH.test(t) && !NOT_A_NAME.test(t)) {
+    const initial = t[0].toUpperCase();
+    return kind === 'decider' ? `Person record (${initial}.)` : `Search result about a person (${initial}.), name withheld`;
+  }
+  return title;
+}
+
 function hostname(url: string | null | undefined): string | null {
   if (!url) return null;
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
@@ -151,10 +166,12 @@ export function foldFeeds(prev: Feeds, events: StoredEvent[], snapAfter: RunSnap
       case 'source.read': {
         appended ??= [];
         ev.items.forEach((it, i) => {
+          const kind = KIND_MAP[it.kind] ?? 'news';
           appended!.push({
-            key: `${st.seq}:${i}`, seq: st.seq, kind: KIND_MAP[it.kind] ?? 'news', title: it.title, company: it.company,
+            key: `${st.seq}:${i}`, seq: st.seq, kind, title: redactPerson(it.title, kind), company: it.company,
             date: it.date, dateLabel: it.precision === 'month' && it.date ? fmtDate(it.date.slice(0, 7)) : fmtDate(it.date),
-            domain: hostname(it.url) ?? domainOf(it.company), signal: it.signal, matched: it.matched, url: it.url,
+            domain: (hostname(it.url) === 'linkedin.com' ? domainOf(it.company) : null) ?? hostname(it.url) ?? domainOf(it.company),
+            signal: it.signal, matched: it.matched, url: it.url,
             callMode: ev.mode, endpoint: ev.endpoint,
           });
         });

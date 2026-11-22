@@ -1,17 +1,18 @@
-// The agent's work, always visible: a plain-language "Now" line and an append-only stream of what it read.
-// Smoothness: cards append at the end with stable keys and animate in once; the list is windowed to the last
-// WINDOW cards; a catch-up burst lands settled; the Now line dwells ~900 ms and is keyed by its text.
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+// Source activity for the run behind the page in view: a plain-language Now line and every record the run read,
+// newest first, kept or discarded. Smoothness: stable keys, entrance once per card, a transform-only FLIP glide when
+// a new card lands on top, a catch-up burst lands settled, and the Now line dwells ~900 ms keyed by its text.
+import { memo, useRef } from 'react';
 import type { SourceCard, SourceKind } from '../data/derive.ts';
 import { runStore, useRunSel } from '../data/store.ts';
-import { Count, useDwell, useEnterOnce } from '../lib/motion.ts';
+import { Count, useDwell, useEnterOnce, useFlip } from '../lib/motion.ts';
 import { fmtInt } from '../lib/format.ts';
+import { prettyText } from '../lib/text.ts';
 
-const WINDOW = 60;
+const WINDOW = 50;
 
 export function ActivityRail() {
   return (
-    <aside className="rail" aria-label="Agent activity" data-testid="activity-rail">
+    <aside className="rail" aria-label="Source activity" data-testid="activity-rail">
       <RailHead />
       <RailStats />
       <Feed />
@@ -22,33 +23,36 @@ export function ActivityRail() {
 function RailHead() {
   const narration = useRunSel((v) => v.feeds.narration);
   const slow = useRunSel((v) => v.feeds.slow);
-  const status = useRunSel((v) => v.ui.snap.status);
   const runId = useRunSel((v) => v.runId);
   const mode = useRunSel((v) => v.mode);
+  const applied = useRunSel((v) => v.version);
   const shown = useDwell(narration, (a, b) => a?.text === b?.text, 900);
-  const idle = !runId ? (mode === 'sample' ? 'Press play to watch the recorded agent run.' : 'Nothing running. Start a scan or onboard a candidate.') : status === 'queued' ? 'Starting the run' : 'Waiting for the first event';
+  const idle = mode === 'sample'
+    ? (applied ? 'Recorded activity paused.' : 'Recorded activity. Press play to replay it.')
+    : !runId ? 'No activity for this view yet.' : 'Waiting for the first read.';
   const tone = shown?.tone ?? 'info';
   return (
     <div className="rail-head">
       <div className="rail-title">
-        <h2>Agent activity</h2>
+        <h2>Source activity</h2>
         <RunState />
       </div>
+      {runId && <div className="rail-run" title={runId}>Run {runId.replace(/^run_/, '').slice(0, 8)}</div>}
       <p className={`now ${tone}`} aria-live="polite" data-testid="now-line">
-        <NowText key={shown?.text ?? idle} text={shown?.text ?? idle} />
+        <NowText key={shown?.text ?? idle} text={prettyText(shown?.text ?? idle)} lead={!!shown} />
       </p>
       {slow && <div className="slow" data-testid="slow-state">{slow.text}</div>}
     </div>
   );
 }
 
-function NowText({ text }: { text: string }) {
-  const ref = useEnterOnce<HTMLSpanElement>(false, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], 260);
-  return <span ref={ref} className="now-line"><span className="lead">Now:</span>{text}</span>;
+function NowText({ text, lead }: { text: string; lead: boolean }) {
+  const ref = useEnterOnce<HTMLSpanElement>(false, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], 220);
+  return <span ref={ref} className="now-line">{lead && <span className="lead">Now:</span>}{text}</span>;
 }
 
 const STATUS_TEXT: Record<string, string> = {
-  queued: 'Starting', running: 'Running', awaiting_input: 'Needs your answer', awaiting_approval: 'Waiting for approval',
+  queued: 'Starting', running: 'Running', awaiting_input: 'Needs an answer', awaiting_approval: 'Waiting for approval',
   completed: 'Finished', failed: 'Failed', crashed: 'Stopped', budget_exhausted: 'Cap reached',
 };
 
@@ -59,9 +63,13 @@ function RunState() {
   const playing = useRunSel((v) => v.playing);
   const pending = useRunSel((v) => v.pending);
   if (mode === 'sample') {
-    return playing
-      ? <button className="btn small" onClick={() => runStore.pause()} data-testid="sample-pause">Pause</button>
-      : <button className="btn small primary" onClick={() => { if (!runId || !pending) void runStore.loadSample().then(() => runStore.play()); else runStore.play(); }} data-testid="sample-play">{runId && pending ? 'Resume' : 'Play recorded run'}</button>;
+    if (playing) return <button className="btn small" onClick={() => runStore.pause()} data-testid="sample-pause">Pause</button>;
+    return (
+      <button className="btn small primary" data-testid="sample-play"
+        onClick={() => { if (!runId || !pending) void runStore.loadSample().then(() => runStore.play()); else runStore.play(); }}>
+        {pending && runId ? 'Resume replay' : 'Replay recorded run'}
+      </button>
+    );
   }
   if (!runId) return null;
   const tone = status === 'failed' || status === 'crashed' ? 'bad' : status === 'awaiting_approval' || status === 'budget_exhausted' ? 'warn' : status === 'completed' ? 'ok' : 'live';
@@ -72,6 +80,8 @@ function RailStats() {
   const reads = useRunSel((v) => v.feeds.reads);
   const cards = useRunSel((v) => v.feeds.sources.length);
   const calls = useRunSel((v) => v.ui.snap.ledger.length);
+  const runId = useRunSel((v) => v.runId);
+  if (!runId) return null;
   const total = Object.values(reads.byEndpoint).reduce((a, b) => a + b, 0);
   return (
     <div className="rail-stats">
@@ -86,26 +96,16 @@ function Feed() {
   const catchingUp = useRunSel((v) => v.catchingUp);
   const runId = useRunSel((v) => v.runId);
   const box = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true);
-  const shown = sources.length > WINDOW ? sources.slice(sources.length - WINDOW) : sources;
-
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [sources.length]);
-
+  useFlip(box, !catchingUp);
+  // newest first; stable keys mean existing cards are moved, never remounted
+  const shown = sources.slice(Math.max(0, sources.length - WINDOW)).reverse();
   return (
     <div className="feed" ref={box} data-testid="feed">
       {!shown.length && (
         <div className="feed-empty">
-          {runId ? 'The first sources appear here as the agent reads them: job moves, company records, job posts and news, each with its date.' : 'When a scan or enrich runs, every record the agent reads lands here with its date and source.'}
+          {runId
+            ? 'Each record the run reads appears here with its date and source, marked kept or discarded.'
+            : 'When this view runs a scan or reads a profile, every record it reads appears here with its date and source.'}
         </div>
       )}
       {shown.map((c) => <Card key={c.key} card={c} settled={catchingUp} />)}
@@ -116,20 +116,21 @@ function Feed() {
 const KIND_LABEL: Record<SourceKind, string> = {
   job_move: 'Job move', company: 'Company record', job_post: 'Job post', news: 'News', funding: 'Funding', decider: 'Person record',
 };
+const MODE_LABEL: Record<string, string> = { live: 'Live', cache: 'Live, cached', fixture: 'Fixture', replay: 'Replay', snapshot: 'Snapshot' };
 
 const Card = memo(function Card({ card, settled }: { card: SourceCard; settled: boolean }) {
   const ref = useEnterOnce<HTMLDivElement>(settled);
   return (
-    <div ref={ref} className={`src${card.matched ? '' : ' dim'}`} data-kind={card.kind}>
+    <div ref={ref} data-flip={card.key} className={`src${card.matched ? '' : ' dim'}`} data-kind={card.kind}>
       <span className="src-icon" aria-label={KIND_LABEL[card.kind]} title={KIND_LABEL[card.kind]}><KindIcon kind={card.kind} /></span>
-      <span className="src-title">{card.title}</span>
+      <span className="src-title">{prettyText(card.title)}</span>
       <span className="src-meta">
-        <span>{card.dateLabel}</span>
+        <span className="src-date">{card.dateLabel}</span>
         {card.company && <span>{card.company}</span>}
         {card.domain && <span>{card.domain}</span>}
-        <span className="call">Call: {card.callMode === 'cache' ? 'cached' : card.callMode}</span>
+        <span className="call">{MODE_LABEL[card.callMode] ?? card.callMode}</span>
       </span>
-      {card.signal && <span className="src-signal">{card.signal}</span>}
+      <span className={`src-signal${card.matched ? '' : ' off'}`}><b>{card.matched ? 'Kept' : 'Discarded'}</b>{card.signal ? `: ${prettyText(card.signal)}` : ''}</span>
     </div>
   );
 });
