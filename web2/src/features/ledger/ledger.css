@@ -1,0 +1,45 @@
+.ledger { display: grid; gap: 16px; }
+.lg-run { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.lg-req { color: var(--ink-2); max-width: 760px; }
+.lg-strip { padding: 16px; display: grid; gap: 16px; }
+.lg-line { margin: 0; font-size: 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; color: var(--ink-2); }
+.lg-line b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.lg-line .sep { color: var(--ink-3); }
+.lg-caps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.lg-cap-h { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; }
+.lg-cap-h b { font-weight: 600; }
+.lg-cap-n { font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+.lg-cap.hit .lg-cap-n { color: var(--ink); font-weight: 600; }
+/* ported from the mock (.capbar) */
+.capbar { height: 10px; border-radius: 2px; background: var(--rule-2); overflow: hidden; display: flex; }
+.capbar i { display: block; height: 100%; transition: width 250ms var(--ease); }
+.capbar i.u { background: var(--ink); }
+.capbar i.r { background: repeating-linear-gradient(135deg, var(--acc) 0 3px, transparent 3px 6px); border-left: 1px solid var(--surface); }
+.lg-cap.hit .capbar i.u { background: var(--ink); }
+.lg-lower { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; padding-top: 12px; border-top: 1px solid var(--rule-2); }
+.lg-lower label { font-weight: 600; font-size: 13px; }
+.lg-lower input { width: 96px; height: 26px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink); }
+.lg-lower input:disabled { color: var(--ink-3); }
+/* ported from the mock (.blocked) */
+.blocked { border: 1px solid var(--ink); border-radius: 6px; background: var(--surface); padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; font-size: 15px; }
+.blocked .faint { font-size: 13px; margin-top: 4px; }
+.blocked.quiet { border-color: var(--rule); }
+.lg-intro { justify-content: space-between; font-size: 15px; }
+.lg-note { font-size: 13px; color: var(--ink-2); }
+.lg-table td { font-size: 14px; }
+.lg-table td.mono { font-size: 13px; white-space: nowrap; }
+.lg-table tbody tr { height: 34px; }
+.lg-table td.num, .lg-table th.num { white-space: nowrap; }
+.lg-table .lg-bad { color: var(--err); font-weight: 600; }
+.lg-table tr.blocked-row td { background: var(--row-hover); }
+.lg-table tfoot td { border-top: 1px solid var(--rule); padding: 10px 12px; font-size: 14px; }
+.lg-drawer { position: fixed; inset: 56px 0 0 auto; width: min(960px, 92vw); background: var(--canvas); border-left: 1px solid var(--rule); padding: 16px 20px; z-index: 20; overflow: auto; }
+.lg-drawer-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.lg-drawer-h h2 { font-size: 16px; font-weight: 600; margin: 0; }
+@media (max-width: 900px) { .lg-caps { grid-template-columns: 1fr; } }
+/* Schibsted tabular figures space "." and "," wide ("3. 50"); keep proportional figures, right-aligned. */
+.ledger .num, .ledger [data-num], .lg-line b { font-variant-numeric: normal; }
+.ledger .panel > header h2 { font-size: 15px; }
+.lg-table td.lg-step { max-width: 380px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-table tbody td { padding-top: 7px; padding-bottom: 7px; }
+.lg-sum { font-weight: 600; font-size: 14px; }

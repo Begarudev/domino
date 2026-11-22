@@ -15,10 +15,10 @@ export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hin
   { id: 'chains', label: 'Chains', group: 'Read', hint: 'Rules that link a move at one company to a need at another, with today’s fire counts.' },
   { id: 'verifier', label: 'Verifier', group: 'Read', hint: 'Each claim checked against a dated source, or marked “I can’t verify”.' },
   { id: 'replay', label: 'Replay', group: 'Check', hint: 'The rules run on 1 Sep data, scored against what happened next.' },
-  { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Every paid call against the run’s caps.' },
+  { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Calls, spend and limits for this run.' },
 ];
 /** Tabs whose feature is built. Unbuilt tabs are hidden, never shown as stubs. */
-export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'buyers', 'outreach', 'reading', 'file', 'chains', 'verifier']);
+export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'buyers', 'outreach', 'reading', 'file', 'chains', 'verifier', 'replay', 'ledger']);
 
 const ALIASES: Record<string, CompanyTab> = {
   openings: 'recruitment', drain: 'recruitment', matches: 'recruitment', analysis: 'file', needs: 'verifier', rules: 'chains', rundesk: 'reading',
