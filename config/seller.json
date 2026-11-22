@@ -1,0 +1,31 @@
+{
+  "company": "Cirrus Kiln",
+  "offering": "managed GPU inference",
+  "oneLiner": "We help engineering teams run and scale inference workloads.",
+  "senderName": "Ira",
+  "team": [
+    {
+      "name": "Ira",
+      "pastEmployers": [
+        {"name": "Peregrine Systems", "from": "2021-04-01", "to": "2023-09-01"}
+      ]
+    }
+  ],
+  "customers": ["Marigold Compute"],
+  "meeting": {
+    "title": "Managed inference discussion",
+    "durationMin": 20,
+    "slots": ["2026-11-24T11:00:00+05:30", "2026-11-25T15:30:00+05:30"]
+  },
+  "displacementEvents": [
+    {
+      "provider": "Lumen Serve",
+      "product": "Lumen Serve",
+      "kind": "acquired",
+      "date": "2026-11-01",
+      "sourceUrl": "https://example.com/news/lumen-serve-acquired",
+      "note": "Lumen Serve was acquired on 2026-11-01.",
+      "fixtureOnly": true
+    }
+  ]
+}
