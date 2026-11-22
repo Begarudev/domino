@@ -141,10 +141,12 @@ export function llmDraftPrompt(target: Target, decider: Decider | null, claims: 
 }
 
 const sentenceBreaks = new Intl.Segmenter('en', { granularity: 'sentence' });
-
-function splitSentences(text: string): string[] {
+// Intl.Segmenter breaks inside names such as "Kestrel Labs Pvt. Ltd."; the verifier would then remove the
+// uncited fragment. A break whose neighbouring words ("Pvt. Ltd.") appear in a claim or name is rejoined.
+function splitSentences(text: string, wholeTexts: string[]): string[] {
   const parts: string[] = [];
   for (const line of text.split(/\n/)) {
+    const lineStart = parts.length;
     for (const { segment } of sentenceBreaks.segment(line.trim())) {
       let sentence = segment.trim();
       const markers = sentence.match(/^(?:\[\d+\]\s*)+/)?.[0];
@@ -152,7 +154,11 @@ function splitSentences(text: string): string[] {
         parts[parts.length - 1] += ' ' + markers.trim();
         sentence = sentence.slice(markers.length);
       }
-      if (sentence) parts.push(sentence);
+      if (!sentence) continue;
+      const last = parts.length > lineStart ? parts[parts.length - 1] : '';
+      const join = last.slice(last.lastIndexOf(' ') + 1) + ' ' + sentence.split(' ', 1)[0];
+      if (last && wholeTexts.some(whole => whole.includes(join))) parts[parts.length - 1] += ' ' + sentence;
+      else parts.push(sentence);
     }
   }
   return parts;
@@ -212,7 +218,8 @@ export function verifyDraft(draft: { subject: string; body: string }, claims: Cl
   const citations = new Map<string, Draft['citations'][number]>();
   const checks: DraftSentenceCheck[] = [];
   let signoff = false;
-  const body = draft.body.split(/\n\s*\n/).map(paragraph => splitSentences(paragraph).flatMap(sentence => {
+  const wholeTexts = [...names, ...claims.map(claim => claim.text)];
+  const body = draft.body.split(/\n\s*\n/).map(paragraph => splitSentences(paragraph, wholeTexts).flatMap(sentence => {
     const markers = [...new Set([...sentence.matchAll(markerPattern)].map(match => Number(match[1])))];
     const numbers = tokens(sentence);
     const evidenceIds = [...new Set(markers.flatMap(marker => allowed.get(marker)?.evidenceIds ?? []))];

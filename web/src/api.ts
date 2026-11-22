@@ -23,7 +23,12 @@ export interface Backend {
 }
 
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text().catch(() => '')}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let message = text;
+    try { message = (JSON.parse(text) as { error?: string }).error ?? text; } catch { /* plain-text body */ }
+    throw new Error(message || `${res.status} ${res.statusText}`);
+  }
   return res.json() as Promise<T>;
 }
 

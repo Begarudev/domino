@@ -284,6 +284,9 @@ export type RunStatus =
   | 'queued' | 'running' | 'awaiting_input' | 'awaiting_approval'
   | 'completed' | 'failed' | 'crashed' | 'budget_exhausted';
 
+/** Longest request the server accepts; the web request field uses the same limit. */
+export const MAX_REQUEST_CHARS = 12_000;
+
 export const STEP_ORDER = [
   'parse_request',
   'pull_triggers',
