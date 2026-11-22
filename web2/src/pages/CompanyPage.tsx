@@ -97,6 +97,7 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
         })}
       </nav>
       <div className="co-main">
+        {desk && <Pipeline desk={desk} companyId={route.id} tab={tab} />}
         {/* Tabs with their own header (file, reading) skip the shell title once their data is in. */}
         {!(desk && OWN_HEADER.has(tab)) && (
           <div className="ph">
@@ -107,7 +108,6 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
             </div>
           </div>
         )}
-        {desk && <Pipeline desk={desk} companyId={route.id} tab={tab} />}
         {desk && OWN_HEADER.has(tab) && <p className="co-hint" data-testid="tab-hint">{current.hint}</p>}
         {!desk && !q.error && <p className="loading-line" role="status">Loading {current.label.toLowerCase()} from the latest scan…</p>}
         {desk && (

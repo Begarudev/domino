@@ -97,8 +97,8 @@ function CompanyPick() {
 
 // The domino effect, drawn once: a move at one company becomes a need DOMINO acts on. Static after it enters.
 const LANES: { id: string; name: string; steps: string[] }[] = [
-  { id: 'hire', name: 'Hire', steps: ['Company A loses 2 ML engineers', 'A will need to hire', 'DOMINO introduces an opted-in candidate'] },
-  { id: 'sell', name: 'Sell', steps: ['Company B raises or ships', 'B needs GPU inference', 'DOMINO drafts outreach to the decider', 'You approve, it’s sent once'] },
+  { id: 'hire', name: 'Hire', steps: ['2 ML engineers leave Company A for other companies', 'A will likely need to hire', 'DOMINO introduces an opted-in candidate'] },
+  { id: 'sell', name: 'Sell', steps: ['Company B, a buyer, raises or ships', 'B may need GPU inference', 'DOMINO drafts outreach to the decider', 'You approve, it’s sent once'] },
 ];
 
 function Dominoes() {

@@ -55,9 +55,9 @@ export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyI
     const approved = intros.filter((i) => i.status === 'delivered' || i.status === 'accepted').length;
     const st = (n: number | null, waiting = false): NodeState => (n == null || n === 0 ? (waiting ? 'waiting' : 'empty') : 'done');
     return [
-      { key: 'read', label: 'Read', big: read, small: 'moves read in the scan', tab: 'reading', state: st(read), steps: STEPS.read },
+      { key: 'read', label: 'Read', big: read, small: 'moves read', tab: 'reading', state: st(read), steps: STEPS.read },
       { key: 'rules', label: 'Rules', big: fired, small: `fired · ${fmtInt(held)} held`, tab: 'chains', state: st(fired + held), steps: STEPS.rules },
-      { key: 'verify', label: 'Verify', big: verified, small: `verified · ${fmtInt(cant)} can’t verify`, tab: 'verifier', state: st(verified + cant), steps: STEPS.verify },
+      { key: 'verify', label: 'Verify', big: verified, small: `met · ${fmtInt(cant)} can’t verify`, tab: 'verifier', state: st(verified + cant), steps: STEPS.verify },
       { key: 'draft', label: 'Draft', big: drafted, small: notDrafted ? `drafted · ${fmtInt(notDrafted)} not drafted` : 'drafted', tab: 'outreach', state: st(drafted), steps: STEPS.draft },
       awaiting || !approved
         ? { key: 'approve', label: 'Approve', big: awaiting, small: 'awaiting you', tab: 'outreach', state: awaiting ? 'waiting' : 'empty', steps: STEPS.approve }
@@ -84,7 +84,7 @@ export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyI
           return (
             <li key={n.key} className={`pipe-n is-${n.state}`} style={{ animationDelay: `${i * 40}ms` }} aria-current={tab === n.tab ? 'step' : undefined}>
               <a href={href(to)} onClick={(e) => { e.preventDefault(); navigate(to, true); }} data-testid={`pipe-${n.key}`}
-                title={`${n.label}: ${n.big == null ? 'not read yet' : `${fmtInt(n.big)} ${n.small}`}. Opens ${n.tab}.`}>
+                title={`${n.label} (${n.key === 'read' ? 'whole scan' : 'this company'}): ${n.big == null ? 'not read yet' : `${fmtInt(n.big)} ${n.small}`}. Opens ${n.tab}.`}>
                 <span className="pipe-dot" aria-hidden>{n.state === 'done' ? <svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" /></svg> : null}</span>
                 <span className="pipe-txt">
                   <span className="pipe-l">{n.label}{t && <span className="pipe-t">{t}</span>}</span>
