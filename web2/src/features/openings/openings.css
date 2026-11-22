@@ -174,10 +174,10 @@
 
 /* polish pass: data grid rhythm. Sans only, tabular figures for every count and date, muted 12px sentence-case
    heads, 16px cell gutters, a quiet row hover, and the header summary never outranks its heading. */
-.rec-fun b { font-family: var(--sans); font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.rec-fun b { font-family: var(--sans); font-weight: 600; letter-spacing: -.02em; font-variant-numeric: lining-nums proportional-nums; }
 .rec-fun .rec-plus { font-family: var(--sans); }
 .rec-role { font-weight: 600; letter-spacing: -.01em; }
-.rec [data-num], .rec-count, .rec-ev-date, .rec-proof, .rec-role-sub { font-variant-numeric: tabular-nums; }
+.rec table [data-num], .rec-ev-date { font-variant-numeric: tabular-nums; }
 .rec .panel > header > span:not(.st) { font-size: 13px; }
 .rec table.t th { font-size: 12px; font-weight: 500; color: var(--ink-3); text-transform: none; letter-spacing: 0; }
 .rec table.t th:first-child, .rec table.t td:first-child { padding-left: 16px; }
