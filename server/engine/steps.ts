@@ -9,6 +9,7 @@ import { now } from '../db.ts';
 import type { OutcomeFact, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { root } from '../env.ts';
 import { modelClient } from '../llm/client.ts';
+import { mapLimit } from '../runtime/pool.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 import { dateShift, predictionEvidence, publishSource, readSource } from './sources.ts';
@@ -329,55 +330,52 @@ function futureSlots(seller: SellerProfile, createdAt: string) {
   return [`${date}T11:00:00+05:30`, `${dateShift(date, 1)}T15:30:00+05:30`];
 }
 
+const draftConcurrency = 3;
+
 async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'draft_messages'>> {
   const { companies, triggers, evidence: companyEvidence } = c.enrich_companies!;
   const evidence = predictionEvidence(byId([...companyEvidence, ...c.find_deciders!.evidence]), c.parse_request!);
-  const drafts: Draft[] = [];
-  const targets: Target[] = [];
-  const events: RunEvent[] = [];
   const profile = { ...seller, offering: c.parse_request!.offering ?? seller.offering,
     meeting: { ...seller.meeting, slots: futureSlots(seller, ctx.store.requireRun(ctx.runId).created_at) } };
-  for (const target of c.warm_paths!) {
-    if (target.hold) {
-      targets.push(target);
-      continue;
-    }
+  // Each attempt reserves its cost inside the ledger transaction before making a model request.
+  const results = await mapLimit(c.warm_paths!, draftConcurrency, async target => {
     const company = companies.find(row => row.id === target.companyId);
-    if (!company) {
-      targets.push(target);
-      continue;
-    }
+    if (!company || target.hold) return { target };
     const claims = deps.buildClaims(target, company, triggers, evidence, c.cascade!);
     const template = deps.templateDraft(target, target.decider, claims, profile);
     const prompt = deps.llmDraftPrompt(target, target.decider, claims.filter(claim => claim.verifiable), profile);
-    const completion = await modelClient(ctx).complete({
-      purpose: 'draft', user: prompt.user, system: prompt.system +
-        '\nUse the exact text of each numbered claim you include. Add a greeting, seller introduction, meeting invitation, and signoff.',
-      json: true, maxTokens: 3000,
-    });
-    const parsed = completion ? messageShape.safeParse(JSON.parse(completion.text)) : null;
-    const candidate = parsed?.success ? { ...template, ...parsed.data, generator: completion!.model } : template;
-    const checked = deps.verifyDraft(candidate, claims, evidence);
-    const removed = checked.checks.filter(check => check.status === 'removed'
-      && !checked.unverifiable.some(item => item.claim === check.sentence))
-      .map(check => ({ claim: check.sentence, reason: check.note ?? 'Missing support in the cited evidence' }));
-    const unverifiable = [...checked.unverifiable, ...removed];
-    const normalized = (text: string) => text.toLowerCase().replace(/\[\d+\]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-    const verifiedCopy = checked.checks.every(check => {
-      if (check.status !== 'cited') return true;
-      const markers = Array.from(check.sentence.matchAll(/\[(\d+)\]/g), match => Number(match[1]));
-      return markers.length === 1 && claims.some(claim => claim.n === markers[0] && normalized(claim.text) === normalized(check.sentence));
-    });
-    // Reuse the template subject. The verifier checks the message body.
-    const draft = candidate !== template && (!checked.verified || !checked.body.trim() || !verifiedCopy)
-      ? { ...template, ...deps.verifyDraft(template, claims, evidence),
-        unverifiable: [...unverifiable, ...(!verifiedCopy ? [{
-          claim: 'The model changed the wording of a cited fact', reason: 'The draft used the verified template instead',
-        }] : [])] }
-      : { ...candidate, ...checked, unverifiable, subject: template.subject };
+    const completion = await modelClient(ctx).complete({ purpose: 'draft', ...prompt, json: true, maxTokens: 3000 });
+    const parsed = completion ? safeJson(completion.text, messageShape) : null;
+    const checked = parsed ? deps.verifyDraft({ subject: template.subject, body: parsed.body }, claims, evidence) : null;
+    let draft: Draft;
+    if (checked?.verified && checked.body.trim()) {
+      const frame = deps.draftFrame(target.decider, profile);
+      const frameCheck = (sentence: string) => ({ sentence, status: 'no_claim' as const, evidenceIds: [] });
+      draft = {
+        ...template, ...checked, generator: completion!.model,
+        body: [frame.greeting, checked.body.trim(), frame.cta, frame.signoff].filter(Boolean).join('\n\n'),
+        checks: [frameCheck(frame.greeting), ...checked.checks, frameCheck(frame.cta), frameCheck(frame.signoff)],
+      };
+    } else {
+      draft = { ...template, ...deps.verifyDraft(template, claims, evidence) };
+    }
+    const unverifiable = new Map([...draft.unverifiable, ...(checked?.unverifiable ?? [])].map(item => [item.claim, item]));
+    for (const check of [...draft.checks, ...(checked?.checks ?? [])]) {
+      if (check.status === 'removed' && !unverifiable.has(check.sentence)) {
+        unverifiable.set(check.sentence, { claim: check.sentence, reason: check.note ?? 'Missing support in the cited evidence' });
+      }
+    }
+    draft.unverifiable = [...unverifiable.values()];
+    return { target: { ...target, draftId: draft.id }, draft };
+  });
+  const drafts: Draft[] = [];
+  const targets: Target[] = [];
+  const events: RunEvent[] = [];
+  for (const { target, draft } of results) {
+    targets.push(target);
+    if (!draft) continue;
     drafts.push(draft);
-    targets.push({ ...target, draftId: draft.id });
-    events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: company.id, ...item })),
+    events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: target.companyId, ...item })),
       { type: 'draft.ready', draft });
   }
   return { output: { targets, drafts }, summary: `${drafts.length} drafts checked against evidence`, events };
@@ -458,3 +456,12 @@ export const steps: { [K in StepName]: Runner<K> } = {
   cascade, rank_targets: rankTargets, find_deciders: findDeciders, warm_paths: warmPaths, draft_messages: draftMessages,
   approval_gate: approvalGate, score_replay: scoreReplay,
 };
+
+function safeJson<T>(text: string, shape: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): T | null {
+  try {
+    const result = shape.safeParse(JSON.parse(text));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}

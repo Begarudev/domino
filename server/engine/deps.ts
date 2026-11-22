@@ -7,7 +7,7 @@ import type { CompanyMention, TriggerBatch } from '../domain/types.ts';
 
 export {
   parseIntentRules, resolveEntities, buildCascade, rankTargets, pickDecider, findWarmPath,
-  buildClaims, templateDraft, llmDraftPrompt, verifyDraft, filterAsOf, scoreReplay,
+  buildClaims, templateDraft, draftFrame, llmDraftPrompt, verifyDraft, filterAsOf, scoreReplay,
 } from '../domain/index.ts';
 export {
   jobSearch, personSearchRecentMoves, companySearchGrowth, companyEnrich, personSearchDeciders, fixtureFor,
