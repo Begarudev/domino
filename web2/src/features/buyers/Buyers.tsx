@@ -156,10 +156,11 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
 
       <div className="by-grid">
         <section className="panel by-accounts">
-          <header><h2>Accounts, ranked</h2><span className="faint">people as role and initial</span></header>
+          <header><h2>Accounts, ranked</h2><span className="faint">{plural(shown.length, 'account')} · a draft needs 2 verified, dated facts · people as role and initial</span></header>
           {shown.length ? (
             <table className="t by-t">
-              <thead><tr><th>Company</th><th>Predicted need</th><th>Trigger</th><th>Decider</th><th>Status</th></tr></thead>
+              <colgroup><col className="c-co" /><col className="c-rule" /><col className="c-dec" /><col className="c-facts" /><col className="c-st" /></colgroup>
+              <thead><tr><th>Company</th><th>Rule and trigger</th><th>Decider role</th><th className="num">Facts</th><th>Status</th></tr></thead>
               <tbody>
                 {shown.map((a) => (
                   <Row key={a.target.companyId} a={a} ev={ev} sel={current?.target.companyId === a.target.companyId}
@@ -181,24 +182,39 @@ function Row({ a, ev, sel, onSel }: { a: Account; ev: Map<string, Evidence>; sel
   const trigEv = a.trigger ? ev.get(a.trigger.evidenceIds[0]) : undefined;
   return (
     <tr className={sel ? 'sel' : undefined} aria-selected={sel} onClick={onSel} data-testid={`buyer-row-${t.companyId}`}>
-      <td className="by-co"><b>{a.name}</b>{a.domain && <span className="mono faint">{a.domain}</span>}</td>
-      <td className="by-need">
-        <span className="by-rule">{t.mechanisms.map(ruleWords).join(' + ')}</span>
-        <span>{readableDates(t.whyNow)}</span>
+      <td className="by-co">
+        <span className="by-co-in">
+          <span className="by-logo" aria-hidden>{a.name.replace(/^the\s+/i, '')[0]?.toUpperCase()}</span>
+          <span className="by-co-t"><b title={a.name}>{a.name}</b>{a.domain && <span className="by-dom" title={a.domain}>{a.domain}</span>}</span>
+        </span>
       </td>
       <td className="by-trig">
-        {a.trigger ? (
-          <>
-            <span className="mono">{fmtDate(a.trigger.date, true)}{a.trigger.precision === 'month' && <span className="tag">month-level date</span>}</span>
-            <span>{readableDates(trigEv ? tidyClaim(trigEv.claim) : a.trigger.summary).replace(/ on \d{1,2} [A-Z][a-z]{2} \d{4}(?=\.?$)/, '')}</span>
-            {trigEv && <button className="srclink" onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{sourceName(trigEv.source.endpoint, trigEv.source.provider)}</button>}{trigEv?.mode === 'fixture' && <span className="tag">fixture</span>}
-          </>
-        ) : t.whyNowDate ? <span className="mono">{fmtDate(t.whyNowDate, true)}</span> : <span className="cant">No dated trigger</span>}
+        <span className="by-rule-l">
+          <span className={`by-pill r-${t.mechanisms[0]?.toLowerCase() ?? 'x'}`} title={readableDates(t.whyNow)}><i aria-hidden />{t.mechanisms.map(ruleWords).join(' + ')}</span>
+          {a.trigger ? <span className="by-date">{fmtDate(a.trigger.date, true)}</span>
+            : t.whyNowDate ? <span className="by-date">{fmtDate(t.whyNowDate, true)}</span> : <span className="cant">No dated trigger</span>}
+          {a.trigger?.precision === 'month' && <span className="tag">month-level</span>}
+        </span>
+        {(() => {
+          const what = a.trigger ? readableDates(trigEv ? tidyClaim(trigEv.claim) : a.trigger.summary).replace(/ on \d{1,2} [A-Z][a-z]{2} \d{4}(?=\.?$)/, '') : readableDates(t.whyNow);
+          return (
+            <span className="by-l2">
+              {trigEv?.mode === 'fixture' && <span className="tag">fixture</span>}
+              {trigEv ? (
+                <button className="by-ell by-evbtn" title={`${what} · source: ${sourceName(trigEv.source.endpoint, trigEv.source.provider)}`}
+                  onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{what}</button>
+              ) : <span className="by-ell" title={what}>{what}</span>}
+            </span>
+          );
+        })()}
       </td>
-      <td className="by-dec">{t.decider ? deciderLabel(t.decider) : <span className="faint">No decider found</span>}</td>
+      <td className="by-dec"><span className="by-ell" title={t.decider ? deciderLabel(t.decider) : undefined}>{t.decider ? deciderLabel(t.decider) : <span className="faint">No decider found</span>}</span></td>
+      <td className={`by-facts num${a.facts.have >= a.facts.need ? ' ok' : ''}`} title={`${a.facts.have} of ${a.facts.need} verified, dated facts needed to draft`}>
+        <b>{a.facts.have}</b><span> of {a.facts.need}</span>
+      </td>
       <td className="by-st">
-        <span className={`st ${a.status.cls}`}>{a.status.label}</span>
-        {a.status.why && <small>{a.status.why}</small>}
+        <span className={`by-stp s-${a.status.kind}`} title={a.status.label}><i aria-hidden /><span>{a.status.label}</span></span>
+        {a.status.why && <small className="by-ell by-why" title={a.status.why}>{a.status.why}</small>}
       </td>
     </tr>
   );

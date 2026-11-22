@@ -251,7 +251,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
         </section>
 
         <section className="panel">
-          <header><h2>Deliveries</h2><span className="out-count" data-testid="deliveries">{deliveries}</span></header>
+          <header><h2>Deliveries</h2><span className="out-count-l"><span className="out-count" data-testid="deliveries">{deliveries}</span> {deliveries === 1 ? 'delivery' : 'deliveries'} to the team inbox</span></header>
           <div className="pad">
             {delivered && key ? (
               <Receipt keyId={key} receivedAt={receivedAt} duplicate={duplicate} deliveries={deliveries} attempts={attempts} />
@@ -263,7 +263,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
 
         {intro.runId && !blocked && (
           <section className="panel out-engine" data-testid="engine">
-            <header><h2>Crash test</h2><span className="faint">{resumed || deliveryResumed ? 'resumed from checkpoint' : crashed ? 'stopped' : mine && engine.alive ? 'engine running' : 'engine idle'}</span></header>
+            <header><h2>Crash test</h2><span className="faint out-eng-state">{resumed || deliveryResumed ? 'resumed from checkpoint' : crashed ? 'stopped' : mine && engine.alive ? 'engine running' : 'engine idle'}</span></header>
             <div className="pad">
               {crashed && <EngineLine tone="stop" text={dispatchKill && !crashStep
                 ? 'Delivery process stopped after the test inbox accepted (deliberate crash test)'
@@ -321,7 +321,7 @@ function Receipt({ keyId, receivedAt, duplicate, deliveries, attempts }: {
     <div ref={ref} data-testid="receipt">
       <div className="receipt">
         <span className="st verified">Delivered once</span>
-        <span className="mono out-rc-key">{keyId}</span>{receivedAt && <span className="mono out-rc-time">{fmtDate(receivedAt)}, {fmtTime(receivedAt)}</span>}
+        <span className="mono out-rc-key">{keyId}</span>{receivedAt && <span className="out-rc-time">{fmtDate(receivedAt)}, {fmtTime(receivedAt)}</span>}
       </div>
       <p className="out-rc-copy">One intro delivered to the team inbox.</p>
       {duplicate && <DupLine keyId={keyId} deliveries={deliveries} attempts={attempts} />}
