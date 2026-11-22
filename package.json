@@ -5,22 +5,24 @@
   "type": "module",
   "description": "DOMINO: an Outbound Desk agent that books meetings on cross-company triggers from the last 30 days, every claim traced to a dated source.",
   "engines": {
-    "node": ">=24"
+    "bun": ">=1.2"
   },
   "scripts": {
-    "demo": "node scripts/demo.ts",
-    "start": "node server/index.ts",
-    "dev": "node scripts/dev.ts",
-    "build:web": "vite build --config web/vite.config.ts",
-    "dev:web": "vite --config web/vite.config.ts",
-    "test": "node --test 'server/**/*.test.ts'",
+    "demo": "bun scripts/demo.ts",
+    "start": "bun scripts/demo.ts",
+    "serve": "bun server/index.ts",
+    "dev": "bun scripts/dev.ts",
+    "build:web": "bun --bun vite build --config web/vite.config.ts",
+    "dev:web": "bun --bun vite --config web/vite.config.ts",
+    "test": "bun test server",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "smoke": "node scripts/smoke.ts",
-    "snapshot": "node scripts/snapshot.ts",
-    "wow:flow": "vite --config web/wow-flow/vite.config.ts"
+    "smoke": "bun scripts/smoke.ts",
+    "snapshot": "bun scripts/snapshot.ts",
+    "wow:flow": "bun --bun vite --config web/wow-flow/vite.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
+    "@fontsource-variable/archivo": "^5.3.0",
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.14",
     "zod": "^3.24.1"
