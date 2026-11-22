@@ -31,9 +31,12 @@ export function cachedPersonNames(sql: DatabaseSync): string[] {
   return [...names];
 }
 
-// Person and Decider records: a name next to a title and a person/company link.
+// Person and Decider records: a name next to a title and a person/company link. An employment entry
+// ({ name, companyId, title, from, to } in Person.pastEmployers) has the same keys, but its name is the employer's.
+const isEmployment = (record: Record<string, unknown>) => ('from' in record || 'to' in record)
+  && !('personId' in record || 'linkedinUrl' in record || 'startedAt' in record);
 const isPerson = (record: Record<string, unknown>) => typeof record.name === 'string' && typeof record.title === 'string' &&
-  ('personId' in record || 'companyId' in record || 'linkedinUrl' in record || 'startedAt' in record);
+  ('personId' in record || 'companyId' in record || 'linkedinUrl' in record || 'startedAt' in record) && !isEmployment(record);
 
 function personNames(input: unknown): string[] {
   const found: string[] = [];
@@ -48,13 +51,19 @@ function personNames(input: unknown): string[] {
   return found;
 }
 
-// "Asha K." (first name + last initial, the candidate's consented display name) is already minimal.
-const isFullName = (name: string) => name.trim().split(/\s+/).length >= 2 && !/\s\p{L}\.?$/u.test(name.trim());
+// "Asha K." (first name + last initial, the candidate's consented display name) is already minimal; "Asha Rao K." is not.
+const isFullName = (name: string) => name.trim().split(/\s+/).length >= 2 && !/^\S+\s+\p{L}\.?$/u.test(name.trim());
 
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// A known person's first name is masked only right after a greeting ("Hi Dipak," → "Hi D.,"): on its own a first name
+// is too often an ordinary word or part of a company name to replace everywhere.
+const GREETING = String.raw`\b(?:Hi|Hello|Hey|Dear)[ \t]+`;
+const firstNameOf = (name: string) => name.trim().split(/\s+/)[0];
+
 export class PeopleRedactor {
   private pattern: RegExp | null = null;
+  private greeting: RegExp | null = null;
   private names = new Set<string>();
   private count = -1;
   private sql: DatabaseSync;
@@ -69,8 +78,15 @@ export class PeopleRedactor {
     if (count === this.count && this.pattern) return;
     this.count = count;
     this.names = new Set([...cachedPersonNames(this.sql), ...this.extra(), ...this.names].filter(isFullName));
+    this.rebuild();
+  }
+
+  private rebuild() {
     const sorted = [...this.names].sort((a, b) => b.length - a.length).map(escape);
     this.pattern = sorted.length ? new RegExp(`(?<![\\p{L}])(?:${sorted.join('|')})(?![\\p{L}])`, 'gu') : null;
+    const firsts = [...new Set([...this.names].map(firstNameOf).filter(first => /^\p{Lu}\p{L}+$/u.test(first)))]
+      .sort((a, b) => b.length - a.length).map(escape);
+    this.greeting = firsts.length ? new RegExp(`(?<=${GREETING})(?:${firsts.join('|')})(?![\\p{L}])`, 'gu') : null;
   }
 
   text(value: string): string {
@@ -81,15 +97,14 @@ export class PeopleRedactor {
   private redact(value: string): string {
     let out = value.replace(PROFILE_URL, '$1[redacted]');
     if (this.pattern) out = out.replace(this.pattern, name => initialOf(name));
+    if (this.greeting) out = out.replace(this.greeting, name => initialOf(name));
     return out;
   }
 
   private learn(names: Iterable<string>) {
     let added = false;
     for (const name of names) if (isFullName(name) && !this.names.has(name.trim())) { this.names.add(name.trim()); added = true; }
-    if (!added) return;
-    const sorted = [...this.names].sort((a, b) => b.length - a.length).map(escape);
-    this.pattern = new RegExp(`(?<![\\p{L}])(?:${sorted.join('|')})(?![\\p{L}])`, 'gu');
+    if (added) this.rebuild();
   }
 
   // Learn the people in a step output (kept server-side) so later events that mention them are redacted.
