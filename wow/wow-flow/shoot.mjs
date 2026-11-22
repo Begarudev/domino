@@ -5,7 +5,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW || 'playwright-core');
 const base = process.argv[2] || 'http://localhost:5181/';
 const out = new URL('.', import.meta.url).pathname;
-const shots = (process.env.SHOTS || '0.4:01-start,6.5:02-river-forming,8.6:03-drain-cracked,10.4:04-frozen-predictions,16.5:05-first-hit,22.2:06-scored,25.6:07-zoom,29.4:08-letter-assembling,34:09-letter-done').split(',');
+const shots = (process.env.SHOTS || '0.6:01-start,7.4:02-river-forming,8.7:03-drain-cracked,10.6:04-frozen-predictions,14.35:05-first-hit,22.4:06-scored,25.0:07-zoom,27.75:08-letter-assembling,32.6:09-letter-done').split(',');
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 const errs = [];
@@ -16,7 +16,7 @@ for (const item of shots) {
   const extra = process.env.EXTRA || '';
   await page.goto(`${base}?s=${s}${extra}`);
   await page.waitForTimeout(900);
-  await page.screenshot({ path: `${out}${name}.png` });
+  await page.locator('.tf-root').screenshot({ path: `${out}${name}.png` });
   console.log('shot', name);
 }
 if (process.env.FPS) {

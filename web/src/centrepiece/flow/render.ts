@@ -17,7 +17,7 @@ export const FONT = "'Archivo Flow', 'Archivo', system-ui, sans-serif";
 const FLIGHT_DAYS = 13;
 
 export interface View {
-  w: number; h: number; dpr: number; k: number;
+  w: number; h: number; dpr: number; k: number; compact: boolean;
   rect: { x: number; y: number; w: number; h: number };
   filterView: boolean; hoverId: string | null; selId: string | null; reduced: boolean;
   slots: { x: number; y: number }[];         // landing points (left-middle) of letter sentences, CSS px in the canvas frame
@@ -88,7 +88,7 @@ function background(w: number, h: number, dpr: number): HTMLCanvasElement {
 }
 
 // quadratic curve between two points, always bowing the same way so flows swirl rather than cross
-function ctrl(ax: number, ay: number, bx: number, by: number, bend = 0.22): [number, number] {
+function ctrl(ax: number, ay: number, bx: number, by: number, bend = -0.22): [number, number] {
   const dx = bx - ax, dy = by - ay;
   return [(ax + bx) / 2 - dy * bend, (ay + by) / 2 + dx * bend];
 }
@@ -133,14 +133,14 @@ function text(g: CanvasRenderingContext2D, str: string, x: number, y: number, fo
   g.fillText(str, x, y);
 }
 
-function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k: number, color: string, alpha: number, sub?: string, leftAnchor = false) {
+function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k: number, color: string, alpha: number, sub?: string, anchor: 'center' | 'left' | 'right' = 'center') {
   g.font = `600 ${12.5 * k}px ${FONT}`;
   const w1 = g.measureText(str).width;
   let w2 = 0;
   if (sub) { g.font = `500 ${12.5 * k}px ${FONT}`; w2 = g.measureText(sub).width + 8 * k; }
   const pw = w1 + w2 + 18 * k, ph = 24 * k;
   if (alpha <= 0.01) return;
-  if (leftAnchor) x += pw / 2;
+  if (anchor === 'left') x += pw / 2; else if (anchor === 'right') x -= pw / 2;
   g.globalAlpha = alpha;
   g.fillStyle = 'rgba(8,14,40,0.92)';
   g.strokeStyle = rgba(color, 0.7);
@@ -205,7 +205,7 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     const a = clamp((s - l.sAppear) / 0.8);
     if (a <= 0) continue;
     const A = N(l.from), B = N(l.to);
-    const [cx, cy] = ctrl(A.x, A.y, B.x, B.y, -0.12);
+    const [cx, cy] = ctrl(A.x, A.y, B.x, B.y, 0.12);
     const col = l.mechanism === 'DISPLACEMENT' ? C.wound : C.slate;
     g.strokeStyle = rgba(col, 0.5 * a * Math.min(dimOf(l.from), dimOf(l.to)) + 0.05);
     g.lineWidth = 1.4 * k;
@@ -239,8 +239,10 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
         const [mx, my] = pts[24];
         g.globalCompositeOperation = 'source-over';
         g.globalAlpha = 0.9 * dim;
-        text(g, `${arrived} serving moves`, mx + 10 * k, my - 8 * k, `650 ${12 * k}px ${FONT}`, rgba(C.ember, 0.95), 'left');
-        text(g, `the rule needs ${RIVER_MIN} to call a drain`, mx + 10 * k, my + 8 * k, `450 ${11.5 * k}px ${FONT}`, rgba(C.slate, 0.95), 'left');
+        const side = mx < cx ? -1 : 1;
+        const al: CanvasTextAlign = side < 0 ? 'right' : 'left';
+        text(g, `${arrived} serving moves`, mx + side * 12 * k, my - 8 * k, `650 ${12 * k}px ${FONT}`, rgba(C.ember, 0.95), al);
+        text(g, `the rule needs ${RIVER_MIN} to call a drain`, mx + side * 12 * k, my + 8 * k, `450 ${11.5 * k}px ${FONT}`, rgba(C.slate, 0.95), al);
         g.globalAlpha = 1;
         g.globalCompositeOperation = 'lighter';
       }
@@ -337,7 +339,7 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     g.globalAlpha = 1;
 
     g.globalCompositeOperation = 'source-over';
-    g.globalAlpha = 0.35 + 0.65 * dim;
+    g.globalAlpha = (0.35 + 0.65 * dim) * (focus && c.id !== focus.id ? 1 - ez * 0.95 : 1);
     const cg = g.createRadialGradient(n.x - R * 0.35, n.y - R * 0.35, R * 0.1, n.x, n.y, R);
     cg.addColorStop(0, '#fffaf0');
     cg.addColorStop(1, cracked ? '#e9b9c2' : '#cfc6b3');
@@ -390,9 +392,9 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     g.font = `650 ${fs}px ${FONT}`;
     const nw = g.measureText(c.name).width;
     g.font = `450 ${fs * 0.82}px ${FONT}`;
-    const hw = g.measureText(` ${c.headcount}`).width;
+    const hw = v.compact ? 0 : g.measureText(` ${c.headcount}`).width;
     text(g, c.name, n.x - hw / 2, ly, `650 ${fs}px ${FONT}`, rgba(C.bone, 0.95));
-    text(g, `${c.headcount}`, n.x + nw / 2 - hw / 2 + 5 * k, ly + 0.5, `450 ${fs * 0.82}px ${FONT}`, rgba(C.slate, 0.9), 'left');
+    if (!v.compact) text(g, `${c.headcount}`, n.x + nw / 2 - hw / 2 + 5 * k, ly + 0.5, `450 ${fs * 0.82}px ${FONT}`, rgba(C.slate, 0.9), 'left');
     let line = ly + fs * 1.3;
     if (need) {
       const bt = clamp((s - need.sBloom) / 0.5);
@@ -400,9 +402,11 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
         g.globalAlpha = la * bt;
         text(g, need.weak ? `${need.need}?` : need.need, n.x, line, `700 ${fs * 0.9}px ${FONT}`, need.weak ? rgba(C.wound, 0.6) : C.wound);
         line += fs * 1.2;
+        if (!v.compact || (focus && c.id === focus.id && ez > 0.5)) {
         const ev = need.weak ? `${need.dated} dated row, needs 2 to act` : `${need.dated} dated rows${need.confidence !== null ? `, ${Math.round(need.confidence * 100)}% confidence` : ''}`;
         text(g, ev, n.x, line, `450 ${fs * 0.8}px ${FONT}`, rgba(C.slate, 0.95));
         line += fs * 1.15;
+        }
       }
     }
     if (v.filterView && m.filterIds.has(c.id)) {
@@ -513,10 +517,11 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       const a = clamp((s - p.sLand) / 0.35) * (focus && p.companyId !== focus.id ? dim : 0.4 + 0.6 * dim);
       const label = p.outcomeDay !== null ? fmtDay(p.outcomeDay) : '';
       const what = p.outcome.replace(/\s\d{1,2} [A-Z][a-z]{2}$/, '');
-      pill(g, label, n.x + R * 0.55, n.y - R * 0.85 - 6 * k, k, p.by === 'domino' ? C.tide : C.slate, a, what, true);
+      const isFocus = focus && p.companyId === focus.id && ez > 0.5;
+      pill(g, label, n.x + (isFocus ? -R * 0.55 : R * 0.55), n.y - R * 0.85 - 6 * k, k, p.by === 'domino' ? C.tide : C.slate, a, what, isFocus ? 'right' : 'left');
     } else if (p.sLand === null && s >= m.sEnd && m.mode === 'replay' && !pillDone.has(p.companyId)) {
       pillDone.add(p.companyId);
-      pill(g, 'no dated sign yet', n.x + R * 0.55, n.y - R * 0.85 - 6 * k, k, C.slate, clamp((s - m.sEnd) / 0.5) * 0.85 * dim, undefined, true);
+      pill(g, 'no dated sign yet', n.x + R * 0.55, n.y - R * 0.85 - 6 * k, k, C.slate, clamp((s - m.sEnd) / 0.5) * 0.85 * dim * (1 - ez), undefined, 'left');
     }
   }
 

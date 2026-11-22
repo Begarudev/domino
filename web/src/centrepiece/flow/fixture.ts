@@ -49,7 +49,7 @@ export const FIXTURE_LAYOUT: Record<string, { x: number; y: number }> = {
   [CO.ibis]: { x: 0.16, y: 0.94 },
   [CO.marlin]: { x: 0.96, y: 0.04 },
   [CO.fennel]: { x: 0.7, y: 0.07 },
-  [CO.halden]: { x: 0.04, y: 0.36 },
+  [CO.halden]: { x: 0.45, y: 0.62 },
 };
 
 const name = (id: string) => COMPANIES.find((c) => c[0] === id)?.[1] ?? id;

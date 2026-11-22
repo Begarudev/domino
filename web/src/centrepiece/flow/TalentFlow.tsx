@@ -64,13 +64,14 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
   const [, force] = useState(0);
 
   const k = clamp(Math.min(width / 1280, height / 800), 0.78, 1.4);
-  const scoreW = model.score ? 236 * k : 0;
+  const compact = width < 1000 || height < 640;
+  const scoreW = model.score ? (compact ? 200 : 236) * k : 0;
   const letterW = Math.min(560 * k, width * 0.5);
   const letterLeft = width - letterW - 28 * k;
   const rect = useMemo(() => ({
-    x: 70 * k, y: 120 * k,
-    w: width - 140 * k - scoreW, h: height - 120 * k - 150 * k,
-  }), [k, width, height, scoreW]);
+    x: (compact ? 56 : 70) * k, y: (compact ? 100 : 128) * k,
+    w: width - (compact ? 100 : 140) * k - scoreW, h: height - (compact ? 100 : 128) * k - (compact ? 92 : 132) * k,
+  }), [k, width, height, scoreW, compact]);
 
   useEffect(() => {
     if (reducedMotion) { st.current.s = model.total; st.current.playing = false; }
@@ -111,7 +112,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
       const s = S.s;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       if (cv.width !== Math.round(width * dpr) || cv.height !== Math.round(height * dpr)) { cv.width = Math.round(width * dpr); cv.height = Math.round(height * dpr); }
-      const view: View = { w: width, h: height, dpr, k, rect, filterView: p.hiringFilterView, hoverId: S.hover, selId: p.selection?.kind === 'node' ? p.selection.id : null, reduced: p.reducedMotion, slots: S.slots, letterLeft };
+      const view: View = { w: width, h: height, dpr, k, rect, compact, filterView: p.hiringFilterView, hoverId: S.hover, selId: p.selection?.kind === 'node' ? p.selection.id : null, reduced: p.reducedMotion, slots: S.slots, letterLeft };
       S.frame = draw(g, model, s, view);
 
       // HUD
@@ -158,12 +159,13 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
               const u = 1 - e;
               const x = u * u * b.x + 2 * u * e * cx + e * e * slot.x;
               const y = u * u * b.y + 2 * u * e * cy + e * e * slot.y;
-              tr = `translate(${(x - slot.x).toFixed(1)}px, ${(y - slot.y).toFixed(1)}px) scale(${(0.3 + 0.7 * e).toFixed(3)})`;
+              tr = `translate(${(x - slot.x).toFixed(1)}px, ${(y - slot.y).toFixed(1)}px) scale(${(0.55 + 0.45 * e).toFixed(3)})`;
             }
           }
           el.style.transform = tr;
           el.style.opacity = String(s < sen.sStart ? 0 : sen.status === 'cited' ? clamp(ft * 2.5) : clamp((s - sen.sStart) / 0.35));
           el.style.setProperty('--land', String(clamp((s - sen.sLand) / 0.4)));
+          el.style.setProperty('--fly', String(sen.status === 'cited' && s >= sen.sStart ? 1 - clamp((s - sen.sLand + 0.15) / 0.5) : 0));
           el.style.setProperty('--strike', String(sen.status === 'removed' ? clamp((s - sen.sStart - 0.35) / 0.45) : 0));
         });
         if (tailRef.current) tailRef.current.style.opacity = String(clamp((s - (L.sentences.at(-1)?.sLand ?? model.sLetter) - 0.3) / 0.6));
@@ -172,7 +174,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [model, width, height, k, rect, letterLeft, focusName]);
+  }, [model, width, height, k, rect, letterLeft, focusName, compact]);
 
   function bump(el: HTMLElement) {
     el.classList.remove('tf-bump');
@@ -247,7 +249,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
   const fixture = model.fixture || snapshot.evidence.some((e) => e.mode === 'fixture');
 
   return (
-    <div ref={rootRef} className="tf-root" tabIndex={0} aria-label="Talent-flow replay" style={{ width, height, ['--k' as string]: k, ['--letter-w' as string]: `${letterW}px` }}>
+    <div ref={rootRef} className={compact ? 'tf-root tf-compact' : 'tf-root'} tabIndex={0} aria-label="Talent-flow replay" style={{ width, height, ['--k' as string]: k, ['--letter-w' as string]: `${letterW}px` }}>
       <canvas ref={canvasRef} style={{ width, height }} onPointerMove={onMove} onClick={onClick} />
 
       <header className="tf-clock">

@@ -136,7 +136,6 @@
 /* ---- the letter ---- */
 .tf-letter {
   position: absolute; right: calc(28 * var(--u)); top: calc(110 * var(--u)); width: var(--letter-w);
-  max-height: calc(100% - 150 * var(--u)); overflow: hidden;
   background: linear-gradient(180deg, rgba(14, 22, 60, 0.97), rgba(8, 13, 38, 0.98));
   border: 1px solid rgba(237, 230, 214, 0.14); border-radius: calc(16 * var(--u));
   padding: calc(22 * var(--u)) calc(26 * var(--u)) calc(18 * var(--u));
@@ -149,7 +148,7 @@
 .tf-l-subject { margin-top: calc(10 * var(--u)); font-family: 'Newsreader Flow', Georgia, serif; font-style: italic; font-size: calc(23 * var(--u)); font-weight: 450; line-height: 1.2; }
 .tf-l-body { margin-top: calc(14 * var(--u)); display: flex; flex-direction: column; gap: calc(11 * var(--u)); }
 .tf-sent { transform-origin: 0 50%; will-change: transform, opacity; opacity: 0; }
-.tf-sent-text { font-family: 'Newsreader Flow', Georgia, serif; font-size: calc(18.5 * var(--u)); line-height: 1.42; font-weight: 400; color: var(--bone); }
+.tf-sent-text { text-shadow: 0 0 calc(var(--fly, 0) * 18px) rgba(111, 227, 255, calc(var(--fly, 0) * 0.9)); font-family: 'Newsreader Flow', Georgia, serif; font-size: calc(18.5 * var(--u)); line-height: 1.42; font-weight: 400; color: var(--bone); }
 .tf-mark { font-family: 'Archivo Flow', sans-serif; font-size: 0.6em; font-weight: 700; color: var(--tide); margin-left: 1px; }
 .tf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: calc(5 * var(--u)); opacity: var(--land, 0); }
 .tf-chip {
@@ -176,3 +175,19 @@
 }
 .lg-frost { background: #b9c7ff; opacity: .85; }
 .tf-root[data-phase='letter'] .tf-score, .tf-root[data-phase='done'] .tf-score { visibility: hidden; }
+
+/* ---- compact: the app's centre slot (about 780 x 540) ---- */
+.tf-compact .tf-clock { left: calc(24 * var(--u)); top: calc(18 * var(--u)); }
+.tf-compact .tf-date { font-size: calc(42 * var(--u)); }
+.tf-compact .tf-caption { font-size: calc(13.5 * var(--u)); margin-top: calc(6 * var(--u)); max-width: calc(470 * var(--u)); }
+.tf-compact .tf-badge, .tf-compact[data-phase] .tf-badge { left: calc(24 * var(--u)); right: auto; top: auto; bottom: calc(58 * var(--u)); transform: none; font-size: calc(11 * var(--u)); padding: 3px 9px; }
+.tf-compact .tf-legend { display: none; }
+.tf-compact .tf-score { right: calc(20 * var(--u)); top: calc(18 * var(--u)); width: calc(190 * var(--u)); }
+.tf-compact .tf-num { font-size: calc(32 * var(--u)); }
+.tf-compact .tf-timeline { left: calc(24 * var(--u)); right: calc(24 * var(--u)); bottom: calc(10 * var(--u)); }
+.tf-compact .tf-letter { top: calc(92 * var(--u)); right: calc(16 * var(--u)); padding: calc(14 * var(--u)) calc(16 * var(--u)); }
+.tf-compact .tf-sent-text { font-size: calc(15.5 * var(--u)); line-height: 1.35; }
+.tf-compact .tf-l-subject { font-size: calc(19 * var(--u)); }
+.tf-compact .tf-l-body { gap: calc(7 * var(--u)); }
+.tf-compact .tf-note-quiet { display: none; }
+.tf-compact .tf-chip span { display: none; }
