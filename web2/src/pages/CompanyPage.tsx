@@ -93,7 +93,6 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
             </div>
           );
         })}
-        <div className="side-foot">Every count opens its records. Rules decide; the model drafts and parses, and says so.</div>
       </nav>
       <div className="co-main">
         {/* Tabs with their own header (file, reading) skip the shell title once their data is in. */}

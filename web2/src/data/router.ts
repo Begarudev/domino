@@ -7,7 +7,7 @@ import { useSyncExternalStore } from 'react';
 export type CompanyTab = 'recruitment' | 'outreach' | 'reading' | 'file' | 'chains' | 'verifier' | 'replay' | 'ledger';
 export type TabGroup = 'Act' | 'Read' | 'Check';
 export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hint: string }[] = [
-  { id: 'recruitment', label: 'Recruitment', group: 'Act', hint: 'Who left, what that predicts, and who you can hire. People appear as role and initial.' },
+  { id: 'recruitment', label: 'Hire', group: 'Act', hint: 'Who left, what that predicts, and who you can hire. People appear as role and initial.' },
   { id: 'outreach', label: 'Outreach', group: 'Act', hint: 'A footnoted draft, your approval, then delivered once.' },
   { id: 'reading', label: 'Reading log', group: 'Read', hint: 'Every record the run read, kept or discarded, and why.' },
   { id: 'file', label: 'Company file', group: 'Read', hint: 'Dated facts, headcount, talent flows and the rules that apply. No generated prose.' },
@@ -17,7 +17,7 @@ export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hin
   { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Every paid call against the run’s caps.' },
 ];
 /** Tabs whose feature is built. Unbuilt tabs are hidden, never shown as stubs. */
-export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'reading', 'file']);
+export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'outreach', 'reading', 'file']);
 
 const ALIASES: Record<string, CompanyTab> = {
   openings: 'recruitment', drain: 'recruitment', matches: 'recruitment', analysis: 'file', needs: 'verifier', rules: 'chains', rundesk: 'reading',
