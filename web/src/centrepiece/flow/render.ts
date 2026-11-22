@@ -123,7 +123,7 @@ export function nodeRadius(c: FlowCompany, k: number) {
 
 let VW = 4000;
 let SAFE = 40;
-let PILLS: { x: number; y: number; w: number }[] = [];   // canvas width, so labels never run off the edge
+let PILLS: { x: number; y: number; w: number; h?: number }[] = [];   // canvas width, so labels never run off the edge
 function text(g: CanvasRenderingContext2D, str: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = 'center') {
   g.font = font;
   const tw = g.measureText(str).width;
@@ -141,20 +141,24 @@ function text(g: CanvasRenderingContext2D, str: string, x: number, y: number, fo
   g.fillText(str, x, y);
 }
 
-function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k: number, color: string, alpha: number, sub?: string, anchor: 'center' | 'left' | 'right' = 'center') {
+type Spot = { x: number; y: number; anchor: 'center' | 'left' | 'right' };
+function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k: number, color: string, alpha: number, sub?: string, anchor: 'center' | 'left' | 'right' = 'center', alts: Spot[] = []) {
   g.font = `600 ${12.5 * k}px ${FONT}`;
   const w1 = g.measureText(str).width;
   let w2 = 0;
   if (sub) { g.font = `500 ${12.5 * k}px ${FONT}`; w2 = g.measureText(sub).width + 8 * k; }
   const pw = w1 + w2 + 18 * k, ph = 24 * k;
   if (alpha <= 0.01) return;
-  if (anchor === 'left') x += pw / 2; else if (anchor === 'right') x -= pw / 2;
-  x = Math.max(pw / 2 + SAFE, Math.min(VW - pw / 2 - SAFE, x));
-  for (let tries = 0; tries < 6; tries++) {
-    const hit = PILLS.find((r) => Math.abs(r.x - x) < (r.w + pw) / 2 + 4 && Math.abs(r.y - y) < ph + 3);
-    if (!hit) break;
-    y = hit.y - ph - 4;
-  }
+  // try the preferred spot, then the alternatives around the same node; the chip never drifts away from its company
+  const place = (sp: Spot) => {
+    let cx = sp.x;
+    if (sp.anchor === 'left') cx += pw / 2; else if (sp.anchor === 'right') cx -= pw / 2;
+    return { x: Math.max(pw / 2 + SAFE, Math.min(VW - pw / 2 - SAFE, cx)), y: sp.y };
+  };
+  const clash = (p: { x: number; y: number }) => PILLS.some((r) => Math.abs(r.x - p.x) < (r.w + pw) / 2 + 4 && Math.abs(r.y - p.y) < ((r.h ?? ph) + ph) / 2 + 3);
+  let best = place({ x, y, anchor });
+  if (clash(best)) for (const a of alts) { const c = place(a); if (!clash(c)) { best = c; break; } }
+  x = best.x; y = best.y;
   PILLS.push({ x, y, w: pw });
   g.globalAlpha = alpha;
   g.fillStyle = 'rgba(8,14,40,0.92)';
@@ -288,6 +292,7 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
         const al: CanvasTextAlign = side < 0 ? 'right' : 'left';
         text(g, `${arrived} serving moves`, mx + side * 12 * k, my - 8 * k, `650 ${12 * k}px ${FONT}`, rgba(C.ember, 0.95), al);
         text(g, `the rule needs ${RIVER_MIN} to call a drain`, mx + side * 12 * k, my + 8 * k, `450 ${11.5 * k}px ${FONT}`, rgba(C.slate, 0.95), al);
+        PILLS.push({ x: mx + side * (12 * k + 85 * k), y: my, w: 180 * k, h: 36 * k });
         g.globalAlpha = 1;
         g.globalCompositeOperation = 'lighter';
       }
@@ -333,10 +338,11 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       const ox = mx - (nx / nl) * (fsA + 14 * k), oy = my - (ny / nl) * (fsA + 14 * k);   // outer side of the bow, clear of the glow
       const fromN = m.byId.get(r.from)!.name, toN = m.byId.get(r.to)!.name;
       const label = `${arrived} serving engineers: ${fromN} → ${toN}`;
-      g.globalAlpha = e * (big ? 1 : v.compact ? 0 : 0.8) * (1 - ez);
+      const after = r.key === m.drainKey ? clamp((s - m.sFreeze - 0.4) / 0.6) : 1;   // explained in chapter 2, then it steps aside
+      g.globalAlpha = e * (big ? 1 : v.compact ? 0 : 0.6) * (1 - ez) * (r.key === m.drainKey ? 1 - after : 1);
       text(g, label, ox, oy, `700 ${fsA}px ${FONT}`, big ? C.emberHot : rgba(C.ember, 0.95));
       g.font = `700 ${fsA}px ${FONT}`;
-      PILLS.push({ x: ox, y: oy, w: g.measureText(label).width + 10 });
+      if (big) PILLS.push({ x: ox, y: oy, w: g.measureText(label).width + 10 });
       g.globalAlpha = 1;
       g.globalCompositeOperation = 'lighter';
     }
@@ -481,6 +487,7 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     text(g, c.name, n.x, ly, `650 ${fs}px ${FONT}`, rgba(C.bone, 0.95));
     g.font = `650 ${fs}px ${FONT}`;
     if (la > 0.05) PILLS.push({ x: n.x, y: ly, w: g.measureText(c.name).width + 8 });
+    PILLS.push({ x: n.x, y: n.y, w: R * 2 + 10, h: R * 2 + 10 });
     let line = ly + fs * 1.3;
     if (need) {
       const bt = clamp((s - need.sBloom) / 0.5);
@@ -608,7 +615,12 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       const label = p.outcomeDay !== null ? fmtDay(p.outcomeDay) : '';
       const what = p.outcome.replace(/\s\d{1,2} [A-Z][a-z]{2}$/, '');
       const isFocus = focus && p.companyId === focus.id && ez > 0.5;
-      pill(g, label, n.x + (isFocus ? -R * 0.55 : R * 0.55), n.y - R * 0.85 - 6 * k, k, p.by === 'domino' ? C.tide : C.slate, a, what, isFocus ? 'right' : 'left');
+      const up = n.y - R * 0.85 - 6 * k;
+      const alts: Spot[] = [
+        { x: n.x - R * 0.55, y: up, anchor: 'right' }, { x: n.x + R + 8 * k, y: n.y, anchor: 'left' },
+        { x: n.x - R - 8 * k, y: n.y, anchor: 'right' }, { x: n.x, y: up - 26 * k, anchor: 'center' },
+      ];
+      pill(g, label, n.x + (isFocus ? -R * 0.55 : R * 0.55), up, k, p.by === 'domino' ? C.tide : C.slate, a, what, isFocus ? 'right' : 'left', isFocus ? [] : alts);
     } else if (p.sLand === null && s >= m.sEnd && m.mode === 'replay' && !pillDone.has(p.companyId)) {
       pillDone.add(p.companyId);
       pill(g, 'no dated sign yet', n.x + R * 0.55, n.y - R * 0.85 - 6 * k, k, C.slate, clamp((s - m.sEnd) / 0.5) * 0.85 * dim * (1 - ez), undefined, 'left');

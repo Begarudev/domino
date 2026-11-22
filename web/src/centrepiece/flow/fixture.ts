@@ -44,11 +44,11 @@ export const FIXTURE_LAYOUT: Record<string, { x: number; y: number }> = {
   [CO.quill]: { x: 0.08, y: 0.62 },
   [CO.sable]: { x: 0.85, y: 0.26 },
   [CO.pallas]: { x: 0.9, y: 0.7 },
-  [CO.vireo]: { x: 0.46, y: 0.08 },
+  [CO.vireo]: { x: 0.46, y: 0.13 },
   [CO.corvid]: { x: 0.72, y: 0.9 },
   [CO.ibis]: { x: 0.05, y: 0.88 },
-  [CO.marlin]: { x: 0.96, y: 0.04 },
-  [CO.fennel]: { x: 0.7, y: 0.07 },
+  [CO.marlin]: { x: 0.96, y: 0.09 },
+  [CO.fennel]: { x: 0.7, y: 0.12 },
   [CO.halden]: { x: 0.45, y: 0.62 },
 };
 

@@ -25,7 +25,7 @@ function chapterText(m: FlowModel, n: number): string {
     ? `${m.byId.get(drain.to)!.name} hired ${drain.moves.filter((mv) => mv.day <= m.dFreeze).length} of ${m.byId.get(drain.from)!.name}'s serving engineers. ${m.byId.get(drain.from)!.name} may now need ${(need?.need ?? 'managed inference').toLowerCase()}.`
     : 'DOMINO marks the companies whose dated changes point to a need for GPU inference.';
   const focus = m.focusId ? m.byId.get(m.focusId)?.name ?? '' : '';
-  const ch1 = 'DOMINO follows engineers changing jobs to find companies that will need GPU inference. Each dot is one move.';
+  const ch1 = 'DOMINO looks for AI companies that may soon need managed GPU inference. Big lights are companies; each moving spark is one person changing jobs.';
   if (m.mode === 'live') {
     return [ch1, ch2, m.letter?.kind === 'draft' ? `DOMINO drafted this message to ${focus} from dated facts. It waits for your approval.` : `Why DOMINO picked ${focus}, from dated facts.`][n - 1];
   }
@@ -34,13 +34,13 @@ function chapterText(m: FlowModel, n: number): string {
     ch2,
     `${asOf}: predictions locked. Nothing dated after this is used.`,
     'Playing forward: a ring turns solid when the company really posts an inference job or hire.',
-    m.letter?.kind === 'draft' ? `DOMINO drafted this message on ${asOf}, using only facts available that day.` : `Why DOMINO picked ${focus} on ${asOf}, using only facts available that day.`,
+    m.letter?.kind === 'draft' ? `Replay draft: written only from records dated on or before ${asOf}.` : `Why DOMINO picked ${focus}: only records dated on or before ${asOf}.`,
   ][n - 1];
 }
 
 type Mark = 'ember' | 'slate' | 'size' | 'river' | 'wound' | 'tide-d' | 'tide' | 'filter';
 function legendFor(m: FlowModel, n: number): [Mark, string][] {
-  if (n === 1) return [['ember', 'serving engineer changing jobs'], ['slate', 'any other job move'], ['size', 'bigger dot = more employees']];
+  if (n === 1) return [['size', 'company (size = headcount)'], ['slate', 'spark = one job move'], ['ember', 'amber = serving engineer']];
   if (n === 2) return [['river', `${3}+ serving engineers to one company`], ['wound', 'likely need, with its evidence dots']];
   if (m.mode === 'live') return [];
   if (n === 3) return [['tide-d', 'DOMINO prediction'], ['filter', 'hiring-filter pick (from job posts)']];
@@ -88,6 +88,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
   const ghostRefs = useRef<(HTMLDivElement | null)[]>([]);
   const tailRef = useRef<HTMLDivElement>(null);
   const playBtn = useRef<HTMLButtonElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
   const st = useRef({ s: props.initialS ?? 0, playing: props.initialS === undefined && props.autoPlay !== false && !reducedMotion, last: 0, frame: null as Frame | null, slots: [] as { x: number; y: number }[], hover: null as string | null, scrubbing: false, wasRunning: props.running });
   const propsRef = useRef(props);
@@ -179,6 +180,10 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
       const x = `translateX(${(clamp((dayNow - model.d0) / span) * 100).toFixed(3)}cqw)`;
       if (headRef.current) headRef.current.style.transform = x;
       if (headDateRef.current) headDateRef.current.style.transform = x;
+      if (endRef.current && trackRef.current) {
+        const near = (1 - clamp((dayNow - model.d0) / span)) * trackRef.current.clientWidth < 40 * k + 70 * k;
+        endRef.current.style.opacity = near ? '0' : '1';
+      }
 
       // scoreboard: appears when predictions lock
       if (model.score && scoreRef.current) {
@@ -319,18 +324,19 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
 
       {sc && (
         <aside ref={scoreRef} className="tf-score" aria-label="Replay score" style={{ visibility: 'hidden' }}>
-          <div className="tf-score-title">Predictions that came true, through <span ref={thruRef} /></div>
+          <div className="tf-score-title">Which picks later posted an inference job or hired?</div>
           <div className="tf-row tf-row-domino">
             <span className="tf-who">DOMINO</span>
-            <span className="tf-num"><span ref={domRef}>0</span><span className="tf-of"> / {sc.domino.predicted}</span></span>
+            <span className="tf-num"><span ref={domRef}>0</span><span className="tf-of"> of {sc.domino.predicted} {sc.domino.predicted === 1 ? 'pick' : 'picks'}</span></span>
           </div>
           <div className="tf-row tf-row-filter">
             <span className="tf-who">Hiring filter<small>picks from job posts</small></span>
-            <span className="tf-num"><span ref={filRef}>0</span><span className="tf-of"> / {sc.filter.predicted}</span></span>
+            <span className="tf-num"><span ref={filRef}>0</span><span className="tf-of"> of {sc.filter.predicted} {sc.filter.predicted === 1 ? 'pick' : 'picks'}</span></span>
           </div>
-          <div className="tf-result">DOMINO found {sc.netNewHits} {sc.netNewHits === 1 ? 'buyer' : 'buyers'} the hiring filter never picked.</div>
+          <div className="tf-checked">Predictions locked {fmtDay(model.dFreeze)} · checked through <span ref={thruRef} /></div>
+          <div className="tf-result">{sc.netNewHits === 1 ? '1 company picked only by DOMINO later posted an inference job' : `${sc.netNewHits} companies picked only by DOMINO later posted inference jobs`}</div>
           <div className="tf-foot">
-            {sc.leaks} facts dated after {fmtDay(model.dFreeze)} were used. Headcount filter: {sc.headcount.hits} / {sc.headcount.predicted}.
+            {sc.leaks} facts dated after {fmtDay(model.dFreeze)} were used. A +30% headcount filter: {sc.headcount.hits} of {sc.headcount.predicted}.
             {snapshot.replay?.snapshotLabel ? ` ${snapshot.replay.snapshotLabel}` : ''}
           </div>
         </aside>
@@ -350,14 +356,14 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
           {model.mode === 'replay' && <div className="tf-freeze" style={{ left: pct(model.dFreeze) }}><span>{fmtDay(model.dFreeze)}: predictions locked</span></div>}
           <div className="tf-headwrap"><div ref={headRef} className="tf-head" /><div ref={headDateRef} className="tf-headdate">{fmtDay(model.d0, true)}</div></div>
         </div>
-        <div className="tf-end">{fmtDay(model.dEnd)}</div>
+        <div ref={endRef} className="tf-end">{fmtDay(model.dEnd)}</div>
       </footer>
 
       {L && (
         <section ref={letterRef} className="tf-letter" style={{ visibility: 'hidden' }} aria-label="Drafted first message">
           <div className="tf-l-meta">
             <span>{L.kind === 'draft' ? <>Draft for <b>{L.to}</b> at {model.byId.get(L.companyId)?.name}</> : <>Why DOMINO picked <b>{L.to}</b></>}</span>
-            <span className="tf-l-when">written {L.writtenOn}</span>
+            <span className="tf-l-when">{model.mode === 'replay' ? `records up to ${L.writtenOn}` : `written ${L.writtenOn}`}</span>
           </div>
           {L.kind === 'draft' && <div className="tf-l-subject">{L.subject}</div>}
           <div className="tf-l-body">
