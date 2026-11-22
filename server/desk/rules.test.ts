@@ -37,6 +37,8 @@ test('rules registry lists every rule with thresholds, lock time and counts, eve
       assert.ok(card.counts.every(item => Number.isInteger(item.value)));
     }
     assert.match(cards[0].lockedAt, /14:08 IST, after seeing live departure counts and before any replay outcome/);
+    // R1 mixes two sources, so each of its counts names its own run (null before any run).
+    assert.ok(cards[1].counts.every(item => 'sourceRunId' in item), 'every R1 count names its run');
   } finally {
     store.sql.close();
     rmSync(dir, { recursive: true, force: true });
