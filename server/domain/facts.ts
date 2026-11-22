@@ -120,6 +120,12 @@ export function servingTitleStatus(title?: string | null): 'serving' | 'unknown'
 
 export const servingTitle = (title?: string | null) => servingTitleStatus(title) === 'serving';
 
+/** "an Inference Engineer", "a GPU Engineer", "an ML Engineer": acronyms are read letter by letter. */
+export function withArticle(noun: string): string {
+  const acronym = /^[A-Z]{2,}\b/.test(noun);
+  return ((acronym ? /^[AEFHILMNORSX]/ : /^[aeiou]/i).test(noun) ? 'an ' : 'a ') + noun;
+}
+
 export function formatMonth(day: IsoDate): string {
   return new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(day));
 }
