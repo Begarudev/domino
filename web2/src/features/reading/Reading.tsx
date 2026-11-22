@@ -287,7 +287,7 @@ const Row = memo(function Row({ r, settled }: { r: LogRow; settled: boolean }) {
   return (
     <tr ref={ref} data-testid="reading-row" data-decision={r.decision} className={[open && 'rd-open', r.sub && 'rd-sub'].filter(Boolean).join(' ') || undefined}
       onClick={open} tabIndex={open ? 0 : undefined} onKeyDown={open ? (e) => { if (e.key === 'Enter') open(); } : undefined}>
-      <td className="rd-src">{r.source}</td>
+      <td className="rd-src"><span className="rd-chip">{r.source}</span></td>
       <td className="rd-title" title={r.title}>{r.title}</td>
       <td className="rd-date" title={r.monthLevel ? 'month-level date' : undefined}>{r.date}</td>
       <td className={r.domain ? 'mono rd-dom' : 'faint'} title={r.domain ?? 'no domain on record'}>{r.domain ?? '–'}</td>

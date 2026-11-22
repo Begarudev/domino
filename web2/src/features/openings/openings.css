@@ -199,3 +199,8 @@
   .rec .panel > header > span:not(.st) { font-size: var(--fs-body); }
 }
 
+/* Attio SPEC + council r1: hairline column dividers, a filled teal-tint pill with no stroke, 38-40px rows. */
+.rec-dep table.t th + th, .rec-dep table.t td + td, .rec-hire th + th, .rec-hire td + td { border-left: 1px solid var(--rule-2); }
+.rec-dep table.t td { padding-top: 9px; padding-bottom: 9px; }
+.rec-pill { height: 20px; padding: 0 7px; border: 0; border-radius: var(--r-sm); background: color-mix(in srgb, var(--acc) 14%, transparent); }
+

@@ -148,3 +148,15 @@ tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
   .rd-table, .rd-date { font-size: var(--fs-body); }
 }
 
+/* Attio SPEC + council r1: hairline column dividers, filled tinted chips with no stroke (source type neutral, kept a
+   teal tint for meaning), 38-40px rows (a 20px pill inside 9px cell padding), and the domain in sans like every cell. */
+.rd-table th + th, .rd-table td + td { border-left: 1px solid var(--rule-2); }
+.rd-table td { padding-top: 9px; padding-bottom: 9px; }
+.rd-dom { font-family: var(--sans); font-size: var(--fs-ui); letter-spacing: 0; }
+.rd-chip, .rd-pill { height: 20px; padding: 0 7px; border: 0; border-radius: var(--r-sm); font-size: var(--fs-cap); font-weight: var(--w-med); }
+.rd-chip { display: inline-flex; align-items: center; background: var(--hover); color: var(--ink-2); white-space: nowrap; }
+.rd-pill { background: var(--hover); }
+.rd-pill-kept { background: color-mix(in srgb, var(--acc) 14%, transparent); }
+.rd-pill-provisional { background: transparent; border: 1px dashed var(--acc); }
+.rd-pill-held, .rd-pill-inconclusive { border: 1px solid var(--rule); }
+
