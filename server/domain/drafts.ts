@@ -127,7 +127,7 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
 export function llmDraftPrompt(target: Target, decider: Decider | null, claims: Claim[], seller: SellerProfile): { system: string; user: string } {
   const usable = claims.filter(claim => claim.verifiable && claim.evidenceIds.length);
   return {
-    system: 'Write the middle of a first outreach email, 70 words or fewer. Return JSON with subject and body. The body has NO greeting, NO meeting invitation and NO sign-off: the system adds those. State factual sentences only from the numbered public facts about the recipient, preserving their numbers and dates exactly, and put each sentence’s [n] citations at its end. Use at most two facts and pick the ones that best show why now. Write like a person, not a report: no percentages with decimals beyond one place, no ISO dates. Then ask about the seller’s offer as one question, using the supplied question or a close variant. Do not mention engineers moving, departure counts, outside companies, inferred needs as facts, or any unlisted fact.',
+    system: 'Write the middle of a first outreach email, 70 words or fewer. Return JSON with subject and body. The body has NO greeting, NO meeting invitation and NO sign-off: the system adds those. State factual sentences only from the numbered public facts about the recipient, preserving their numbers and dates exactly, and put each sentence’s [n] citations at its end. Use at most two facts and pick the ones that best show why now. Write like a person, not a report: no percentages with decimals beyond one place, no ISO dates. Then ask about the seller’s offer as one question, using the supplied question or a close variant. Do not introduce the seller or yourself, do not mention engineers moving, departure counts, outside companies, inferred needs as facts, or any unlisted fact.',
     user: [
       `Recipient ${decider?.name ?? 'company team'} at ${claims.find(claim => claim.recipientCompany)?.recipientCompany ?? 'the target company'}.`,
       `Suggested subject ${subjectLine(target, claims.find(claim => claim.recipientCompany)?.recipientCompany, seller.offering)}.`,
@@ -142,10 +142,22 @@ export function llmDraftPrompt(target: Target, decider: Decider | null, claims: 
 
 const sentenceBreaks = new Intl.Segmenter('en', { granularity: 'sentence' });
 
+// Intl.Segmenter breaks after abbreviations, which splits nearly every Indian legal name ("Pvt. Ltd.").
+const ABBREVIATION_END = /\b(?:Pvt|Ltd|Inc|Co|Corp|LLC|LLP|Mr|Ms|Mrs|Dr|St|No|vs|approx|e\.g|i\.e)\.$/i;
+
 function splitSentences(text: string): string[] {
   const parts: string[] = [];
   for (const line of text.split(/\n/)) {
+    let carry = '';
+    const segments: string[] = [];
     for (const { segment } of sentenceBreaks.segment(line.trim())) {
+      const joined = (carry + segment);
+      if (ABBREVIATION_END.test(joined.trim())) { carry = joined; continue; }
+      segments.push(joined);
+      carry = '';
+    }
+    if (carry.trim()) segments.push(carry);
+    for (const segment of segments) {
       let sentence = segment.trim();
       const markers = sentence.match(/^(?:\[\d+\]\s*)+/)?.[0];
       if (markers && parts.length) {
@@ -162,6 +174,11 @@ function permittedCopy(sentence: string, names: string[]) {
   if (/^(?:(?:hi|hello|dear)(?:\s+[^.!?\d,]+)?|(?:thanks|thank you|best|regards|cheers|sincerely|warmly)),?$/i.test(sentence)) return true;
   if ([config.senderName, meetingCopy(config), offerQuestion(config.offering, true),
     offerQuestion(config.offering, false)].includes(sentence)) return true;
+  // Seller-only logistics (meeting length, the offered slots) are not claims about the recipient.
+  if (!/\b(?:since|recently|raised|founded|grew|hired|left|moved|posted|employees|engineers|million|billion|headcount|round)\b/i.test(sentence) &&
+      tokens(sentence).length > 0 &&
+      tokens(sentence).every(value => /^20$/.test(value) || tokens(meetingCopy(config)).map(canonicalToken).includes(canonicalToken(value)) ||
+        /^\d{1,2}(?::\d{2})?$/.test(value) || /^\d{1,2}\s+(?:nov|dec)/i.test(value))) return true;
   if (/^(?:would (?:you|it)|could we|are you open to|do you have|can we)\b[^.!?]*\?$/i.test(sentence) &&
       !/\b(?:since|recently|raised|founded|grew|hired|left|moved|posted|employees|engineers|million|billion)\b/i.test(sentence) &&
       tokens(sentence).every(value => value === '20' || tokens(meetingCopy(config)).includes(value))) return true;
