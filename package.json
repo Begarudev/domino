@@ -5,19 +5,20 @@
   "type": "module",
   "description": "DOMINO: an Outbound Desk agent that books meetings on cross-company triggers from the last 30 days, every claim traced to a dated source.",
   "engines": {
-    "node": ">=24"
+    "bun": ">=1.2"
   },
   "scripts": {
-    "demo": "node scripts/demo.ts",
-    "start": "node server/index.ts",
-    "dev": "node scripts/dev.ts",
-    "build:web": "vite build --config web/vite.config.ts",
-    "dev:web": "vite --config web/vite.config.ts",
-    "probe": "node scripts/probe-live.ts",
-    "test": "node --test 'server/**/*.test.ts'",
+    "demo": "bun scripts/demo.ts",
+    "start": "bun scripts/demo.ts",
+    "serve": "bun server/index.ts",
+    "dev": "bun scripts/dev.ts",
+    "build:web": "bun --bun vite build --config web/vite.config.ts",
+    "dev:web": "bun --bun vite --config web/vite.config.ts",
+    "probe": "bun scripts/probe-live.ts",
+    "test": "bun test server",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "smoke": "node scripts/smoke.ts",
-    "snapshot": "node scripts/snapshot.ts"
+    "smoke": "bun scripts/smoke.ts",
+    "snapshot": "bun scripts/snapshot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
