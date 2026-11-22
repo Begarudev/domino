@@ -95,12 +95,14 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   // ---------- openings ----------
 
   api.post('/openings/scan', async c => {
-    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string } };
+    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string };
+    // dataMode 'cache' replays a previous live scan from the tool cache (0 credits); 'fixture' uses fictional companies.
+    const dataMode = body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
     const asOf = /^\d{4}-\d{2}-\d{2}$/.test(body.replay?.asOf ?? '') ? body.replay!.asOf : null;
     const request = (body.request?.trim() || 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles') +
       (asOf ? `, replay as of ${asOf}` : '');
     // A full cohort pull is 8–13 person-search pages paced for the rate limit (about 4 minutes and 300–600 credits).
-    const runId = launch('openings', request, { limits: { maxCredits: 1500, maxSeconds: asOf ? 1200 : 900 } });
+    const runId = launch('openings', request, { dataMode, limits: { maxCredits: 1500, maxSeconds: asOf ? 1200 : 900 } });
     return c.json({ runId }, 201);
   });
 
@@ -231,8 +233,11 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   api.get('/companies/:id', c => {
     const id = c.req.param('id');
     const snapshot = openingsSnapshot(store);
-    const company = snapshot && companiesOf(snapshot).find(item => item.id === id);
+    // Accept the canonical id or a name slug ("abacus-ai" for Abacus.AI).
+    const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const company = snapshot && companiesOf(snapshot).find(item => item.id === id || slug(item.name) === slug(id));
     if (!snapshot || !company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
+    if (company.id !== id) return c.redirect(`/api/companies/${company.id}`, 302);
     const openings = snapshot.openings.filter(opening => opening.companyId === id);
     const departures = snapshot.departures.filter(departure => departure.companyId === id);
     const candidates = listCandidateRows(store).map(row => candidateView(store, row))
