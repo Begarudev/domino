@@ -8,6 +8,7 @@ import { runStore, useRunSel } from '../../data/store.ts';
 import { closeLedger, useShell } from '../../shell/ui.ts';
 import { fmtCredits, fmtInt, fmtSeconds, fmtTime, fmtUsd, plural } from '../../lib/format.ts';
 import { Count, ENTER, reducedMotion } from '../../lib/motion.ts';
+import { LedgerCharts, type ChartPick } from './LedgerCharts.tsx';
 import './ledger.css';
 
 type Reserved = { credits: number; modelUsd: number };
@@ -64,7 +65,9 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [openKeys, setOpenKeys] = useState<Record<string, boolean>>({});
-  const groups = useMemo(() => groupRows(rows.filter(FILTER_FN[filter]).filter((r) => matches(r, q))), [rows, filter, q]);
+  const [pick, setPick] = useState<ChartPick>(null);
+  const byPick = (r: LedgerEntry) => !pick || (pick.kind === 'endpoint' ? r.endpoint === pick.value : r.step === pick.value);
+  const groups = useMemo(() => groupRows(rows.filter(FILTER_FN[filter]).filter(byPick).filter((r) => matches(r, q))), [rows, filter, q, pick]);
 
   return (
     <div className="ledger">
@@ -140,6 +143,8 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
         </div>
       )}
 
+      <LedgerCharts rows={rows} pick={pick} onPick={setPick} stepName={stepName} />
+
       <section className="panel">
         <header>
           <div className="lg-sec-h">
@@ -159,6 +164,11 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
                 {label} <span className="faint">{rows.filter(FILTER_FN[k]).length}</span>
               </button>
             ))}
+            {pick && (
+              <button className="lg-chip on" data-testid="chart-filter" onClick={() => setPick(null)} aria-label="Clear chart filter">
+                {pick.kind === 'endpoint' ? 'Endpoint' : 'Step'}: {pick.kind === 'endpoint' ? pick.value : stepName({ step: pick.value } as LedgerEntry)} ✕
+              </button>
+            )}
           </div>
           <table className="t lg-table">
             <thead><tr><th>Time</th><th>Step</th><th>Endpoint</th><th>Mode</th><th>Status</th><th className="num">Credits</th><th className="num">Tokens</th><th className="num">USD</th><th className="num">Latency</th></tr></thead>
