@@ -1,0 +1,10 @@
+import { writeFileSync } from 'node:fs';
+const [query, out, start = '2026-09-01', end = '2026-11-22'] = process.argv.slice(2);
+const body = { query, sources: ['news'], start_date: Math.floor(Date.parse(start) / 1000), end_date: Math.floor(Date.parse(end + 'T23:59:59Z') / 1000) };
+const res = await fetch('https://api.crustdata.com/web/search/live', { method: 'POST', headers: { Authorization: `Bearer ${process.env.CRUSTDATA_API_KEY}`, 'x-api-version': '2025-11-01', 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000) });
+const t = await res.text();
+const retrievedAt = new Date().toISOString();
+writeFileSync(out, JSON.stringify({ retrievedAt, request: body, status: res.status, creditsHeader: res.headers.get('x-credits-used'), response: JSON.parse(t) }, null, 1));
+const j = JSON.parse(t);
+console.log(res.status, 'credits', res.headers.get('x-credits-used'), 'n', j.results?.length);
+for (const r of j.results ?? []) console.log('-', r.title, '|', r.url, '|', (r.snippet ?? '').slice(0, 140));
