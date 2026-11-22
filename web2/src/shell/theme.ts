@@ -1,23 +1,18 @@
-// Theme: Auto (system preference) by default, Light or Dark as an override, persisted in localStorage "domino-theme".
+// Theme: light only (Garud 17:17). The system dark preference and any saved choice are ignored; the dark tokens stay
+// in tokens.css, scoped to data-theme="dark", which nothing sets. The API is kept so existing imports still compile.
 import { useSyncExternalStore } from 'react';
 
 export type ThemeChoice = 'auto' | 'light' | 'dark';
-const KEY = 'domino-theme';
-let choice: ThemeChoice = (localStorage.getItem(KEY) as ThemeChoice | null) ?? 'auto';
-const listeners = new Set<() => void>();
+const choice: ThemeChoice = 'light';
 
-export function applyTheme(c: ThemeChoice = choice) {
-  const root = document.documentElement;
-  if (c === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', c);
+export function applyTheme() {
+  document.documentElement.setAttribute('data-theme', 'light');
+  try { localStorage.removeItem('domino-theme'); } catch { /* storage may be unavailable */ }
 }
 
-export function setTheme(c: ThemeChoice) {
-  choice = c;
-  if (c === 'auto') localStorage.removeItem(KEY); else localStorage.setItem(KEY, c);
-  applyTheme(c);
-  listeners.forEach((f) => f());
-}
+/** No-op: the theme is fixed to light. */
+export function setTheme(_c: ThemeChoice) { applyTheme(); }
 
 export function useTheme(): ThemeChoice {
-  return useSyncExternalStore((f) => { listeners.add(f); return () => { listeners.delete(f); }; }, () => choice);
+  return useSyncExternalStore(() => () => {}, () => choice);
 }
