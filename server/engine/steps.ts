@@ -393,7 +393,10 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
       }
     }
     draft.unverifiable = [...unverifiable.values()];
-    return { target: { ...target, draftId: draft.id }, draft };
+    // Hub rule (14:35): outreach needs >= 2 verified, dated, cited facts AND a named decider role, else "Not drafted".
+    const gate = draftGate(draft, target, evidence);
+    if (gate) return { target: { ...target, draftId: null, notDrafted: gate }, draft: { ...draft, status: 'not_drafted' as const, blockedReason: gate.reason } };
+    return { target: { ...target, draftId: draft.id }, draft: { ...draft, status: 'ready' as const } };
   });
   const drafts: Draft[] = [];
   const targets: Target[] = [];
@@ -402,17 +405,40 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
     targets.push(target);
     if (!draft) continue;
     drafts.push(draft);
+    if (draft.status === 'not_drafted') {
+      events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: target.companyId, ...item })));
+      continue;
+    }
     events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: target.companyId, ...item })),
       { type: 'draft.ready', draft });
   }
-  return { output: { targets, drafts }, summary: `${drafts.length} drafts checked against evidence`, events };
+  const ready = drafts.filter(draft => draft.status !== 'not_drafted').length;
+  const blocked = drafts.length - ready;
+  return { output: { targets, drafts }, events,
+    summary: `${ready} drafts checked against evidence${blocked ? `; ${blocked} not drafted (fewer than 2 verified facts or no named decider)` : ''}` };
+}
+
+export const MIN_VERIFIED_FACTS = 2;
+// Facts that survived verification: cited in the body, dated, verifiable. The decider must be a named role.
+export function draftGate(draft: Draft, target: Target, evidence: Evidence[]): { reason: string; have: number; need: number } | null {
+  const byEvidence = new Map(evidence.map(row => [row.id, row]));
+  const cited = new Set(draft.citations.map(cite => cite.evidenceId).filter(id => {
+    const row = byEvidence.get(id);
+    return row?.verifiable && row.observedAt && draft.body.includes(`[${draft.citations.find(cite => cite.evidenceId === id)!.marker}]`);
+  }));
+  const have = cited.size;
+  if (have < MIN_VERIFIED_FACTS) {
+    return { reason: `Not drafted: not enough verified evidence (${have} of ${MIN_VERIFIED_FACTS})`, have, need: MIN_VERIFIED_FACTS };
+  }
+  if (!target.decider?.title?.trim()) return { reason: 'Not drafted: no named decider role found', have, need: MIN_VERIFIED_FACTS };
+  return null;
 }
 
 function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_gate'> {
   const { targets, drafts } = c.draft_messages!;
   const output = targets.flatMap(target => {
     if (target.hold || target.watch) return [];
-    const draft = drafts.find(row => row.id === target.draftId);
+    const draft = drafts.find(row => row.id === target.draftId && row.status !== 'not_drafted');
     return !draft ? [] : (['send_message', 'book_meeting'] as const).map((kind): Approval => {
       const idempotencyKey = hash([ctx.runId, target.companyId, draft.personId ?? '', draft.body, kind].join('|')).slice(0, 16);
       return {
@@ -421,9 +447,9 @@ function approvalGate(ctx: ToolContext, c: Checkpoints): StepResult<'approval_ga
       };
     });
   });
+  // Approvals open only when the run has finished (the worker sets awaiting_approval after the last step, incl. replay scoring).
   return { output, summary: `${output.length} test-mode actions ready for review`,
-    events: [...output.map(approval => ({ type: 'approval.requested' as const, approval })),
-      ...(output.length ? [{ type: 'run.status' as const, status: 'awaiting_approval' as const }] : [])] };
+    events: output.map(approval => ({ type: 'approval.requested' as const, approval })) };
 }
 
 async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'score_replay'>> {
