@@ -183,6 +183,8 @@ export interface CompanyDossier {
   runId: string; asOf: IsoDate | null; dataMode: DataMode; company: Company;
   source: 'analysis_run' | 'openings_scan';  // which run the file was built from (labelled on screen)
   rules: DossierRule[];
+  whyTarget: WhyThisTarget | null;           // eligibility clauses + the ranking rule that placed this company (its top O1 opening)
+  headcountSeries: { date: IsoDate; count: number }[];  // Crustdata enrich timeseries up to the scan's as-of date; [] if not read
   timeline: DossierEvent[];         // news/posts, funding, headcount jumps, hires, departures; newest first
   jobPosts: DossierEvent[];
   talentFlows: TalentFlow[];

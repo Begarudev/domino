@@ -76,6 +76,7 @@ export interface CompanyFacts {
   headcount: number | null;
   headcountChange90d?: number | null; // percent, from a dated timeseries
   headcountEvidenceId?: string | null;
+  headcountSeries?: { date: IsoDate; count: number }[]; // enrich timeseries up to asOf
   ambiguous?: boolean;
 }
 

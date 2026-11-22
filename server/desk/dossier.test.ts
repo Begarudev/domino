@@ -52,6 +52,11 @@ test('a company only in the openings scan still gets a file: O1 row from its cla
     assert.equal(file!.rules.find(rule => rule.id === 'CONTAGION')!.state, 'not_evaluated');
     assert.ok(['met', 'open'].includes(file!.rules[0].state));
     assert.ok(file!.talentFlows.every(flow => flow.direction === 'out' && !/\s\S+\s/.test(flow.initial ?? '')));
+    // "Why this target?": the opening's clauses plus the exact ranking rules, never a score.
+    assert.equal(file!.whyTarget?.rule, 'O1');
+    assert.match(file!.whyTarget!.companyRanking.rule, /^Companies are ordered by open predicted openings/);
+    assert.equal(file!.whyTarget!.companyRanking.position, 1);
+    assert.ok(Array.isArray(file!.headcountSeries));
   } finally {
     store.sql.close();
     rmSync(dir, { recursive: true, force: true });

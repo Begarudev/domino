@@ -219,7 +219,10 @@ const enrichResponse = z.array(z.object({ matches: z.array(z.object({ company_da
   headcount: z.object({ total: int, timeseries: z.array(z.object({ date: str, employee_count: int }).passthrough()).nullish() }).passthrough().nullish(),
 }).passthrough().nullish() }).passthrough()).nullish() }).passthrough());
 
-export interface HeadcountFact { crustdataId: number; headcount: number | null; change90d: number | null; change30d?: number | null; evidenceId: string | null }
+export interface HeadcountFact {
+  crustdataId: number; headcount: number | null; change90d: number | null; change30d?: number | null; evidenceId: string | null;
+  series?: { date: IsoDate; count: number }[];   // the enrich timeseries up to asOf (last 13 points), for the company file chart
+}
 
 /** Company enrich for size (as of the cutoff) and the 90-day headcount change behind the restructure guard. */
 export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: number[] }, { facts: HeadcountFact[]; evidence: Evidence[] }> = {
@@ -256,7 +259,8 @@ export const companyHeadcount: EndpointSpec<{ asOf: IsoDate; crustdataIds: numbe
         evidence.push(row);
         evidenceId = row.id;
       }
-      facts.push({ crustdataId: id, headcount, change90d: change, change30d, evidenceId });
+      facts.push({ crustdataId: id, headcount, change90d: change, change30d, evidenceId,
+        series: series.slice(-13).map(point => ({ date: point.date!.slice(0, 10), count: point.employee_count! })) });
     }
     return { facts, evidence };
   },

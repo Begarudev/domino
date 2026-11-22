@@ -154,7 +154,8 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     const companyFacts: CompanyFacts[] = cohort.map(company => {
       const enriched = headcounts.get(company.crustdataId);
       return { id: company.id, name: company.name, headcount: enriched?.headcount ?? (scope.runKind === 'replay' ? null : company.headcount),
-        headcountChange90d: enriched?.change90d ?? null, headcountEvidenceId: enriched?.evidenceId ?? null };
+        headcountChange90d: enriched?.change90d ?? null, headcountEvidenceId: enriched?.evidenceId ?? null,
+        headcountSeries: enriched?.series ?? [] };
     });
     const size = new Map(companyFacts.map(row => [row.id, row.headcount]));
     const companies: Company[] = cohort.map(company => ({ id: company.id, name: company.name, aliases: [company.name], domain: company.domain,

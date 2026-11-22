@@ -1,8 +1,10 @@
 // Company dossier: the full company analysis for one company, shaped from a run snapshot. OWNER: lead.
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
-import type { CompanyDossier, Departure, DossierRule, Opening, RuleClause, TalentFlow } from '../../shared/desk.ts';
+import type { CompanyDossier, CompanySummary, Departure, DossierRule, Opening, TalentFlow, WhyThisTarget } from '../../shared/desk.ts';
 import type { Company, Evidence } from '../../shared/types.ts';
-import { openingsSnapshot } from './store.ts';
+import type { CompanyFacts } from '../domain/openings.ts';
+import { openingsSnapshot, type OpeningsSnapshot } from './store.ts';
+import { compareCompanies, compareOpenings, whyThisTarget } from './why.ts';
 import type { RunSnapshot } from '../../shared/types.ts';
 import type { Store } from '../db.ts';
 import { snapshot } from '../snapshot.ts';
@@ -80,6 +82,7 @@ export function dossier(snap: RunSnapshot, companyId: string, openings: Opening[
     mechanismRule('CONTAGION', 'CONTAGION', 'Peer contagion'), mechanismRule('DISPLACEMENT', 'DISPLACEMENT', 'Provider displacement')];
   return {
     runId: snap.id, asOf: snap.intent?.asOf ?? null, dataMode: snap.dataMode, company, source: 'analysis_run', rules,
+    whyTarget: null, headcountSeries: [],
     timeline: triggers.map(event), jobPosts: triggers.filter(row => row.kind === 'job_post' && row.companyId === id).map(event),
     talentFlows, chains, predictedNeeds, openings: companyOpenings, outreach,
     evidence: snap.evidence.filter(row => cited.has(row.id)),
@@ -146,6 +149,7 @@ export function scanDossier(store: Store, key: string): CompanyDossier | null {
   const run = store.requireRun(scan.runId);
   return {
     runId: scan.runId, asOf: run.created_at.slice(0, 10), dataMode: run.data_mode, company, source: 'openings_scan', rules,
+    whyTarget: null, headcountSeries: [],
     timeline, jobPosts: replacements.filter(row => row.kind === 'job_post').map(row => ({ id: row.evidenceId, date: dayOf(row.date), kind: 'job_post' as const,
       summary: row.label ?? 'Replacement job post', evidenceIds: [row.evidenceId] })),
     talentFlows: [...departures.map(flowOut), ...replacements.filter(row => row.kind === 'hire').map(row => ({ direction: 'in' as const,
@@ -167,11 +171,39 @@ export function companyDossier(store: Store, companyId: string, runId?: string):
   const scan = store.sql.prepare(`SELECT id FROM runs WHERE pipeline = 'openings' AND status = 'completed'
     ORDER BY created_at DESC LIMIT 1`).get() as { id: string } | undefined;
   const openings = scan ? store.getOutput<{ openings: Opening[] }>(scan.id, 'detect_openings')?.openings ?? [] : [];
+  let result: CompanyDossier | null = null;
   for (const { id } of runs) {
     const snap = snapshot(store, id);
     const match = snap.companies.find(row => sameCompany(row, companyId));
-    const result = match ? dossier(snap, match.id, openings) : null;
-    if (result) return result;
+    result = match ? dossier(snap, match.id, openings) : null;
+    if (result) break;
   }
-  return runId ? null : scanDossier(store, companyId);
+  result ??= runId ? null : scanDossier(store, companyId);
+  return result && withScanFacts(store, result);
+}
+
+// Same order and counts as GET /api/companies (desk routes), so the placement quoted here matches the list on screen.
+function companySummaries(scan: OpeningsSnapshot): CompanySummary[] {
+  const byId = new Map<string, Company>();
+  for (const company of [...scan.companies, ...scan.openings.map(row => ({ id: row.companyId, name: row.companyName, aliases: [], evidenceIds: [] }))]) {
+    if (!byId.has(company.id)) byId.set(company.id, company);
+  }
+  return [...byId.values()].map(company => ({
+    id: company.id, name: company.name, domain: company.domain ?? null, headcount: company.headcount ?? null,
+    openings: scan.openings.filter(row => row.companyId === company.id && row.status === 'open').length,
+    departures90d: scan.departures.filter(row => row.companyId === company.id).length,
+  })).filter(row => row.departures90d || scan.openings.some(opening => opening.companyId === row.id)).sort(compareCompanies);
+}
+
+// "Why this target?" (the company's top O1 opening: its clauses and the ranking rule) and the headcount series, both from
+// the latest openings scan. They're attached to either kind of file.
+function withScanFacts(store: Store, file: CompanyDossier): CompanyDossier {
+  const scan = openingsSnapshot(store);
+  if (!scan) return file;
+  const company = scan.companies.find(row => row.id === file.company.id || row.name === file.company.name);
+  const mine = scan.openings.filter(row => row.companyId === company?.id || row.companyName === file.company.name).sort(compareOpenings);
+  const whyTarget: WhyThisTarget | null = mine[0] ? whyThisTarget(mine[0], scan.openings, companySummaries(scan)) : null;
+  const facts = store.getOutput<{ companyFacts?: CompanyFacts[] }>(scan.runId, 'resolve_departures')?.companyFacts ?? [];
+  const headcountSeries = facts.find(row => row.id === company?.id)?.headcountSeries ?? [];
+  return { ...file, whyTarget, headcountSeries };
 }
