@@ -13,12 +13,22 @@
 .side a:hover { background: var(--hover); }
 .side a[aria-current='page'] { background: var(--hover); color: var(--ink); }
 .side a .c { color: var(--ink-3); font-weight: 400; }
-.side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 12px; color: var(--ink-3); line-height: 18px; }
+.side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 13px; color: var(--ink-3); line-height: 18px; }
 .co-main { flex: 1; padding: 28px 32px 48px; min-width: 0; max-width: 1240px; }
 @media (min-width: 1800px) { .co-main { max-width: 1480px; } }
 
 .reading-panel { min-height: 60vh; display: grid; }
 .reading-panel .rail { min-height: 60vh; }
+
+/* candidate side: align headings to the mock's serif voice (screens 2 and 3) */
+.side-candidate .onb-title { font-family: var(--serif); font-weight: var(--serif-w); font-size: 44px; line-height: 50px; letter-spacing: -.02em; display: block; }
+.side-candidate .onb-title-wide, .side-candidate .onb-title-narrow { font-variation-settings: normal; font-weight: inherit; color: var(--ink); }
+.side-candidate .onb-title-narrow::before { content: ' '; }
+.side-candidate .dash-name, .side-candidate .onb-h2 { font-family: var(--serif); font-weight: var(--serif-w); font-size: 30px; line-height: 36px; font-variation-settings: normal; }
+.side-candidate .dash-h2 { font-family: var(--serif); font-weight: var(--serif-w); font-size: 22px; line-height: 28px; font-variation-settings: normal; }
+.side-candidate .op-co, .side-candidate .pcard-name { font-family: var(--serif); font-weight: var(--serif-w); font-size: 26px; line-height: 32px; font-variation-settings: normal; }
+.side-candidate .op-rule { color: var(--ink-2); font-size: 15px; font-weight: 600; font-variation-settings: normal; }
+.cand-wait { display: grid; gap: 12px; justify-items: start; }
 
 /* cohort list */
 .cohort-row {

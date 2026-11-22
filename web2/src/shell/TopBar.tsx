@@ -69,10 +69,11 @@ function RunChip() {
     return <span className="runchip" title="No run behind this page" data-testid="run-chip"><span className="dot idle" />{page === 'fixture' ? 'snapshot of today’s scan' : 'no run'}</span>;
   }
   return (
-    <a className="runchip" data-testid="run-chip" title={`${runId}: open its reading log`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
+    <a className="runchip" data-testid="run-chip" title={`Run ${runId}. Open its reading log.`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
       onClick={(e) => { e.preventDefault(); if (companyId) navigate({ page: 'company', id: companyId, tab: 'reading' }); }}>
       <span className={`dot${running ? ' run' : ''}`} />
-      {runId.replace(/^(run_[0-9a-f]{8}).*/, '$1')} {how}{created ? ` · ${fmtDate(created, true)}, ${fmtTime(created)} IST` : ''}
+      {running ? 'Scan running' : how === 'recorded' ? 'Recorded run' : how === 'mock' ? 'Mock run' : how === 'fixture' ? 'Fixture scan' : how === 'cached live' ? 'Cached live scan' : 'Live scan'}
+      {created ? ` · ${fmtDate(created)}, ${fmtTime(created)} IST` : ''}
     </a>
   );
 }

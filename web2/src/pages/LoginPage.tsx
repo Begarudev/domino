@@ -31,7 +31,8 @@ export function LoginPage() {
     if (conclusive) out.push({ big: fmtInt(conclusive.count), small: conclusive.label });
     if (companies.data) out.push({ big: fmtInt(decided), small: decided === 1 ? 'predicted opening today' : 'predicted openings today' });
     const runId = funnel.data?.runId ?? scan.data?.runId;
-    if (runId) out.push({ big: runId.replace(/^(run_[0-9a-f]{8}).*/, '$1'), small: scan.data?.checkedAt ? `${fmtDate(scan.data.checkedAt, true)}, ${fmtTime(scan.data.checkedAt)}` : 'latest scan run', mono: true });
+    const at = scan.data?.checkedAt ?? null;
+    if (runId) out.push({ big: at ? fmtTime(at) : 'Latest', small: at ? `latest scan, ${fmtDate(at, true)} IST` : 'latest scan run' });
     return out;
   }, [funnel.data, companies.data, scan.data]);
 
