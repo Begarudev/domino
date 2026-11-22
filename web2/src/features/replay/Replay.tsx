@@ -42,12 +42,17 @@ function ReplayEmpty({ locked }: { locked: string | null }) {
         <header><h2>Awaiting a scored replay</h2><span className="st plain">O1 · not replayed</span></header>
         <div className="pad">
           <p>A replay freezes the data at 1 Sep, runs rule O1 as it was locked{locked ? ` at ${locked}` : ''}, then checks each company for a dated job post or hire in the role family afterwards. Until a replay run is scored, there are no counts to show.</p>
-          <ul className="rp-ghost" aria-label="What the scorecard will show">
-            <li>Companies O1 selected, of the cohort</li>
-            <li>What the job-post baseline selected, and how many had the outcome</li>
-            <li>The cohort base rate</li>
-            <li>Facts dated after 1 Sep used: must be 0</li>
-          </ul>
+          <h3 className="rp-sub">What the scorecard will show</h3>
+          <p className="rp-subline">Raw counts per selector once a replay is scored. Cells stay empty until then; nothing here is estimated.</p>
+          <table className="t rp-table rp-ghost-t" aria-label="Scorecard columns, not yet scored">
+            <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
+            <tbody>
+              {['O1 (locked rule)', 'Job-post baseline', 'Whole cohort (base rate)'].map((l) => (
+                <tr key={l}><td>{l}</td><td className="num"><span className="faint">not scored</span></td><td className="num"><span className="faint">not scored</span></td><td className="num"><span className="faint">not scored</span></td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="rp-subline">Integrity check: facts dated after 1 Sep used by O1 must be 0.</p>
         </div>
       </section>
     </div>
@@ -92,7 +97,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
     <div className="replay">
       <section className="panel">
         <header>
-          <h2>{fmtDate(score.asOf)} replay · outcomes through {fmtDate(score.horizonEnd, true)}</h2>
+          <h2>{fmtDate(score.asOf, true)} replay · outcomes through {fmtDate(score.horizonEnd, true)}</h2>
           <span className={`st ${score.factsAfterAsOfUsed === 0 ? 'verified' : 'held'}`}>O1 inputs · {fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)}</span>
         </header>
         {score.snapshotLabel && <p className="rp-src">Snapshot: {score.snapshotLabel}</p>}
@@ -123,10 +128,10 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
           <div className="pad">
             <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. {d.predicted === 0 ? 'Precision unavailable.' : `${fmtInt(d.hits)} had the tracked outcome.`}</p>
             <table className="t rp-table">
-              <thead><tr><th>Selector</th><th className="num">Companies</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
+              <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
               <tbody>
-                <tr><td><b>O1</b> (locked rule)</td><td className="num">{fmtInt(d.predicted)}</td><td className="num">{d.predicted ? fmtInt(d.hits) : <span className="faint">–</span>}</td><td className="num">{d.medianLeadDays != null ? `${fmtInt(d.medianLeadDays)} d` : <span className="faint">–</span>}</td></tr>
-                <tr><td>Job-post baseline</td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{fmtInt(base.hits)} of {fmtInt(base.predicted)}</td><td className="num">{base.medianLeadDays != null ? `${fmtInt(base.medianLeadDays)} d` : <span className="faint">–</span>}</td></tr>
+                <tr><td><b>O1</b> (locked rule)</td><td className="num">{fmtInt(d.predicted)}</td><td className="num">{d.predicted ? `${fmtInt(d.hits)} of ${fmtInt(d.predicted)}` : <span className="faint">–</span>}</td><td className="num">{d.medianLeadDays != null ? `${fmtInt(d.medianLeadDays)} days` : <span className="faint">–</span>}</td></tr>
+                <tr><td>Job-post baseline</td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{fmtInt(base.hits)} of {fmtInt(base.predicted)}</td><td className="num">{base.medianLeadDays != null ? `${fmtInt(base.medianLeadDays)} days` : <span className="faint">–</span>}</td></tr>
                 <tr><td>Whole cohort (base rate)</td><td className="num">{fmtInt(N)}</td><td className="num">{fmtInt(cohortHits)} of {fmtInt(N)}</td><td className="num"><span className="faint">–</span></td></tr>
               </tbody>
             </table>
@@ -140,9 +145,9 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
               <dt>Snapshot</dt><dd>{score.snapshotLabel ?? 'not reported'}</dd>
               <dt>Outcome</dt><dd>{score.outcomeDefinition ?? 'not reported'}</dd>
               <dt>Cohorts</dt><dd>
-                <ul className="rp-cohort">{score.outcomes.map((o, i) => (
+                <ul className="rp-cohort"><li className="rp-cohort-h" aria-hidden="true"><span>Company</span><span>Selected by</span><span>Outcome</span><span>Date</span></li>{score.outcomes.map((o, i) => (
                   <li key={`${o.companyId}-${i}`}><span className="mono">{o.companyId}</span><span className="faint">{o.predictedBy === 'domino' ? 'O1' : o.predictedBy === 'both' ? 'O1 + baseline' : 'baseline'}</span>
-                    <span>{o.hit ? <span className="tick">✓</span> : null} {o.outcome}</span><span className="mono faint">{o.outcomeDate ? fmtDate(o.outcomeDate, true) : 'undated'}</span></li>
+                    <span>{o.hit ? <span className="tick">✓</span> : null} {o.outcome}</span><span className="rp-date faint">{o.outcomeDate ? fmtDate(o.outcomeDate, true) : 'undated'}</span></li>
                 ))}</ul>
               </dd>
             </dl>
@@ -153,7 +158,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
           <header><h2>Scorecard</h2><span className="faint">Counts appear when the replay reaches {fmtDate(score.horizonEnd, true)}</span></header>
           <div className="pad">
             <table className="t rp-table rp-ghost-t" aria-label="Scorecard, withheld until the end">
-              <thead><tr><th>Selector</th><th className="num">Companies</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
+              <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
               <tbody>
                 {['O1 (locked rule)', 'Job-post baseline', 'Whole cohort (base rate)'].map((l) => (
                   <tr key={l}><td>{l}</td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td></tr>

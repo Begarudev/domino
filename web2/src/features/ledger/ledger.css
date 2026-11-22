@@ -43,3 +43,18 @@
 .lg-table td.lg-step { max-width: 380px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lg-table tbody td { padding-top: 7px; padding-bottom: 7px; }
 .lg-sum { font-weight: 600; font-size: 14px; }
+/* p4 polish: section heading + one-line description, scrolling data grid with a sticky header, 4px-grid cells */
+.lg-sec-h { display: grid; gap: 2px; }
+.lg-sec-h h2 { font-size: 15px; font-weight: 600; margin: 0; color: var(--ink); }
+.lg-sec-h span { font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.lg-strip .lg-line { font-size: 16px; }
+.lg-scroll { max-height: 560px; overflow: auto; }
+.lg-scroll:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.lg-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--ink-2); box-shadow: inset 0 -1px 0 var(--rule); border-bottom: 0; }
+.lg-table tbody td, .lg-table tfoot td { padding: 8px 16px; vertical-align: middle; }
+.lg-table tfoot td { position: sticky; bottom: 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--rule); border-top: 0; }
+.lg-table td.lg-time { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; font-size: 13px; }
+.lg-table td.mono { color: var(--ink-2); }
+.ledger .panel > header { align-items: flex-start; }
+.lg-note { white-space: nowrap; padding-top: 2px; }
+.lg-table tbody td:not(.lg-step) { white-space: nowrap; }
