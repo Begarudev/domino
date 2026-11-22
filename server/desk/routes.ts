@@ -114,9 +114,14 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   // ---------- openings ----------
 
   api.post('/openings/scan', async c => {
-    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string };
+    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string; confirmLive?: boolean };
     // dataMode 'cache' replays a previous live scan from the tool cache (0 credits); 'fixture' uses fictional companies.
     const dataMode = body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
+    // A live scan can spend hundreds of credits on cache misses, so it never starts by accident (a script, a page load).
+    if ((dataMode ?? config.dataMode) === 'live' && body.confirmLive !== true) {
+      return c.json({ error: 'A live scan reads Crustdata and can spend 300–600 credits. Send dataMode "cache" to replay the ' +
+        'recorded read for 0 credits, or confirmLive: true to read live.' }, 409);
+    }
     const asOf = /^\d{4}-\d{2}-\d{2}$/.test(body.replay?.asOf ?? '') ? body.replay!.asOf : null;
     const request = (body.request?.trim() || 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles') +
       (asOf ? `, replay as of ${asOf}` : '');

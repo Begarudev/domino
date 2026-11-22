@@ -211,6 +211,11 @@ describe('search desk over HTTP (fixture mode)', () => {
   };
   const all = { shareHistory: true, shareSkills: true, shareSamples: true, discoverable: true };
 
+  test('a live openings scan needs an explicit confirmLive (never started by accident)', async () => {
+    const refused = await call<{ error: string }>('/api/openings/scan', { dataMode: 'live' }, [409]);
+    assert.match(refused.error, /confirmLive: true/);
+  });
+
   test('rejects anything but a LinkedIn profile URL', async () => {
     await call('/api/candidates', { linkedinUrl: 'https://example.com/in/x', consent: all }, [400]);
     await call('/api/candidates', { linkedinUrl: 'https://www.linkedin.com/in/x1', consent: { shareHistory: true } }, [400]);
