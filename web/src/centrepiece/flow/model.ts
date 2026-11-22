@@ -88,8 +88,11 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
   const endIso = snap.replay?.horizonEnd ?? snap.intent?.horizonEnd ?? asOfIso;
   const dFreeze = dayOf(asOfIso);
   const dEnd = replay ? Math.max(dayOf(endIso), dFreeze + 1) : dFreeze;
-  const windowDays = Math.max(30, Math.min(120, snap.intent?.windowDays ?? 90));
-  const d0 = dFreeze - Math.max(windowDays, 90);
+  // the time-lapse starts a few weeks before the first dated move (at most 90 days before the freeze)
+  const moveDays = snap.triggers.filter((t) => t.kind === 'hire' || t.kind === 'departure')
+    .flatMap((t) => t.evidenceIds.map((id) => evById.get(id)?.observedAt).filter((d): d is string => !!d).map(dayOf))
+    .filter((d) => d >= dFreeze - 120 && d <= dFreeze);
+  const d0 = moveDays.length ? Math.max(dFreeze - 90, Math.min(dFreeze - 30, Math.min(...moveDays) - 21)) : dFreeze - 90;
 
   // time mapping
   const sSee0 = INTRO;
@@ -212,8 +215,9 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
   } : null;
 
   // ---- letter ----
-  const top = [...snap.targets].sort((a, b) => a.rank - b.rank)[0];
-  const draft: Draft | undefined = snap.drafts.find((d) => d.id === top?.draftId) ?? snap.drafts[0];
+  const top = [...snap.targets].filter((t) => !t.hold?.reasons?.length).sort((a, b) => a.rank - b.rank)[0];
+  const held = new Set(snap.targets.filter((t) => t.hold?.reasons?.length).map((t) => t.companyId));
+  const draft: Draft | undefined = snap.drafts.find((d) => d.id === top?.draftId) ?? snap.drafts.find((d) => !held.has(d.companyId));
   const focusId = draft?.companyId ?? top?.companyId ?? needs[0]?.companyId ?? null;
   let letter: FlowLetter | null = null;
   if (focusId && byId.has(focusId)) {
@@ -320,5 +324,8 @@ function layout(cs: FlowCompany[], moves: FlowMove[], hints?: Record<string, { x
   }
   const xs = cs.map((c) => c.x), ys = cs.map((c) => c.y);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  cs.forEach((c) => { c.x = (c.x - x0) / (x1 - x0 || 1); c.y = (c.y - y0) / (y1 - y0 || 1); });
+  // keep the shape: one scale for both axes, centred, with a margin that grows when there are few companies
+  const margin = n <= 4 ? 0.22 : 0.06;
+  const sc = (1 - 2 * margin) / Math.max(x1 - x0, y1 - y0, 1e-3);
+  cs.forEach((c) => { c.x = 0.5 + (c.x - (x0 + x1) / 2) * sc; c.y = 0.5 + (c.y - (y0 + y1) / 2) * sc; });
 }

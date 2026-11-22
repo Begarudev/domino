@@ -272,6 +272,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
           </div>
           <div className="tf-minor">Headcount filter: {model.score.headcount.hits} of {model.score.headcount.predicted}</div>
           <div className="tf-leak">Facts dated after {fmtDay(model.dFreeze)} used: <b>{model.score.leaks}</b></div>
+          {snapshot.replay?.snapshotLabel && <div className="tf-snaplabel">{snapshot.replay.snapshotLabel}</div>}
           <div className="tf-netnew">{model.score.netNewHits} of DOMINO's hits were accounts the hiring filter never returned</div>
         </aside>
       )}
@@ -281,6 +282,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
         <span><i className="lg-slate" />other job move</span>
         {model.mode === 'replay' && <span><i className="lg-frost" />move after {fmtDay(model.dFreeze)}, not used</span>}
         <span><i className="lg-wound" />need DOMINO inferred</span>
+        {model.mode === 'live' && <span><i className="lg-tide-d" />DOMINO's pick</span>}
         {model.mode === 'replay' && <><span><i className="lg-tide-d" />prediction on {fmtDay(model.dFreeze)}</span><span><i className="lg-tide" />came true</span><span><i className="lg-filter" />hiring filter pick</span></>}
       </div>
 

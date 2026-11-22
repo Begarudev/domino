@@ -2,11 +2,18 @@
 //   ?slot=1        render at the app's slot size (780x540) instead of full window
 //   ?s=12.5        start paused at story second 12.5 (for screenshots)
 //   ?filter=1      hiring-filter view     ?speed=1.5   playback speed
+//   ?data=engine   replay snapshot recorded from the real engine (fixture data mode); ?data=engine-live: a live run
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Selection } from '../src/centrepiece/contract.ts';
 import { TalentFlow } from '../src/centrepiece/flow/TalentFlow.tsx';
 import { FIXTURE_LAYOUT, FIXTURE_SNAPSHOT } from '../src/centrepiece/flow/fixture.ts';
+import type { RunSnapshot } from '../../shared/types.ts';
+// ?data=engine: a snapshot recorded from the real engine (DOMINO_DATA=fixture replay run), no layout hints
+import engineSample from '../src/centrepiece/flow/engine-sample.json';
+import engineLive from '../src/centrepiece/flow/engine-live-sample.json';
+const ENGINE = engineSample as unknown as RunSnapshot;
+const ENGINE_LIVE = engineLive as unknown as RunSnapshot;
 
 const q = new URLSearchParams(location.search);
 
@@ -23,12 +30,12 @@ function App() {
   const s = q.get('s');
   return (
     <TalentFlow
-      snapshot={FIXTURE_SNAPSHOT} events={[]} running={false} selection={sel}
+      snapshot={q.get('data') === 'engine' ? ENGINE : q.get('data') === 'engine-live' ? ENGINE_LIVE : FIXTURE_SNAPSHOT} events={[]} running={false} selection={sel}
       onSelect={(x) => { setSel(x); if (x) console.log('select', x); }}
       hiringFilterView={q.get('filter') === '1'}
       reducedMotion={q.get('reduced') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches}
       width={w} height={h} replayToken={0}
-      layoutHints={FIXTURE_LAYOUT}
+      layoutHints={q.get('data') ? undefined : FIXTURE_LAYOUT}
       initialS={s !== null ? Number(s) : undefined}
       speed={q.get('speed') ? Number(q.get('speed')) : 1}
     />

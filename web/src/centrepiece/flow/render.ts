@@ -121,8 +121,14 @@ export function nodeRadius(c: FlowCompany, k: number) {
   return k * (5 + 3.1 * Math.sqrt(c.headcount / 20));
 }
 
+let VW = 4000;
+let PILLS: { x: number; y: number; w: number }[] = [];   // canvas width, so labels never run off the edge
 function text(g: CanvasRenderingContext2D, str: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = 'center') {
   g.font = font;
+  const tw = g.measureText(str).width;
+  if (align === 'center') x = Math.max(tw / 2 + 6, Math.min(VW - tw / 2 - 6, x));
+  else if (align === 'left') x = Math.max(6, Math.min(VW - tw - 6, x));
+  else if (align === 'right') x = Math.max(tw + 6, x);
   g.textAlign = align;
   g.textBaseline = 'middle';
   g.lineJoin = 'round';
@@ -141,6 +147,13 @@ function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k:
   const pw = w1 + w2 + 18 * k, ph = 24 * k;
   if (alpha <= 0.01) return;
   if (anchor === 'left') x += pw / 2; else if (anchor === 'right') x -= pw / 2;
+  x = Math.max(pw / 2 + 6, Math.min(VW - pw / 2 - 6, x));
+  for (let tries = 0; tries < 6; tries++) {
+    const hit = PILLS.find((r) => Math.abs(r.x - x) < (r.w + pw) / 2 + 4 && Math.abs(r.y - y) < ph + 3);
+    if (!hit) break;
+    y = hit.y - ph - 4;
+  }
+  PILLS.push({ x, y, w: pw });
   g.globalAlpha = alpha;
   g.fillStyle = 'rgba(8,14,40,0.92)';
   g.strokeStyle = rgba(color, 0.7);
@@ -158,6 +171,8 @@ function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k:
 
 export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: View): Frame {
   const { w, h, k } = v;
+  VW = w;
+  PILLS = [];
   const day = dayAt(m, s);
   const phase = phaseAt(m, s);
   const frame: Frame = { nodes: new Map(), beads: new Map(), rivers: [], zoom: 1 };

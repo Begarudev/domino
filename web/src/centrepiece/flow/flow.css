@@ -191,3 +191,4 @@
 .tf-compact .tf-l-body { gap: calc(7 * var(--u)); }
 .tf-compact .tf-note-quiet { display: none; }
 .tf-compact .tf-chip span { display: none; }
+.tf-snaplabel { margin-top: calc(6 * var(--u)); font-size: calc(11.5 * var(--u)); line-height: 1.35; color: rgba(154, 162, 200, 0.95); }
