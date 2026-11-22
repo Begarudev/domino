@@ -20,6 +20,9 @@ export interface Consent {
 
 export interface CandidateHistoryItem { company: string; companyId?: string | null; title: string; from: IsoDate | null; to: IsoDate | null }
 
+// 'Edited by candidate' once the candidate changed the field at confirm; otherwise who parsed it.
+export type FieldProvenance = 'Edited by candidate' | 'Parsed by GPT-6 Luna' | 'Parsed by rules' | string;
+
 export interface Candidate {
   id: string;
   status: 'enriching' | 'ready' | 'failed';
@@ -36,6 +39,7 @@ export interface Candidate {
   runId: string;                    // the candidate pipeline run (stream its events at /api/runs/:runId/stream)
   parsedBy: 'llm' | 'rules';
   fieldSource?: string;             // "Filled by GPT-6 Luna · confirm each field" (llm) or "Read by rules from your profile · confirm each field"
+  provenance?: { roleFamily: FieldProvenance; skills: FieldProvenance }; // who set each editable field
   fixture?: boolean;                // labelled fictional demo candidate
 }
 

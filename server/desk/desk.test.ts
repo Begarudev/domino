@@ -339,6 +339,35 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.deepEqual(await call(`/api/candidates/${candidate.id}/inbox`), [], 'candidate-requested intros are not inbox items');
   });
 
+  test('confirm stores the candidate\'s edits with provenance and re-runs matching on them', async () => {
+    const parsed = await onboard({ shareHistory: true, shareSkills: true, shareSamples: false, discoverable: false });
+    assert.deepEqual(parsed.provenance, { roleFamily: 'Parsed by rules', skills: 'Parsed by rules' });
+    // Unchanged values sent back are not edits.
+    const same = await call<Candidate>(`/api/candidates/${parsed.id}/confirm`, { roleFamily: parsed.roleFamily, skills: parsed.skills });
+    assert.deepEqual(same.provenance, { roleFamily: 'Parsed by rules', skills: 'Parsed by rules' });
+
+    await call(`/api/candidates/${parsed.id}/confirm`, { roleFamily: 'astronaut' }, [400]);
+    const edited = await call<Candidate & { openings: OpeningForCandidate[] }>(`/api/candidates/${parsed.id}/confirm`,
+      { roleFamily: 'inference', skills: ['vLLM', 'Triton', 'Kubernetes'] });
+    assert.equal(edited.roleFamily, 'inference');
+    assert.deepEqual(edited.skills, ['vLLM', 'Triton', 'Kubernetes']);
+    assert.deepEqual(edited.provenance, { roleFamily: 'Edited by candidate', skills: 'Edited by candidate' });
+    const reread = await call<Candidate>(`/api/candidates/${parsed.id}`);
+    assert.equal(reread.roleFamily, 'inference', 'edits are stored, not just echoed');
+
+    // Re-matched on the edited profile: ML platform is now an adjacent family, and the fit says who set it.
+    const orbit = edited.openings.find(row => row.id === 'op_orbit_mlp')!;
+    assert.ok(orbit.fit.some(reason => reason.profileField === 'roleFamily' &&
+      reason.text === 'Profile role family (edited by candidate) Inference / model serving is adjacent to ML platform / ML infrastructure'));
+    assert.ok(orbit.fit.some(reason => reason.profileField === 'skills' && /^Profile skills \(edited by candidate\) relevant to .+: Kubernetes$/.test(reason.text)));
+    const listed = await call<OpeningForCandidate[]>(`/api/candidates/${parsed.id}/openings`);
+    assert.deepEqual(listed.map(row => row.id), edited.openings.map(row => row.id));
+
+    // The intro only cites skills the enriched profile row lists (Kubernetes), never the added ones.
+    const preview = await call<IntroPreview>(`/api/candidates/${parsed.id}/intros/preview?openingId=op_orbit_mlp`);
+    assert.equal(preview.shared.find(field => field.field === 'skills')?.value, 'Kubernetes');
+  });
+
   test('company view: drain as role + initial, discoverable matches only, company-to-candidate intro reaches the inbox', async () => {
     const hidden = await onboard({ shareHistory: false, shareSkills: true, shareSamples: false, discoverable: false }, ['secret sample']);
     assert.deepEqual(hidden.history, []);

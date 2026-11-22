@@ -185,8 +185,10 @@ export function introSharedFields(candidate: Candidate, candidateEvidence: Evide
   if (title) fields.push({ field: 'title', label: 'Current title', value: String(title.value), evidenceId: title.id,
     claim: `${name} lists the current title ${title.value}` });
   const skills = candidateEvidence.find(row => row.source.field === SKILLS_FIELD);
-  if (candidate.consent.shareSkills && skills && candidate.skills.length) {
-    const top = candidate.skills.slice(0, 3).join(', ');
+  // Cite only skills the enriched row actually lists; skills the candidate added are not sourced facts.
+  const sourced = skills ? candidate.skills.filter(skill => String(skills.value).split('; ').includes(skill)) : [];
+  if (candidate.consent.shareSkills && skills && sourced.length) {
+    const top = sourced.slice(0, 3).join(', ');
     fields.push({ field: 'skills', label: 'Skills (top 3)', value: top, evidenceId: skills.id, claim: `${name} lists skills including ${top}` });
   }
   const current = candidate.consent.shareHistory ? candidate.history.find(item => item.to === null) : undefined;
