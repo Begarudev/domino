@@ -65,3 +65,13 @@
 .ver-note { padding: 8px 16px 0; margin: 0; }
 .ver-empty { padding: 16px; margin: 0; color: var(--ink-2); }
 @media (max-width: 1100px) { .ver { grid-template-columns: 1fr; } }
+/* polish p3: grid header, sans tabular dates with a month-level marker, numbers aligned */
+.ver-claims { overflow: clip; }
+.ver-t thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); font-size: 12px; font-weight: 500; color: var(--ink-3); padding: 8px 12px; }
+.ver-t td { padding: 10px 12px; }
+.ver-date { font-size: 13px; font-variant-numeric: tabular-nums; }
+.ver-month { display: block; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--ink-3); }
+.ver-src:has(> span + span) { display: table-cell; }
+.ver-src > span:first-child { display: -webkit-inline-box; max-width: calc(100% - 28px); vertical-align: top; text-overflow: ellipsis; }
+.ver-src > span + span { vertical-align: top; }
+.vt b, .ver-sum header .faint { font-variant-numeric: tabular-nums; }
