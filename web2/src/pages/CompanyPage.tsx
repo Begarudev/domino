@@ -10,6 +10,7 @@ import { Chains } from '../features/chains/Chains.tsx';
 import { LedgerTab } from '../features/ledger/Ledger.tsx';
 import { Needs } from '../features/needs/Needs.tsx';
 import { Openings } from '../features/openings/Openings.tsx';
+import { Buyers } from '../features/buyers/Buyers.tsx';
 import { Outreach } from '../features/outreach/Outreach.tsx';
 import { Replay } from '../features/replay/Replay.tsx';
 import { Reading } from '../features/reading/Reading.tsx';
@@ -109,6 +110,7 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
         {desk && (
           <section data-testid={`panel-${tab}`}>
             {tab === 'recruitment' && <Openings desk={desk} />}
+            {tab === 'buyers' && <Buyers desk={desk} />}
             {tab === 'outreach' && <Outreach desk={desk} />}
             {tab === 'reading' && <Reading desk={desk} />}
             {tab === 'file' && <Analysis desk={desk} />}
