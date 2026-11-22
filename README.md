@@ -341,6 +341,10 @@ The shared guards apply. An account at 2 of 3 goes on a **watchlist** with its d
 **DISPLACEMENT.** An inference provider was acquired, shut down or repriced (a dated source), and B's dated job posts
 name that provider's product, so B needs a contingency plan for the integration. Displacement events are configured
 per seller in `config/seller.json` with their source URL and date, and must match the post's product field exactly.
+Two real, dated events are configured: **Hugging Face acquired by NVIDIA** (3 Sep 2026,
+[blogs.nvidia.com](https://blogs.nvidia.com/blog/nvidia-to-acquire-hugging-face/); product: Text Generation Inference)
+and **Chroma Cloud shut down** (23 Oct 2026, [trychroma.com](https://trychroma.com/blog/replit)). A third, Lumen Serve,
+is a labelled fixture used only in tests.
 
 **CONTAGION.** A peer of B (same industry and size band within 3x, or a listed competitor) made dated technical moves
 (at least two infra job posts or relevant hires), and B has posted no matching roles. B is likely to face the same
@@ -602,7 +606,8 @@ beat hiring. We report it anyway.
   search results carry no date, so a date is read from the article page, and a result without one stays an undated
   lead. Job-post coverage is uneven (no Poolside postings at all since 1 Sep). The replay cohort comes from today's
   profiles, so people who moved again since drop out and departures are undercounted.
-- **Displacement depends on configured events** with a dated source in `config/seller.json`.
+- **Displacement depends on configured events** with a dated source in `config/seller.json` (two real ones today),
+  not on news read automatically.
 - **Coverage bias.** Companies and people with sparse public profiles (many small Indian startups) produce fewer dated
   rows, so DOMINO says less about them instead of guessing. Candidates with thin profiles get fewer matches.
 - **Replay isn't point-in-time** (see the caveat above).
