@@ -1,6 +1,5 @@
-// App shell pieces: the landing title card, the top bar, and the run reel (steps as a filmstrip).
+// App shell pieces: the top bar and the run reel (steps as a filmstrip). The landing lives in features/landing.
 // Feature panels (request box, drawer, drafts, ledger, ...) plug into this shell; it owns only layout.
-import type { ReactNode } from 'react';
 import type { RunSnapshot, StepName } from '../../../shared/types.ts';
 import type { UIState } from '../state.ts';
 
@@ -9,22 +8,6 @@ const SHORT: Record<StepName, string> = {
   enrich_companies: 'Enrich', cascade: 'Cascade', rank_targets: 'Rank', find_deciders: 'Deciders',
   warm_paths: 'Warm paths', draft_messages: 'Draft + verify', approval_gate: 'Approval', score_replay: 'Score replay',
 };
-
-export function Landing(props: { requestBar: ReactNode; source: ReactNode }) {
-  return (
-    <section className="landing film" aria-label="Start a run">
-      <div className="landing-inner m-establish">
-        <h1 className="landing-title">DOMINO</h1>
-        <p className="landing-lead">
-          A dated change at one company creates a need at another. DOMINO finds that second domino, proves it with dated
-          sources, and books the meeting once you approve.
-        </p>
-        <div className="landing-request">{props.requestBar}</div>
-        <div className="landing-source">{props.source}</div>
-      </div>
-    </section>
-  );
-}
 
 export function Reel(props: { state: UIState; onKill: () => void; onResume: () => void; busy: string | null; onOpenLog: () => void }) {
   const { snap, timeline, durations } = props.state;
