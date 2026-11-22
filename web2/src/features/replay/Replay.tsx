@@ -126,7 +126,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
         <section className="panel rp-summary" data-testid="replay-summary">
           <header><h2>Scorecard</h2><button className="btn sm" onClick={() => setDrawer((v) => !v)} aria-expanded={drawer} data-testid="replay-drawer">{drawer ? 'Hide protocol' : 'Show protocol and cohorts'}</button></header>
           <div className="pad">
-            <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. {d.predicted === 0 ? 'Precision unavailable.' : `${fmtInt(d.hits)} had the tracked outcome.`}</p>
+            <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. <span className="rp-lead-2">{d.predicted === 0 ? 'Precision unavailable.' : `${fmtInt(d.hits)} had the tracked outcome.`}</span></p>
             <table className="t rp-table">
               <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
               <tbody>

@@ -73,3 +73,4 @@
 .rp-sub { font-size: var(--fs-body); letter-spacing: var(--track-snug); }
 .rp-drawer { padding: 16px; font-size: var(--fs-ui); }
 .rp-drawer dt { font-weight: var(--w-med); color: var(--ink-3); }
+.rp-lead-2 { color: var(--ink-3); }
