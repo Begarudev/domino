@@ -10,3 +10,5 @@ data/*
 web/dist/
 *.log
 .DS_Store
+data/cache-snapshot/*
+!data/cache-snapshot/.gitkeep
