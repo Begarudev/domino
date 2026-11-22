@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Company, Intent } from '../../shared/types.ts';
+import { Store } from '../db.ts';
 import { parseIntentRules } from '../domain/index.ts';
+import { canonicalJson, hash, ToolContext } from '../runtime/tool.ts';
 import type { ParseMeta } from '../domain/types.ts';
 import { endpoints, fixtureFor, movesPageLimit, NonsenseError, readMovesPages } from './index.ts';
 import type { EndpointSpec } from './spec.ts';
@@ -118,6 +120,31 @@ test('moves pagination sends opaque cursors unchanged and stops at the budgeted 
     assert.equal(page.nextCursor, 'fixture_profiles:1');
   }
   assert.equal(fixtureBodies.length, 1);
+});
+
+test('each cursor page is served from its own cache entry without spending credits', async () => {
+  const store = new Store(':memory:');
+  const spec = endpoints.person_recent_moves;
+  const runId = 'cached-departure-pages';
+  try {
+    store.createRun(runId, 'Cached move search', 'cache', 'template', {
+      maxCredits: 0, maxSeconds: 10, maxModelUsd: 0,
+    }, {});
+    for (const [cursor, next] of [[undefined, 'opaque+/='], ['opaque+/=', null]] as const) {
+      const request = canonicalJson(spec.build({ intent, cursor }));
+      store.writeCache(hash(spec.path + request), 'crustdata', spec.path, request, { profiles: [], next_cursor: next });
+    }
+    const ctx = new ToolContext(store, runId, 'pull_triggers');
+    const cursors: (string | null)[] = [];
+    for await (const page of readMovesPages(intent, input => ctx.crust(spec, input, intent, fixtureFor,
+      () => ({ evidence: [], mentions: [], people: [], triggers: [], nextCursor: null })), 2)) {
+      cursors.push(page.nextCursor);
+    }
+    assert.deepEqual(cursors, ['opaque+/=', null]);
+    assert.deepEqual(store.getLedger(runId).map(row => [row.status, row.credits]), [['cache_hit', 0], ['cache_hit', 0]]);
+  } finally {
+    store.sql.close();
+  }
 });
 
 test('company_growth uses the provider snapshot date and preserves the legal alias', () => {
