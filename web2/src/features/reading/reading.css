@@ -144,5 +144,8 @@ tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
 .rd-table .rd-sub td { padding-top: 6px; padding-bottom: 6px; }
 .rd-table .ctag { height: 20px; }
 .rd-table .c-src { width: 140px; }
+.rd-table .c-dec { width: 190px; }
+.rd-dec-tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 18px; }
+.rd-dec-tag::before { display: inline-block; margin-right: 6px; vertical-align: middle; }
 .rd-dom { font-family: var(--sans); font-size: var(--fs-ui); letter-spacing: 0; }
 
