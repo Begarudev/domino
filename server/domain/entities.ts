@@ -1,6 +1,12 @@
 import type { Company, KeptApartDecision, MergeDecision, Person } from '../../shared/types.ts';
 import { companyNameKey, normalizeDomain, normalizeLinkedIn, normalizeName, relatedDomains, stableId } from './facts.ts';
-import type { CompanyMention, PersonMention } from './types.ts';
+import type { CompanyMention, PersonMention, ResolvedCompany } from './types.ts';
+
+const PLACEHOLDER_NAME = /^(self[- ]?employed|freelanc(e|er|ing)|independent( consultant)?|stealth( mode)?( startup)?|confidential|n\/?a|unknown|various)$/i;
+const SHARED_HOSTS = /^(linkedin\.com|lnkd\.in|links\.[a-z0-9-]+\.[a-z]+|sites\.google\.com|google\.com|github\.io|medium\.com|notion\.site|wixsite\.com|linktr\.ee|bit\.ly|facebook\.com|twitter\.com|x\.com)$/i;
+function usableDomain(domain: string | null): string | null {
+  return domain && !SHARED_HOSTS.test(domain) ? domain : null;
+}
 
 class Groups<T extends { key: string }> {
   parents = new Map<string, string>();
@@ -60,9 +66,14 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
   const idMap: Record<string, string> = Object.create(null);
   const merges: MergeDecision[] = [];
   const keptApart: KeptApartDecision[] = [];
-  const domainOf = (mention: CompanyMention) => normalizeDomain(mention.domain);
-  const idOf = (mention: CompanyMention) => mention.crustdataId != null && String(mention.crustdataId).trim() ? String(mention.crustdataId) : null;
-  const linkedinOf = (mention: CompanyMention) => normalizeLinkedIn(mention.linkedinUrl);
+  // Placeholder identifiers must never join records: Crustdata uses id 0 for unknown employers, people list
+  // "Self-employed"/"Freelance", and some websites are shared hosts (linkedin.com, links.*, google sites).
+  const domainOf = (mention: CompanyMention) => usableDomain(normalizeDomain(mention.domain));
+  const idOf = (mention: CompanyMention) => {
+    const id = mention.crustdataId != null ? String(mention.crustdataId).trim() : '';
+    return id && !/^0+$/.test(id) && !PLACEHOLDER_NAME.test(mention.name ?? '') ? id : null;
+  };
+  const linkedinOf = (mention: CompanyMention) => PLACEHOLDER_NAME.test(mention.name ?? '') ? null : normalizeLinkedIn(mention.linkedinUrl);
   for (const [name, keyOf] of [
     ['Crustdata id', idOf], ['domain', domainOf], ['LinkedIn company URL', linkedinOf],
   ] as const) {
@@ -71,12 +82,18 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
     }
   }
 
+  const ambiguities = new Set<string>();
   const conflicts: { a: string; b: string; reason: string }[] = [];
   for (const [name, records] of buckets(companyMentions, mention => companyNameKey(mention.name))) {
+    const anchors = new Set(records.filter(record => idOf(record) || domainOf(record) || linkedinOf(record))
+      .map(record => groups.root(record.key)));
+    if (anchors.size > 1) for (const record of records) {
+      if (!anchors.has(groups.root(record.key))) ambiguities.add(record.key);
+    }
     for (const [i, first] of records.entries()) for (const second of records.slice(i + 1)) {
       const a = groups.root(first.key);
       const b = groups.root(second.key);
-      if (a === b) continue;
+      if (a === b || ambiguities.has(first.key) !== ambiguities.has(second.key)) continue;
       const conflict = (keyOf: (mention: CompanyMention) => string | null) => {
         const left = [...buckets(groups.members.get(a)!, keyOf).keys()];
         const right = [...buckets(groups.members.get(b)!, keyOf).keys()];
@@ -106,16 +123,19 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
     const identity = ids[0] ? 'id:' + ids[0] : domains[0] ? 'domain:' + domains[0] : urls[0] ? 'linkedin:' + urls[0] : 'name:' + (nameKey || root);
     const id = stableId('co_', identity);
     const funding = preference.flatMap(record => record.lastFunding ?? []).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
-    const company: Company = {
+    const company: ResolvedCompany = {
       id, name: aliases[0], aliases, domain: normalizeDomain(first('domain')), linkedinUrl: normalizeLinkedIn(first('linkedinUrl')),
       crustdataId: first('crustdataId'), industry: first('industry'), headcount: first('headcount'), headcountGrowthPct: first('headcountGrowthPct'),
+      ambiguousIdentity: ids.length > 1 || records.some(record => ambiguities.has(record.key) || record.ambiguousIdentity),
+      acquisitions: records.flatMap(record => record.acquisitions ?? []),
       hq: first('hq'), foundedYear: first('foundedYear'), lastFunding: funding, evidenceIds: [...new Set(records.flatMap(record => record.evidenceIds))],
     };
     companies.push(company);
     companyMembers.set(id, records);
     for (const record of records) idMap[record.key] = id;
-    if (records.length > 1) merges.push({ canonicalId: id, kind: 'company', names: aliases, keys: [...new Set(records.map(record => record.key))],
-      reason: `Merged ${records.map(record => record.key).join(', ')} using ${[...(groups.reasons.get(root) ?? ['the same mention key'])].join(' and ')}.` });
+    const sourceKeys = [...new Set(records.map(record => record.key))];
+    if (sourceKeys.length > 1) merges.push({ canonicalId: id, kind: 'company', names: aliases, keys: sourceKeys,
+      reason: `Merged ${sourceKeys.length} source records (${sourceKeys.join(', ')}) using ${[...(groups.reasons.get(root) ?? [])].join(' and ')}.` });
   }
   companies.sort((a, b) => lexical(a.name, b.name) || lexical(a.id, b.id));
 
@@ -201,9 +221,10 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
       linkedinUrl: url, startedAt: preferred.startedAt, pastEmployers: [...pastEmployers.values()],
       evidenceIds: [...new Set(records.flatMap(record => record.evidenceIds))],
     });
-    if (records.length > 1) merges.push({ canonicalId: id, kind: 'person', names: [...new Set(records.map(record => record.name))],
-      keys: [...new Set(records.map(record => record.key))],
-      reason: `Merged ${records.map(record => record.key).join(', ')} using ${[...(peopleGroups.reasons.get(root) ?? ['the same mention key'])].join(' and ')}.` });
+    const sourceKeys = [...new Set(records.map(record => record.key))];
+    if (sourceKeys.length > 1) merges.push({ canonicalId: id, kind: 'person', names: [...new Set(records.map(record => record.name))],
+      keys: sourceKeys,
+      reason: `Merged ${sourceKeys.length} source records (${sourceKeys.join(', ')}) using ${[...(peopleGroups.reasons.get(root) ?? [])].join(' and ')}.` });
   }
   return { companies, people: resolvedPeople, merges, keptApart, idMap };
 }

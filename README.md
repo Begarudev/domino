@@ -135,7 +135,33 @@ Source: [`docs/architecture.mmd`](docs/architecture.mmd). Build contract: [`docs
 
 ## Experiments
 
-_Replay results go here, measured, including where DOMINO loses to a baseline._
+### Replay protocol (frozen 22 Nov 2026, 13:40 IST, before any replay outcome was looked at)
+
+- **Question:** do accounts flagged by the cross-company rules show the predicted need later, more often than accounts a
+  plain filter would pick?
+- **As-of date:** 1 Sep 2026. Only facts dated on or before it are used to predict. Profile-based hires and departures
+  count only once 30 days old (people update profiles late), so a move is usable at 1 Sep only if it started by 2 Aug.
+  Month-precision dates count only when the whole month is inside the window.
+- **Cohort:** AI/ML companies with 20-5000 staff returned by Crustdata company search for the request, plus the
+  companies their departing infra/serving engineers came from. Giants (> 5000 staff) and staffing/recruiting firms are
+  excluded. The cohort is fixed by the request, not by outcomes.
+- **Rules and thresholds (unchanged after this point):** TALENT_DRAIN needs >= 3 conclusive dated departures of
+  infra/serving/ML-platform engineers from A in 90 days, the 3rd inside the last 30 days of the window; any Hold guard
+  (acqui-hire, shared parent, > 40% of headcount moving, ambiguous id, month-only dates that can't settle the window,
+  unrecognised titles) removes the account. CONTAGION and DISPLACEMENT as described above.
+- **Outcome definition:** within 60 days after the as-of date (by 31 Oct 2026), a dated serving/infra/ML-platform job
+  post or hire at the account ("serving staffing activity"). Outcomes say the company *showed* the need, never that it
+  bought anything.
+- **Baselines:** (1) first-order hiring filter: companies that posted infra/serving roles before the as-of date;
+  (2) headcount +30% filter.
+- **Reported:** raw counts per arm (predicted, showed the need, did not), no lift statistics; small numbers are shown
+  as small numbers, including when DOMINO loses.
+- **Caveat shown on screen:** not point-in-time. It is today's Crustdata index filtered by fact dates, so records that
+  changed or disappeared since 1 Sep can't be seen.
+
+### Results
+
+_Filled in from the replay run; nothing above changes after outcomes are seen._
 
 ## What's next
 

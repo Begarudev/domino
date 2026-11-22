@@ -66,18 +66,18 @@ export function useReducedMotion() {
   return rm;
 }
 
+/** Measures an element's content box. A callback ref, so it works for elements mounted later (after the landing card). */
 export function useSize<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  useEffect(() => {
-    const el = ref.current;
+  const ro = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((el: T | null) => {
+    ro.current?.disconnect();
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
+    ro.current = new ResizeObserver(([entry]) => {
       const r = entry.contentRect;
       setSize({ width: Math.floor(r.width), height: Math.floor(r.height) });
     });
-    ro.observe(el);
-    return () => ro.disconnect();
+    ro.current.observe(el);
   }, []);
   return [ref, size] as const;
 }

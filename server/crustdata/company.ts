@@ -30,7 +30,15 @@ const companySchema = z.object({
     total: int, growth_percent: z.record(num).nullish(),
     timeseries: z.array(z.object({ date: str, employee_count: int }).passthrough()).nullish(),
   }).passthrough().nullish(),
-  funding: z.object({ last_fundraise_date: str, last_round_type: str, last_round_amount_usd: num }).passthrough().nullish(),
+  funding: z.object({
+    last_fundraise_date: str, last_round_type: str, last_round_amount_usd: num,
+    acquisitions: z.array(z.object({
+      acquirer_company_id: int, acquirer_company_name: str, acquiree_company_id: int, acquiree_company_name: str,
+      announced_on_date: str, acquirer_crunchbase_url: str, acquiree_crunchbase_url: str,
+    }).passthrough()).nullish(),
+    acquired_by: z.array(z.object({ name: str, crustdata_company_id: int, date: str }).passthrough()).nullish(),
+    milestones: z.array(z.object({ date: str, funding_date: str, round_type: str, amount_usd: num }).passthrough()).nullish(),
+  }).passthrough().nullish(),
   competitors: z.object({ all_domains: strs }).passthrough().nullish(),
 }).passthrough();
 type CompanyRow = z.infer<typeof companySchema>;
@@ -42,7 +50,8 @@ const enrichResponse = z.array(z.object({
 
 function roundName(value?: string | null): string | null {
   if (!value?.trim()) return null;
-  return value.replace(/_/g, ' ').replace(/\bseries ([a-z])\b/i, (_, letter: string) => 'Series ' + letter.toUpperCase());
+  return value.replace(/_/g, ' ').replace(/\bseries ([a-z])\b/i, (_, letter: string) => 'Series ' + letter.toUpperCase())
+    .replace(/\bipo\b/gi, 'IPO').replace(/\bpost IPO\b/i, 'post-IPO').replace(/\bpre IPO\b/i, 'pre-IPO');
 }
 
 const periods = [['1m', 'mom'], ['3m', 'qoq'], ['6m', 'six_months'], ['12m', 'yoy']] as const;
@@ -70,10 +79,9 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
   const snapshotUsable = anchorUsable || (!historical && !anchor);
   const headcount = latest?.count ?? (snapshotUsable ? row.headcount?.total : undefined);
   const headcountDate = latest?.date ?? (snapshotUsable ? anchor : null);
-  let headcountFact: Evidence | undefined;
   if (headcount != null) {
     const field = latest ? `headcount.timeseries[${latest.index}].employee_count` : 'headcount.total';
-    headcountFact = add(field, `${name} had ${headcount} employees${headcountDate ? ' on ' + headcountDate : ' in the company profile'}.`, headcountDate, headcount);
+    add(field, `${name} had ${headcount} employees${headcountDate ? ' on ' + headcountDate : ' in the company profile'}.`, headcountDate, headcount);
   }
 
   const growthMap = row.headcount?.growth_percent;
@@ -82,8 +90,10 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
   const previous = latest && points.find(point => point.date <= shiftDays(latest.date, -28));
   if (latest && previous?.count && previous.date >= shiftDays(latest.date, -35)) {
     growth = { window: '1m', pct: Math.round((latest.count / previous.count - 1) * 1000) / 10 };
-    growthFact = add(`headcount.timeseries[${previous.index}].employee_count`,
+    add(`headcount.timeseries[${previous.index}].employee_count`,
       `${name} had ${previous.count} employees on ${previous.date}.`, previous.date, previous.count);
+    growthFact = add('headcount.timeseries', `${name}’s headcount went from ${previous.count} on ${previous.date} to ${latest.count} on ${latest.date}.`,
+      latest.date, growth.pct);
   } else if (growthMap && snapshotUsable) {
     for (const [window, alias] of periods) {
       const field = growthMap[window] == null ? alias : window;
@@ -91,21 +101,28 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
       if (pct == null) continue;
       growth = { window, pct };
       growthFact = add('headcount.growth_percent.' + field,
-        `${name} reported ${pct}% headcount growth over ${window}${anchor ? ' through ' + anchor : ''}.`, anchor, pct);
+        `${name} reported ${Math.round(pct * 10) / 10}% headcount growth over ${window}${anchor ? ' through ' + anchor : ''}.`, anchor, pct);
       break;
     }
   }
-  const fundingDate = isoDay(row.funding?.last_fundraise_date);
-  const round = roundName(row.funding?.last_round_type);
-  const amountUsd = row.funding?.last_round_amount_usd;
+  const headlineDate = isoDay(row.funding?.last_fundraise_date);
+  const historicRound = (row.funding?.milestones ?? []).flatMap((round, index) => {
+    const date = isoDay(round.funding_date ?? round.date);
+    return date && date <= meta.asOf ? [{ ...round, date, index }] : [];
+  }).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const useMilestone = historicRound && (!headlineDate || headlineDate > meta.asOf || historicRound.date > headlineDate);
+  const fundingDate = useMilestone ? historicRound.date : headlineDate;
+  const round = roundName(useMilestone ? historicRound.round_type : row.funding?.last_round_type);
+  const amountUsd = useMilestone ? historicRound.amount_usd : row.funding?.last_round_amount_usd;
   let funding: Company['lastFunding'];
   let fundingFact: Evidence | undefined;
   if ((fundingDate && fundingDate <= meta.asOf) || (!historical && !fundingDate && (round || amountUsd != null))) {
     funding = { date: fundingDate, round, amountUsd };
-    const amount = amountUsd != null ? ' of $' + amountUsd.toLocaleString('en-US') : '';
-    const fundingField = amountUsd != null ? 'last_round_amount_usd' : round ? 'last_round_type' : 'last_fundraise_date';
-    fundingFact = add('funding.' + fundingField,
-      `${name} reported ${round ? 'a ' + round : 'a funding round'}${amount}${fundingDate ? ' on ' + fundingDate : ''}.`,
+    const amount = amountUsd != null ? ' of ' + usd(amountUsd) : '';
+    const fundingField = useMilestone ? `funding.milestones[${historicRound.index}]`
+      : 'funding.' + (amountUsd != null ? 'last_round_amount_usd' : round ? 'last_round_type' : 'last_fundraise_date');
+    fundingFact = add(fundingField,
+      `${name} reported a ${round ? round + ' round' : 'funding round'}${amount}${fundingDate ? ' on ' + fundingDate : ''}.`,
       fundingDate, amountUsd ?? round ?? fundingDate);
   }
 
@@ -121,30 +138,42 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
     add('basic_info.year_founded', `${name} was founded in ${basic.year_founded}.`, null, basic.year_founded);
   }
 
+  const acquisitions = (row.funding?.acquisitions ?? []).flatMap(event => {
+    const date = isoDay(event.announced_on_date);
+    if ((date && date > meta.asOf) || !event.acquirer_company_name || !event.acquiree_company_name) return [];
+    return [{ acquirer: event.acquirer_company_name, acquired: event.acquiree_company_name, acquirerId: event.acquirer_company_id,
+      acquiredId: event.acquiree_company_id, date, sourceUrl: event.acquiree_crunchbase_url ?? event.acquirer_crunchbase_url ?? undefined }];
+  });
+  for (const event of row.funding?.acquired_by ?? []) {
+    const date = isoDay(event.date);
+    if (event.name && (!date || date <= meta.asOf)) acquisitions.push({
+      acquirer: event.name, acquired: name, acquirerId: event.crustdata_company_id, acquiredId: id, date, sourceUrl: undefined,
+    });
+  }
   const mention: CompanyMention = {
     key: prefix + ':' + recordId + ':company', name, domain, linkedinUrl: basic.professional_network_url,
     crustdataId: id, headcount, headcountGrowthPct: growth, firmographicsAsOf: headcountDate,
     industry, hq: row.locations?.headquarters || row.locations?.country, foundedYear: hasFirmographics ? basic.year_founded : undefined,
-    lastFunding: funding, competitorNames: [], competitorDomains, evidenceIds: evidence.map(row => row.id),
+    lastFunding: funding, acquisitions, competitorNames: [], competitorDomains, evidenceIds: evidence.map(row => row.id),
   };
-  return { mention, evidence, recordId, growth, growthFact, headcountFact, fundingFact };
+  return { mention, evidence, recordId, growth, growthFact, fundingFact };
 }
 
 function companySignals(row: NonNullable<ReturnType<typeof toCompany>>, intent: Pick<Intent, 'asOf' | 'windowDays'>) {
   const triggers: TriggerBatch['triggers'] = [];
   const after = shiftDays(intent.asOf, -intent.windowDays);
-  const { mention, recordId, fundingFact, growth, growthFact, headcountFact } = row;
+  const { mention, recordId, fundingFact, growth, growthFact } = row;
   if (fundingFact && inWindow(fundingFact.observedAt, after, intent.asOf)) triggers.push({
     id: stableId('tr_', 'funding', recordId, fundingFact.observedAt), companyId: mention.key, kind: 'funding',
     date: fundingFact.observedAt, summary: `reported ${mention.lastFunding?.round || 'funding'} on ${fundingFact.observedAt}`,
     evidenceIds: [fundingFact.id],
   });
-  const growthDate = headcountFact?.observedAt ?? growthFact?.observedAt ?? null;
+  const growthDate = growthFact?.observedAt ?? null;
   if (growth?.window === '1m' && growth.pct >= JUMP_PCT && growthFact && inWindow(growthDate, after, intent.asOf)) {
     triggers.push({
       id: stableId('tr_', 'headcount_jump', recordId, growthDate), companyId: mention.key, kind: 'headcount_jump', date: growthDate,
       summary: `headcount grew ${growth.pct}% over one month through ${growthDate}`,
-      evidenceIds: [...(headcountFact ? [headcountFact.id] : []), growthFact.id],
+      evidenceIds: [growthFact.id],
     });
   }
   return triggers;
@@ -203,18 +232,22 @@ export const companyEnrich: EndpointSpec<{ companies: CompanyInput[] }, Pick<Tri
     const historical = Boolean(isoDay(meta.retrievedAt) && meta.asOf < isoDay(meta.retrievedAt)!);
     const seen = new Set<string>();
     for (const result of validate(enrichResponse, raw)) {
-      const match = result.matches.filter(candidate => {
+      const matching = result.matches.filter(candidate => {
         const basic = candidate.company_data.basic_info;
         const identity = {
           name: basic?.name || '', domain: basic?.primary_domain || basic?.website,
           crustdataId: candidate.company_data.crustdata_company_id ?? basic?.crustdata_company_id,
         };
         return companies.some(company => sameCompany(identity, company));
-      }).sort((a, b) => (b.confidence_score ?? 0) - (a.confidence_score ?? 0))[0];
+      }).sort((a, b) => (b.confidence_score ?? 0) - (a.confidence_score ?? 0));
+      const match = matching[0];
       if (!match) continue;
       const row = toCompany(match.company_data, meta, 'company_enrich', historical);
       if (!row || seen.has(row.recordId)) continue;
       seen.add(row.recordId);
+      const identities = new Set(matching.map(candidate => candidate.company_data.crustdata_company_id ??
+        candidate.company_data.basic_info?.crustdata_company_id ?? candidate.company_data.basic_info?.primary_domain));
+      if (identities.size > 1) row.mention.ambiguousIdentity = true;
       batch.mentions.push(row.mention);
       batch.evidence.push(...row.evidence);
       batch.triggers.push(...companySignals(row, meta));
@@ -229,3 +262,11 @@ export const companyEnrich: EndpointSpec<{ companies: CompanyInput[] }, Pick<Tri
     }, 0);
   },
 };
+
+// "$3,960,000" reads badly in a first message; "$4.0M" is what a person would write.
+function usd(amount: number): string {
+  if (amount >= 1e9) return '$' + (amount / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (amount >= 1e6) return '$' + (amount / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (amount >= 1e3) return '$' + Math.round(amount / 1e3) + 'K';
+  return '$' + amount;
+}

@@ -9,6 +9,7 @@ import { now } from '../db.ts';
 import type { OutcomeFact, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import { root } from '../env.ts';
 import { modelClient } from '../llm/client.ts';
+import { mapLimit } from '../runtime/pool.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 import { dateShift, predictionEvidence, publishEvidence, readSource } from './sources.ts';
@@ -294,31 +295,47 @@ function futureSlots(seller: SellerProfile, createdAt: string) {
   return [`${date}T11:00:00+05:30`, `${dateShift(date, 1)}T15:30:00+05:30`];
 }
 
+const draftConcurrency = 3;
+
 async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResult<'draft_messages'>> {
   const { companies, triggers, evidence: companyEvidence } = c.enrich_companies!;
   const evidence = predictionEvidence(byId([...companyEvidence, ...c.find_deciders!.evidence]), c.parse_request!);
-  const drafts: Draft[] = [];
-  const targets: Target[] = [];
-  const events: RunEvent[] = [];
   const profile = { ...seller, meeting: { ...seller.meeting, slots: futureSlots(seller, ctx.store.requireRun(ctx.runId).created_at) } };
-  for (const target of c.warm_paths!) {
+  // Each draft is an independent model call; run a few at once. Budget checks reserve each call's estimate in
+  // the ledger transaction before it starts, so concurrent calls cannot overspend the run's model ceiling.
+  const results = await mapLimit(c.warm_paths!, draftConcurrency, async target => {
     const company = companies.find(row => row.id === target.companyId);
-    if (!company) {
-      targets.push(target);
-      continue;
-    }
+    if (!company || target.hold) return { target };   // held accounts are shown with reasons, never drafted
     const claims = deps.buildClaims(target, company, triggers, evidence, c.cascade!);
     const template = deps.templateDraft(target, target.decider, claims, profile);
     const prompt = deps.llmDraftPrompt(target, target.decider, claims.filter(claim => claim.verifiable), profile);
     const completion = await modelClient(ctx).complete({ purpose: 'draft', ...prompt, json: true, maxTokens: 2400 });
-    const parsed = completion ? messageShape.safeParse(JSON.parse(completion.text)) : null;
-    const candidate = parsed?.success ? { ...template, ...parsed.data, generator: completion!.model } : template;
-    const checked = deps.verifyDraft(candidate, claims, evidence);
-    // Use the template subject because verifier results cover the message body.
-    const draft = { ...candidate, ...checked, subject: template.subject };
+    const parsed = completion ? safeJson(completion.text, messageShape) : null;
+    let draft: Draft;
+    if (parsed) {
+      // The model writes only the claim-bearing middle; the verifier checks it; the fixed frame goes around it.
+      const frame = deps.draftFrame(target.decider, profile);
+      const checked = deps.verifyDraft({ subject: template.subject, body: parsed.body }, claims, evidence);
+      const frameCheck = (sentence: string) => ({ sentence, status: 'no_claim' as const, evidenceIds: [] });
+      draft = {
+        ...template, ...checked, generator: completion!.model, subject: template.subject,
+        body: [frame.greeting, checked.body.trim(), frame.cta, frame.signoff].filter(Boolean).join('\n\n'),
+        checks: [frameCheck(frame.greeting), ...checked.checks, frameCheck(frame.cta), frameCheck(frame.signoff)],
+      };
+      draft.id = template.id;
+    } else {
+      draft = { ...template, ...deps.verifyDraft(template, claims, evidence), subject: template.subject };
+    }
+    return { target: { ...target, draftId: draft.id }, draft };
+  });
+  const drafts: Draft[] = [];
+  const targets: Target[] = [];
+  const events: RunEvent[] = [];
+  for (const { target, draft } of results) {
+    targets.push(target);
+    if (!draft) continue;
     drafts.push(draft);
-    targets.push({ ...target, draftId: draft.id });
-    events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: company.id, ...item })),
+    events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: target.companyId, ...item })),
       { type: 'draft.ready', draft });
   }
   return { output: { targets, drafts }, summary: `${drafts.length} drafts checked against evidence`, events };
@@ -392,3 +409,12 @@ export const steps: { [K in StepName]: Runner<K> } = {
   cascade, rank_targets: rankTargets, find_deciders: findDeciders, warm_paths: warmPaths, draft_messages: draftMessages,
   approval_gate: approvalGate, score_replay: scoreReplay,
 };
+
+function safeJson<T>(text: string, shape: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): T | null {
+  try {
+    const result = shape.safeParse(JSON.parse(text));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
