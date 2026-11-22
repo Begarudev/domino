@@ -145,6 +145,13 @@ export function createApp(store: Store) {
   app.use('/api/*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     await next();
+    // Privacy boundary: every JSON response shows people as role + initial; full names never leave the server.
+    if (c.res.headers.get('content-type')?.includes('application/json')) {
+      const body = await c.res.clone().json().catch(() => undefined);
+      if (body !== undefined) {
+        c.res = new Response(JSON.stringify(store.redactor.value(body)), { status: c.res.status, headers: c.res.headers });
+      }
+    }
   });
 
   app.get('/api/health', c => c.json({
@@ -199,7 +206,7 @@ export function createApp(store: Store) {
         const events = store.getEvents(id, after);
         for (const event of events) {
           if (stream.aborted) break;
-          await stream.writeSSE({ id: String(event.seq), data: JSON.stringify(event) });
+          await stream.writeSSE({ id: String(event.seq), data: JSON.stringify(store.redactor.value(event)) });
           after = event.seq;
         }
         if (Date.now() - heartbeat >= 10_000) {
