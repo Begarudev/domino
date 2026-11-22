@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LiveProbe, liveIntent, probeIntent, replayIntent } from '../../scripts/probe-live.ts';
 
-const skip = process.env.CRUSTDATA_API_KEY?.trim() ? false : 'CRUSTDATA_API_KEY is unset';
+// Live calls cost credits and share a few-requests-per-minute limit, so they run only when asked for
+// (Bun auto-loads .env, so the key alone is not consent): DOMINO_LIVE_TESTS=1 bun test server/crustdata/live.test.ts
+const skip = process.env.DOMINO_LIVE_TESTS !== '1' ? 'set DOMINO_LIVE_TESTS=1 to run live Crustdata checks' : process.env.CRUSTDATA_API_KEY?.trim() ? false : 'CRUSTDATA_API_KEY is unset';
 const endpoints = [
   'job_search', 'person_recent_moves', 'company_growth', 'company_enrich', 'person_deciders', 'outcome_check jobs', 'outcome_check hires',
 ];
