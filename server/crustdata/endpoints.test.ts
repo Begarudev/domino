@@ -38,7 +38,26 @@ test('job_search reads original dates, URLs and descriptions using the documente
   assert.match(job!.id, /^ev_[\da-f]+$/);
   assert.equal(job!.retrievedAt, today + 'T15:00:00Z');
   assert.equal(job!.mode, 'fixture');
-  assert.equal(parsed.triggers.filter(trigger => trigger.kind === 'post').length, 1);
+  assert.equal(parsed.triggers.filter(trigger => trigger.kind === 'post').length, 0);
+});
+
+test('job_search_displacement asks only for products of recent provider events and cites the naming excerpt', () => {
+  const { body, parsed } = evaluate(endpoints.job_search_displacement, { intent });
+  const text = JSON.stringify(body);
+  assert.match(text, /"field":"content.description","type":"\[\.\]","value":"Lumen Serve"/);
+  assert.doesNotMatch(text, /"value":"inference"/);
+  const post = parsed.triggers.find(trigger => trigger.kind === 'post');
+  assert.ok(post?.relatedCompanyId?.startsWith('displacement:'));
+  const fact = parsed.evidence.find(row => post!.evidenceIds.includes(row.id) && row.source.field === '$.content.description');
+  assert.match(fact!.claim, /named Lumen Serve in the posting for .* on 2026-10-29: “….*Lumen Serve integration/);
+});
+
+test('a product named only as employer background or an investor is not an integration', async () => {
+  const { productMention } = await import('./job-search.ts');
+  assert.equal(productMention('Background at a neocloud such as CoreWeave or Nebius is a plus.', 'Nebius'), null);
+  assert.equal(productMention('We secured strategic investment led by Nebius Group.', 'Nebius'), null);
+  assert.match(productMention('You will work with cloud compute clusters (Lambda, Nebius, AWS).', 'Nebius')!, /Nebius/);
+  assert.equal(productMention('Chromatic aberration', 'Chroma'), null);
 });
 
 test('person_recent_moves pairs current starts with the nearest prior end and keeps no contact fields', () => {

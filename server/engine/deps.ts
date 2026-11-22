@@ -9,7 +9,7 @@ export {
   buildClaims, templateDraft, draftFrame, llmDraftPrompt, verifyDraft, filterAsOf, scoreReplay,
 } from '../domain/index.ts';
 export {
-  jobSearch, personSearchRecentMoves, companySearchGrowth, companyEnrich, personSearchDeciders, fixtureFor,
+  jobSearch, jobSearchDisplacement, personSearchRecentMoves, companySearchGrowth, companyEnrich, personSearchDeciders, fixtureFor,
 } from '../crustdata/index.ts';
 
 // The engine's replay step reads outcome legs as trigger batches keyed by canonical company id;

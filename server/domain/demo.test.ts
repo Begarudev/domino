@@ -24,6 +24,7 @@ function fixturePipeline(intent: Intent) {
   const input = { intent };
   const batches: TriggerBatch[] = [
     fetchFixture(endpoints.job_search, input, intent),
+    fetchFixture(endpoints.job_search_displacement, input, intent),
     fetchFixture(endpoints.person_recent_moves, input, intent),
     fetchFixture(endpoints.company_growth, input, intent),
   ];

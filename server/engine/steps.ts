@@ -169,7 +169,7 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
 type TriggerSource<I> = EndpointSpec<I, TriggerBatch>;
 async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpoints): Promise<StepResult<'pull_triggers'>> {
   const output = emptyBatch();
-  for (const spec of [deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth] satisfies TriggerSource<{ intent: Intent }>[]) {
+  for (const spec of [deps.jobSearch, deps.jobSearchDisplacement, deps.personSearchRecentMoves, deps.companySearchGrowth] satisfies TriggerSource<{ intent: Intent }>[]) {
     const batch = await readSource(ctx, spec, { intent: intent! }, intent!);
     const kept = guardBatch(batch, intent!);
     ctx.store.transaction(() => {

@@ -15,6 +15,12 @@ export const jobCompanyFields = {
   id: 'company.basic_info.company_id', domain: 'company.basic_info.primary_domain', name: 'company.basic_info.name',
 };
 const displacementEvents = (sellerJson as SellerProfile).displacementEvents;
+/** A provider event stays actionable for this many days; the naming job post must be dated on or after the event. */
+export const DISPLACEMENT_EVENT_DAYS = 90;
+export const DISPLACEMENT_LIMIT = 100;
+// A product named only as an employer background, an investor or a sponsor is not an integration.
+const notAnIntegration = /\b(?:background (?:at|in)|experience at|worked at|alumni of|invest(?:ed|ment|or)s?|led by|backed by|powered by|partner(?:ship)? with|acquired by)\b[^.;\n]{0,80}$/i;
+const staffingIndustry = /\b(?:staffing|recruit|employment|human resources)/i;
 
 const jobResponse = z.object({
   job_listings: z.array(z.object({
@@ -35,8 +41,21 @@ const jobResponse = z.object({
 
 type Job = z.infer<typeof jobResponse>['job_listings'][number];
 
-function activeEvents(after: IsoDate, through: IsoDate) {
-  return displacementEvents.filter(event => inWindow(event.date, after, through));
+export function activeEvents(asOf: IsoDate, fixture = false) {
+  return displacementEvents.filter(event => inWindow(event.date, shiftDays(asOf, -DISPLACEMENT_EVENT_DAYS), asOf) &&
+    (!event.fixtureOnly || fixture));
+}
+
+/** The first mention of the product that reads as the employer's own stack, or null. */
+export function productMention(description: string, product: string): string | null {
+  const lower = description.toLowerCase();
+  const needle = product.toLowerCase();
+  for (let at = lower.indexOf(needle); at >= 0; at = lower.indexOf(needle, at + needle.length)) {
+    if (!containsPhrase(description.slice(Math.max(0, at - 1), at + needle.length + 1), product)) continue;
+    if (notAnIntegration.test(description.slice(Math.max(0, at - 120), at))) continue;
+    return description.slice(Math.max(0, at - 90), at + needle.length + 60).replace(/\s+/g, ' ').trim();
+  }
+  return null;
 }
 
 export function buildJobs(intent: Intent, after: IsoDate, through: IsoDate, company?: Filter, displacement = false) {
@@ -46,9 +65,10 @@ export function buildJobs(intent: Intent, after: IsoDate, through: IsoDate, comp
   const keywords = [...new Set(intent.signalKeywords.filter(keyword => keyword.trim()))];
   if (keywords.some(keyword => containsPhrase('GPU', keyword))) keywords.push('GPUs');
   const signalFilters = titleFields.flatMap(field => keywords.map(keyword => condition(field, '[.]', keyword)));
-  const productFilters = displacement ? activeEvents(after, through)
-    .map(event => condition('content.description', '[.]', event.product)) : [];
-  const signal = [...signalFilters, ...productFilters];
+  const productFilters = displacement ? [...new Set(activeEvents(through, true).map(event => event.product))]
+    .map(product => condition('content.description', '[.]', product)) : [];
+  // Product mentions get their own request so keyword-matched postings cannot crowd them out of the page.
+  const signal = displacement ? productFilters : signalFilters;
   return {
     filters: group('and', [
       ...dates(JOB_DATE, after, through),
@@ -58,7 +78,7 @@ export function buildJobs(intent: Intent, after: IsoDate, through: IsoDate, comp
     ]),
     sorts: [{ field: JOB_DATE, order: 'desc' }],
     fields,
-    limit: JOB_LIMIT,
+    limit: displacement ? DISPLACEMENT_LIMIT : JOB_LIMIT,
   };
 }
 
@@ -80,7 +100,7 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
   options: { displacement?: boolean; allowAnyGeography?: boolean } = {}): TriggerBatch {
   const batch = emptyBatch();
   const seen = new Set<string>();
-  const events = options.displacement ? activeEvents(after, through).filter(event => !event.fixtureOnly || meta.mode === 'fixture') : [];
+  const events = options.displacement ? activeEvents(through, meta.mode === 'fixture') : [];
   for (const row of validate(jobResponse, raw).job_listings) {
     const title = row.job_details?.title?.trim();
     if (!title || (!options.allowAnyGeography && !matchesGeography(row.location?.country, intent.geography))) continue;
@@ -88,7 +108,11 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
     if (day && !inWindow(day, after, through)) continue;
     const description = row.content?.description ?? '';
     const infra = matchesSignal(title, intent.signalKeywords) || matchesSignal(description, intent.signalKeywords);
-    const products = events.filter(event => containsPhrase(description, event.product));
+    const staffing = (row.company?.basic_info?.industries ?? []).some(industry => staffingIndustry.test(industry ?? ''));
+    const products = staffing ? [] : events.flatMap(event => {
+      const excerpt = day ? productMention(description, event.product) : null;
+      return excerpt ? [{ event, excerpt }] : [];
+    });
     if (!infra && !products.length) continue;
     const recordId = String(row.crustdata_job_id ?? row.job_details?.job_id ??
       stableId('job_', row.job_details?.url || '', row.company?.basic_info?.name || '', title, day || ''));
@@ -107,9 +131,9 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
       summary: `posted “${title}” on ${day}`, evidenceIds: [titleFact.id],
     });
 
-    for (const event of products) {
+    for (const { event, excerpt } of products) {
       const productFact = evidenceRow(meta, recordId, '$.content.description',
-        `${company.name} mentioned ${event.product} in the posting for “${title}”.`, day, event.product, url);
+        `${company.name} named ${event.product} in the posting for “${title}” on ${day}: “…${excerpt}…”`, day, event.product, url);
       batch.evidence.push(productFact);
       company.evidenceIds.push(productFact.id);
       const sourceUrl = publicUrl(event.sourceUrl);
@@ -136,7 +160,16 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
 
 export const jobSearch: EndpointSpec<{ intent: Intent }, TriggerBatch> = {
   name: 'job_search', path: '/job/search', method: 'POST',
-  build: ({ intent }) => buildJobs(intent, shiftDays(intent.asOf, -intent.windowDays), intent.asOf, undefined, true),
-  parse: (raw, { intent }, meta) => parseJobs(raw, intent, meta, shiftDays(intent.asOf, -intent.windowDays), intent.asOf, { displacement: true }),
+  build: ({ intent }) => buildJobs(intent, shiftDays(intent.asOf, -intent.windowDays), intent.asOf),
+  parse: (raw, { intent }, meta) => parseJobs(raw, intent, meta, shiftDays(intent.asOf, -intent.windowDays), intent.asOf),
   estimateCredits: raw => estimate(raw, 'job_listings', JOB_LIMIT, 0.03),
+};
+
+/** Postings that name a product whose provider was acquired, shut down or repriced (config/seller.json). */
+export const jobSearchDisplacement: EndpointSpec<{ intent: Intent }, TriggerBatch> = {
+  name: 'job_search_displacement', path: '/job/search', method: 'POST',
+  build: ({ intent }) => buildJobs(intent, shiftDays(intent.asOf, -intent.windowDays), intent.asOf, undefined, true),
+  parse: (raw, { intent }, meta) => parseJobs(raw, intent, meta, shiftDays(intent.asOf, -intent.windowDays), intent.asOf,
+    { displacement: true }),
+  estimateCredits: raw => estimate(raw, 'job_listings', DISPLACEMENT_LIMIT, 0.03),
 };
