@@ -88,6 +88,30 @@ export const inboxView = v.object({
   introductions: v.array(recruiterIntroView),
   suggestions: v.array(suggestionView),
 });
+const coverage = v.union(v.literal("complete"), v.literal("partial"), v.literal("unavailable"));
+export const hiringCapability = v.union(
+  v.literal("inference_serving"), v.literal("gpu_kernels"), v.literal("training_infrastructure"),
+  v.literal("evaluation_and_safety"), v.literal("unclassified"),
+);
+const hiringComparison = v.object({
+  capabilities: v.array(v.object({
+    id: hiringCapability,
+    label: v.string(),
+    cells: v.array(v.object({
+      companyId: v.id("companies"),
+      observedPostings: v.number(),
+      coverage,
+      evidenceIds: v.array(v.id("evidence")),
+    })),
+  })),
+  difference: v.union(v.null(), v.object({
+    capabilityId: hiringCapability,
+    peerId: v.id("companies"),
+    takeaway: v.string(),
+    caveat: v.string(),
+    evidenceIds: v.array(v.id("evidence")),
+  })),
+});
 export const comparisonRow = v.object({
   companyId: v.id("companies"),
   name: v.string(),
@@ -99,7 +123,7 @@ export const comparisonRow = v.object({
   headcountChange: v.union(v.number(), v.null()),
   funding: v.union(v.object({ amountUsd: v.union(v.number(), v.null()), round: v.string(), date: v.string() }), v.null()),
   evidenceIds: v.array(v.id("evidence")),
-  coverage: v.union(v.literal("complete"), v.literal("partial"), v.literal("unavailable")),
+  coverage,
   incompleteKinds: v.array(signalKind),
   mode: sourceMode,
 });
@@ -109,6 +133,7 @@ export const dashboardView = v.object({
   through: v.string(),
   overview: comparisonRow,
   peers: v.array(comparisonRow),
+  hiring: hiringComparison,
   signals: v.array(v.object({
     kind: signalKind,
     date: v.string(),

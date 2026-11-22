@@ -77,6 +77,33 @@ describe("recruiting demo", () => {
       .not.toContain(ids.novaCompanyId);
   });
 
+  it("withholds a hiring contrast when peer postings are incomplete or unclassified", async () => {
+    const { t, ids, recruiter } = await setup();
+    const company = { companyId: ids.novaCompanyId };
+    await t.run((ctx) => ctx.db.patch(ids.atlasCompanyId, { incompleteKinds: ["departure"] }));
+    const partialTalent = await recruiter.query(api.companies.companyDashboard, company);
+    expect(partialTalent.peers[0].coverage).toBe("partial");
+    expect(partialTalent.hiring.difference?.peerId).toBe(ids.atlasCompanyId);
+
+    const meridianId = partialTalent.peers[1].companyId;
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ids.atlasCompanyId, { incompleteKinds: ["job_post"] });
+      const meridianPosting = await ctx.db.query("signals").withIndex("by_company_and_kind_and_date", (q) =>
+        q.eq("companyId", meridianId).eq("kind", "job_post")).first();
+      if (!meridianPosting) throw new Error("Expected a Meridian posting.");
+      await ctx.db.patch(meridianPosting.evidenceId, { excerpt: "Maintain internal developer tools." });
+    });
+    const partialJobs = await recruiter.query(api.companies.companyDashboard, company);
+    const kernels = partialJobs.hiring.capabilities.find(({ id }) => id === "gpu_kernels");
+    expect(kernels?.cells[1]).toMatchObject({ coverage: "partial", observedPostings: 0 });
+    expect(partialJobs.hiring.capabilities.find(({ id }) => id === "unclassified")?.cells[2].observedPostings).toBe(1);
+    expect(partialJobs.hiring.difference).toBeNull();
+
+    const earlier = await recruiter.query(api.companies.companyDashboard, { ...company, through: "2026-11-18", from: "2026-10-24" });
+    expect(earlier.hiring.capabilities.find(({ id }) => id === "gpu_kernels")?.cells[0].observedPostings).toBe(0);
+    expect(earlier.hiring.difference).toBeNull();
+  });
+
   it("does not generate an introduction from an empty profile or accept another candidate's material", async () => {
     const { t, candidate, other, ids } = await setup();
     await expect(t.query(api.introductions.listIntroOptions)).rejects.toThrow(/Authentication required/);

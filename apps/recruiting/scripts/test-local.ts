@@ -88,7 +88,16 @@ try {
   const source = await recruiterHttp.query(api.companies.getEvidence, { ...company, evidenceId: kernelSignal.evidenceId });
   assert.equal(source?.mode, "fixture");
   assert.equal(source.eventDate, "2026-11-19");
-  console.log("Local Convex passed authenticated onboarding, uploads, recommendations, concurrent intro delivery, reactive recruiter inbox, tenant isolation, and dated peer evidence.");
+  const kernels = dashboard.hiring.capabilities.find(({ id }) => id === "gpu_kernels");
+  assert.deepEqual(kernels?.cells.map(({ observedPostings }) => observedPostings), [1, 0, 0]);
+  const difference = dashboard.hiring.difference;
+  assert.ok(difference);
+  assert.equal(difference.capabilityId, "gpu_kernels");
+  assert.equal(difference.peerId, dashboard.peers[0].companyId);
+  const comparedSources = await Promise.all(difference.evidenceIds.map((evidenceId) =>
+    recruiterHttp.query(api.companies.getEvidence, { ...company, evidenceId })));
+  assert.deepEqual(comparedSources.map((record) => record?.title), ["GPU Kernel Engineer", "Model Serving Engineer"]);
+  console.log("Local Convex passed authenticated onboarding, uploads, recommendations, concurrent intro delivery, reactive recruiter inbox, tenant isolation, and a source-backed capability comparison.");
 } finally {
   await recruiter.close();
   runConvex("run", "demo:seed", JSON.stringify({ reset: true }));

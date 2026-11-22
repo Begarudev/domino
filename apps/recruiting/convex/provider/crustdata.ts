@@ -145,7 +145,7 @@ export async function searchCompanyJobs(domains: string[], from: string, through
       url: httpsUrl(row.job_details?.url),
     }];
   });
-  return { signals, partial: Boolean(rows.next_cursor || rows.job_listings.length >= 80) };
+  return { signals, partial: Boolean(rows.next_cursor || rows.job_listings.length >= 80 || signals.length < rows.job_listings.length) };
 }
 
 const companyResponse = z.array(z.object({

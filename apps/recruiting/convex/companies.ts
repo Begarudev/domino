@@ -3,6 +3,7 @@ import { dashboardView, evidenceView } from "../shared/contract";
 import { requireCompanyMember } from "./access";
 import type { Doc } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
+import { compareHiring, postingCapability } from "./hiring";
 import { toEvidenceView } from "./matching";
 
 const dayMs = 86_400_000;
@@ -24,13 +25,22 @@ async function comparison(ctx: QueryCtx, company: Doc<"companies">, from: string
     ctx.db.query("signals").withIndex("by_company_and_kind_and_date", (q) => q.eq("companyId", company._id).eq("kind", "funding").lte("date", through)).order("desc").first(),
   ]);
   const shown = signals.slice(0, signalLimit);
+  const jobSignals = shown.filter(({ kind }) => kind === "job_post").reverse();
+  const jobs = await Promise.all(jobSignals.map(async ({ evidenceId, date }) => {
+    const evidence = await ctx.db.get(evidenceId);
+    if (!evidence || evidence.owner || evidence.companyId !== company._id || evidence.eventDate !== date) return null;
+    return { capability: postingCapability(evidence.title, evidence.excerpt), evidenceId };
+  }));
+  const postings = jobs.filter((job) => job !== null);
   const evidenceIds = [...new Set([
     ...shown.map((signal) => signal.evidenceId),
     ...[firstHeadcount, headcount, funding].flatMap((signal) => signal ? [signal.evidenceId] : []),
   ])];
-  const coverage = !company.coverageFrom || !company.coverageThrough ? "unavailable"
-    : company.coverageFrom > from || company.coverageThrough < through
-        || signals.length > signalLimit || company.incompleteKinds?.length ? "partial" : "complete";
+  const windowCoverage = !company.coverageFrom || !company.coverageThrough ? "unavailable"
+    : company.coverageFrom > from || company.coverageThrough < through || signals.length > signalLimit ? "partial" : "complete";
+  const coverage = windowCoverage === "complete" && company.incompleteKinds?.length ? "partial" : windowCoverage;
+  const jobCoverage = windowCoverage === "complete" && (company.incompleteKinds?.includes("job_post") || postings.length !== jobSignals.length)
+    ? "partial" : windowCoverage;
   const headcountChange = firstHeadcount?.count && headcount?.count !== undefined && headcount.date > firstHeadcount.date
     ? Math.round(((headcount.count - firstHeadcount.count) / firstHeadcount.count) * 1_000) / 10
     : null;
@@ -39,7 +49,7 @@ async function comparison(ctx: QueryCtx, company: Doc<"companies">, from: string
       companyId: company._id,
       name: company.name,
       domain: company.domain,
-      jobPosts: shown.filter((signal) => signal.kind === "job_post").length,
+      jobPosts: jobSignals.length,
       hiresObserved: shown.filter((signal) => signal.kind === "hire").reduce((count, signal) => count + (signal.count ?? 1), 0),
       departuresObserved: shown.filter((signal) => signal.kind === "departure").reduce((count, signal) => count + (signal.count ?? 1), 0),
       headcount: headcount?.count ?? null,
@@ -49,9 +59,11 @@ async function comparison(ctx: QueryCtx, company: Doc<"companies">, from: string
       coverage,
       incompleteKinds: company.incompleteKinds ?? [],
       mode: company.mode,
-    } as const,
+    },
     signals: shown,
-  };
+    postings,
+    jobCoverage,
+  } as const;
 }
 
 export const companyDashboard = query({
@@ -68,13 +80,17 @@ export const companyDashboard = query({
     if (fromMs > throughMs || throughMs - fromMs > 365 * dayMs) throw new ConvexError("Choose a comparison window of up to one year.");
     const peers = (await Promise.all(company.peerIds.slice(0, 5).map((id) => ctx.db.get(id))))
       .filter((peer) => peer !== null);
-    const [current, ...peerResults] = await Promise.all([company, ...peers].map((item) => comparison(ctx, item, from, through)));
+    const [current, peerResults] = await Promise.all([
+      comparison(ctx, company, from, through),
+      Promise.all(peers.map((peer) => comparison(ctx, peer, from, through))),
+    ]);
     return {
       companyId: company._id,
       from,
       through,
       overview: current.row,
       peers: peerResults.map((result) => result.row),
+      hiring: compareHiring([current, ...peerResults]),
       signals: current.signals.slice().reverse().map((signal) => ({
         kind: signal.kind, date: signal.date, label: signal.label, evidenceId: signal.evidenceId,
       })),

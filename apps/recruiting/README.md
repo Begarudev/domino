@@ -33,9 +33,11 @@ The Next.js integration route `GET /api/health` checks the backend configured by
 | Optional materials | `materials.addLink` adds an HTTPS link. `uploads.addFile` accepts base64 PDF or text up to 2 MB. `materials.getMaterial` checks ownership or the introduction that shared it. |
 | Introduction choices | `introductions.listIntroOptions` returns the supported role, company, recipient, and evidence. `introductions.previewIntro` supplies the confirmation token and shareable materials. Send with `introductions.confirmIntro`, passing that token, a stable request key, and the user's selected sharing fields. |
 | Recruiter inbox | `introductions.recruiterCompanies` returns accessible teams. Subscribe to `introductions.recruiterInbox`; `introductions.markIntroOpened` updates the unread state. |
-| Company dashboard | `companies.companyDashboard` returns comparison rows, a dated timeline, and coverage. `companies.getEvidence` resolves a cited record. `intelligence.classifyPosting` and `intelligence.summarizeComparison` provide additional model-assisted analysis. |
+| Company dashboard | `companies.companyDashboard` returns comparison rows, a dated timeline, and `hiring.capabilities` with observed posting counts, coverage, and evidence IDs for each company. `hiring.difference` offers a dated comparison when both companies have sufficient job data. `companies.getEvidence` resolves a cited record. `intelligence.classifyPosting` and `intelligence.summarizeComparison` provide additional model-assisted analysis. |
 
 The intro is delivered when Convex commits it to the authorized recruiter's inbox. The same candidate-role pair returns the original receipt on retry. Live job postings become introduction options after a verified recruiter publishes the role with `market.publishRole`.
+
+The capability counts use dated postings in the selected window. Each posting goes into one capability or the unclassified row. Show an observed zero alongside its posting coverage. An empty cell with partial or unavailable coverage can reflect missing data. Open the difference card’s evidence from both companies through `companies.getEvidence` using the dashboard's `companyId`.
 
 ## Live provider configuration
 

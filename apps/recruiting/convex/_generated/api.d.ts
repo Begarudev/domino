@@ -11,6 +11,7 @@
 import type * as access from "../access.js";
 import type * as companies from "../companies.js";
 import type * as demo from "../demo.js";
+import type * as hiring from "../hiring.js";
 import type * as intelligence from "../intelligence.js";
 import type * as introductions from "../introductions.js";
 import type * as liveData from "../liveData.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   companies: typeof companies;
   demo: typeof demo;
+  hiring: typeof hiring;
   intelligence: typeof intelligence;
   introductions: typeof introductions;
   liveData: typeof liveData;
