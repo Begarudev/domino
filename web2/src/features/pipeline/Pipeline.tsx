@@ -39,7 +39,7 @@ const secs = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : ms < 60_000 ?
 export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyId: string; tab: CompanyTab }) {
   const funnel = useFunnel();
   const steps = useRunSel((v) => v.ui.snap?.steps);
-  const runId = useRunSel((v) => v.runId);
+  useRunSel((v) => v.runId); // re-render when the run changes
 
   const nodes = useMemo<Node[]>(() => {
     const read = funnel.data?.stages?.[0]?.count ?? null;
@@ -80,12 +80,12 @@ export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyI
       <span className="pipe-h">What’s happening</span>
       <ol>
         {nodes.map((n, i) => {
-          const to = runId ? ({ page: 'trace', id: companyId, runId, phase: n.key } as const) : ({ page: 'company', id: companyId, tab: n.tab } as const);
+          const to = { page: 'company', id: companyId, tab: n.tab } as const;
           const t = timing(n.steps);
           return (
             <li key={n.key} className={`pipe-n pipe-${n.key} is-${n.state}`} style={{ animationDelay: `${i * 40}ms` }} aria-current={tab === n.tab ? 'step' : undefined}>
-              <a href={href(to)} onClick={(e) => { e.preventDefault(); navigate(to, true); }} data-testid={`pipe-${n.key}`}
-                title={`${n.label} (${n.key === 'read' ? 'whole scan' : 'this company'}): ${n.big == null ? 'not read yet' : `${fmtInt(n.big)} ${n.small}`}. Opens the run trace at this step.`}>
+              <a href={href(to)} onClick={(e) => { e.preventDefault(); if (tab !== n.tab) navigate(to); }} data-testid={`pipe-${n.key}`}
+                title={`${n.label} (${n.key === 'read' ? 'whole scan' : 'this company'}): ${n.big == null ? 'not read yet' : `${fmtInt(n.big)} ${n.small}`}. Opens the tab for this step.`}>
                 <span className="pipe-dot" aria-hidden>{n.state === 'done' ? <svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" /></svg> : null}</span>
                 <span className="pipe-txt">
                   <span className="pipe-l">{n.label}{t && <span className="pipe-t">{t}</span>}</span>
