@@ -1,71 +1,112 @@
 # DOMINO
 
-**An Outbound Desk that finds the second domino.** You send a request, for example "We sell managed GPU inference.
-Find AI companies whose changes in the last 30 days mean they'll need it, and book me meetings with the people who
-decide". What comes back is finished work, held for approval: ranked accounts, the person who decides at each one, a
-first message in which every claim cites a dated source, and a meeting hold. After a person approves, it is delivered
-**once** to a test inbox.
+**A search desk that predicts job openings before they're posted, and makes the match with dated proof.**
 
-ContextCon 05 (Crustdata x BITS Pilani), theme "Services, Replaced", problem **9.1 The Outbound Desk: meetings booked
-on triggers from the last 30 days**. Team DOMINO. Built on 22 Nov 2026 between 10:15 and 18:00 IST; the commit history
-starts at 12:16 IST.
+When a company loses two of its inference engineers in a quarter and hasn't posted a replacement, it is about to hire.
+DOMINO spots that from dated public moves, tells an opted-in candidate "this company is likely hiring for you, and here
+is why", and gives the company a matched candidate whose fit is cited line by line. The introduction goes out only
+after a person approves it, and it goes **once**.
+
+ContextCon 05 (Crustdata x BITS Pilani), theme "Services, Replaced", problem **1.1 The Search Desk: from a manager's
+three lines to a first call, tested on real hires**. Team DOMINO. Built on 22 Nov 2026 between 10:15 and 18:00 IST;
+the commit history starts at 12:16 IST.
+
+> **Status, 14:15 IST.** The engine, ledger, verifier, approvals, send-once, replay and Crustdata adapters below are
+> built and tested. The two-sided product (candidate onboarding and dashboard, company tabs) and rule O1 are being
+> finished this afternoon; the result tables marked *to fill* are completed from the live runs at 16:30.
 
 - [The customer and the service](#the-customer-and-the-service)
+- [What you can do with it](#what-you-can-do-with-it)
 - [Scope: now and later](#scope-now-and-later)
 - [Run it from a fresh clone](#run-it-from-a-fresh-clone)
 - [Stack](#stack)
 - [Architecture, data, state and hosting](#architecture-data-state-and-hosting)
-- [How it decides](#how-it-decides)
+- [How it decides: rule O1](#how-it-decides-rule-o1)
 - [What's live vs cached](#whats-live-vs-cached)
-- [Sources, approvals and send-once](#sources-approvals-and-send-once)
+- [Sources, consent, approvals and send-once](#sources-consent-approvals-and-send-once)
+- [Privacy](#privacy)
 - [Budgets and the cost ledger](#budgets-and-the-cost-ledger)
 - [Experiments](#experiments)
 - [Robustness cases](#robustness-cases)
 - [Limitations and who it could get wrong](#limitations-and-who-it-could-get-wrong)
-- [Approaches considered](#approaches-considered)
+- [Approaches considered (and why we pivoted)](#approaches-considered-and-why-we-pivoted)
 - [Models and tools](#models-and-tools)
 - [Next steps](#next-steps)
 - [Team and declaration](#team-and-declaration)
 
 ## The customer and the service
 
-**Customer:** a vendor of AI infrastructure (managed inference, GPU capacity, ML platform tooling) that pays a sales
-development agency or a lead-qualification firm per meeting booked with the right buyer.
+**The service DOMINO replaces:** a search firm. The handbook puts it plainly: "Recruiting firms earn their fee when a
+person starts the job." That fee is large:
 
-**The service DOMINO replaces** is the research half of that agency: watch for triggers, work out who now has the
-problem, find the person who owns it, and write a first message that shows the homework. Most agencies and signal tools
-watch one trigger, a company's own hiring: "X posts an inference role, so X needs inference." That signal is first
-order, and every competitor sees it on the same day.
+| Fee type | Reported range | Source (retrieved 22 Nov 2026) |
+|---|---|---|
+| Contingency search | "20 percent to 25 percent of the role's first-year cash compensation" | [SHRM, 18 Jul 2016](https://www.shrm.org/in/topics-tools/news/talent-acquisition/how-to-work-effectively-executive-search-firm) |
+| Retained search | "about 33 percent of the role's annual salary, bonus and signing bonus" | same SHRM article |
+| India, contingency | "between 8.33% and 15% of the candidate's annual CTC" | [Hyring, 24 Aug 2026](https://hyring.com/blog/recruitment-agency-fees-india/) (a vendor's figure) |
 
-DOMINO looks for needs that **another company's move created**. If B hires three of A's serving engineers, A is the
-account to call: it has just lost the people who run its inference and hasn't posted a role yet. A hiring filter can't
-see that, because A is losing people rather than hiring them.
+These are industry-reported ranges, not audited benchmarks.
+
+**Customers:** the company that pays for the hire, and the candidate, who pays nothing and opts in with their own
+profile.
+
+**What the firm actually sells** is timing and proof: knowing a team needs someone before the role is public, and
+showing why a particular person fits. Job boards only see an opening once it is posted, and by then every recruiter
+and every applicant sees it on the same day. DOMINO looks one step earlier. A company that lost people in a role
+family and hasn't replaced them is about to post that role. That is the *second domino*.
+
+## What you can do with it
+
+A persona switcher in the top bar moves between the two sides.
+
+**Candidate (`/candidate`)**
+
+1. **Onboard.** Paste your LinkedIn URL and, optionally, work samples. Tick what you agree to share. DOMINO runs a live
+   Crustdata person enrich, the model parses your role family, skills and history, and the profile is shown back to
+   you to confirm.
+2. **Companies likely hiring for you.** Predicted openings ranked for you. Each has dated reason chips (talent drain,
+   no replacement posted, funding or news) and a confidence score.
+3. **Request an intro.** You see exactly what the company will receive and confirm it.
+4. **Companies reaching out.** An inbox of intro requests from companies.
+
+**Company (`/company/:id`)**
+
+- **Talent-drain monitor:** who left, for where, and when, shown as role, initial and date, never as a full name.
+- **Predicted openings:** role family, why, evidence with dates, and status (open, watch, held).
+- **Matched candidates:** opted-in candidates only. Each fit reason cites the candidate's consented profile field and
+  the opening's evidence. Items DOMINO can't verify are struck through.
+- **Outreach:** a sourced intro draft, approved by a person and delivered once to the team inbox. A retry shows
+  "already delivered, skipped".
+- **Ledger:** credits, tokens, USD and the per-run caps.
+- **Replay:** frozen at 1 Sep, predicted openings against the job posts and hires that actually followed, next to the
+  baselines.
+
+Agent work stays visible in a live activity feed, but you drive the product by clicking through it.
 
 ## Scope: now and later
 
-**Now (built today and working end to end):**
+**Now:**
 
-- A free-text request goes in and a finished, approval-gated result comes out, with no one stepping in. DOMINO asks one
-  question only when the request doesn't say what you sell, because every rule depends on it.
-- It reads live Crustdata data: job posts, people's moves with their previous employer, company growth and funding,
-  company enrichment, company posts, and decision-makers.
-- It applies three cross-company rules (talent drain, displacement, contagion) next to a first-order hiring baseline,
-  and marks which accounts the baseline would have missed.
-- Every claim carries a dated source. A verifier deletes any sentence whose numbers, dates or names aren't in the cited
-  evidence. Anything undated is listed under "I can't verify" and left out of the message.
-- A person approves each send and meeting hold, and each is delivered once to a local test inbox (`.eml` / `.ics`).
-  That holds through retries, double clicks and crashes.
-- Every run has credit, model-spend and time caps that can be lowered mid-run, and a ledger row for every call attempt.
-- The engine can be killed mid-run and resumed from the last checkpoint without repeating calls.
-- A replay mode freezes the world at 1 Sep 2026 and scores DOMINO's picks against two baselines on what happened next.
+- Live Crustdata reads: person enrich for the candidate, departures across a cohort of AI companies with their
+  previous and new employer, job posts, company enrichment, growth, funding and posts.
+- Rule O1 predicts openings, with written guards against false drains. It was fixed at 14:08 IST, after seeing the live
+  departure counts and before looking at any replay outcomes (below).
+- Matching of a candidate's role family and skills to predicted openings, with every fit reason cited.
+- A verifier deletes any sentence in an intro whose numbers, dates or names aren't in the cited evidence. Undated
+  facts are listed as "I can't verify" and left out.
+- Consent on both sides: the candidate confirms what is shared and requests the intro; a person at the company side
+  approves every outreach, and it is delivered once to a test inbox, through retries, double clicks and crashes.
+- Per-run credit, model-spend and time caps, lowerable mid-run, and a ledger row per call attempt.
+- Kill and resume from the last checkpoint without repeating calls.
+- Replay from 1 Sep 2026 against later job posts and hires, with two baselines.
 
 **Later:**
 
-- Crustdata watchers instead of polling, so a rule fires on the day of the third departure.
-- More cross-company rules (vendor churn, customer concentration, a key customer's funding).
-- Rule confidence learned from replayed outcomes instead of hand-set bases.
-- Real delivery (an email provider and a calendar) behind the same approval gate and idempotency key, plus tracking
-  which meetings were booked and which accounts bought.
+- Crustdata watchers instead of polling, so an opening is flagged on the day of the departure that completes it.
+- More role families beyond AI infrastructure (backend, payments, data), and seniority-aware matching.
+- A manager's "three lines" as a third input: match the request against predicted *and* posted openings.
+- Outcome tracking: first call held, offer, start date, which is when a search firm is paid.
+- Real delivery (email, ATS) behind the same approval gate and idempotency key.
 
 ## Run it from a fresh clone
 
@@ -78,16 +119,17 @@ bun install
 bun start            # builds the UI on first run, then serves http://localhost:4321
 ```
 
-Open <http://localhost:4321>, type a request (or keep the example) and press Run. If port 4321 is taken ("DOMINO could
-not bind the server port"), pick another: `DOMINO_PORT=4399 bun start`.
+Open <http://localhost:4321>. If port 4321 is taken, `bun start` names the busy port; pick another with
+`DOMINO_PORT=4399 bun start`.
 
-**Without API keys**, DOMINO runs on a labelled synthetic fixture world (the data badge reads "Fixture") and writes
-drafts from an evidence template. Every feature works this way, including approvals, crash and resume, the ledger and
-replay. **For live data**, create `.env` in the repo root. It is gitignored and never committed:
+**Without API keys**, DOMINO runs on a labelled synthetic fixture world (the data badge reads "Fixture", and the demo
+candidate is a labelled fictional person) and writes drafts from an evidence template. Every feature works this way,
+including consent, approvals, crash and resume, the ledger and replay. **For live data**, create `.env` in the repo
+root. It is gitignored and never committed:
 
 ```
 CRUSTDATA_API_KEY=...      # live Crustdata reads; with a key the default data mode is live
-OPENAI_API_KEY=...         # model-written request parsing and drafts (OPENAI_MODEL, default gpt-6-luna)
+OPENAI_API_KEY=...         # model-written profile parsing and intro drafts (OPENAI_MODEL, default gpt-6-luna)
 ANTHROPIC_API_KEY=...      # optional alternative provider (ANTHROPIC_MODEL, default claude-opus-5-5); used only without an OpenAI key
 DOMINO_DATA=live           # optional: live | cache | fixture
 DOMINO_PORT=4321           # optional
@@ -96,7 +138,7 @@ DOMINO_PORT=4321           # optional
 Tests:
 
 ```bash
-bun run test         # unit, domain and engine tests (bun test server); 7 live-adapter checks skip without a Crustdata key
+bun run test         # unit, domain and engine tests (bun test server); live-adapter checks skip without a Crustdata key
 bun run test:e2e     # end to end over HTTP: messy input, timeouts, kill/resume, double approve, budgets, replay
 bun run smoke        # one scripted run: approve twice, kill the engine and resume
 bun run typecheck
@@ -113,20 +155,21 @@ Other scripts: `bun run dev` (hot-reload UI and server), `bun run probe` (checks
 | Server | Hono on Bun: REST plus Server-Sent Events. The engine runs as a separate child process per run |
 | Frontend | React 19 + Vite, built to static files that the server serves |
 | State | SQLite in WAL mode (`data/domino.db`): runs, step checkpoints, append-only events, ledger, tool cache, evidence, approvals, outbox, inbox, asks |
-| Data | Crustdata REST API, `x-api-version: 2025-11-01`: `/job/search`, `/person/search`, `/company/search`, `/company/enrich`, `/social_post/search` |
-| Models | OpenAI `gpt-6-luna` (reasoning effort none; $0.10 / $0.50 per million tokens) for request parsing and the claim-backed middle of each draft; deterministic template fallback; Anthropic `claude-opus-5-5` supported but unused today |
+| Data | Crustdata REST API, `x-api-version: 2025-11-01`: `/person/enrich`, `/person/search`, `/job/search`, `/company/search`, `/company/enrich`, `/social_post/search` |
+| Models | OpenAI `gpt-6-luna` (reasoning effort none) for profile parsing and the claim-backed middle of each intro; deterministic template fallback; Anthropic `claude-opus-5-5` supported but unused today |
 | Validation | zod schemas on every provider response (a nonsense response is rejected and retried) |
 
 ## Architecture, data, state and hosting
 
-Rendered by GitHub from [`docs/architecture.mmd`](docs/architecture.mmd):
+Rendered by GitHub from [`docs/architecture.mmd`](docs/architecture.mmd) (also on its own page:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)):
 
 ```mermaid
 flowchart LR
-  subgraph Browser["Browser · React UI"]
-    REQ["Request box<br/>plan, caps, window"]
-    VIEW["Cascade table · evidence drawer<br/>timeline · drafts · replay · ledger"]
-    APPROVE["Approve / reject"]
+  subgraph Browser["Browser · React UI · persona switcher"]
+    CAND["Candidate<br/>onboard + consent · likely hiring for you<br/>request intro · companies reaching out"]
+    COMP["Company<br/>drain monitor · predicted openings<br/>matched candidates · outreach · ledger · replay"]
+    FEED["Live activity feed"]
   end
 
   subgraph Server["server/index.ts · Hono"]
@@ -134,140 +177,128 @@ flowchart LR
     SSE["SSE stream<br/>tails the events table"]
     GATE["Approval gate<br/>reserve in one transaction"]
     DISPATCH["Dispatcher<br/>child process per delivery"]
-    INBOX["Test inbox receiver<br/>unique idempotency key<br/>.eml / .ics files only"]
+    INBOX["Test inbox receiver<br/>unique idempotency key"]
   end
 
-  subgraph Engine["engine/worker.ts · child process per run"]
+  subgraph Engine["engine · child process per run · checkpoint per step"]
     direction TB
-    S1["parse_request<br/>ask only if the offer is missing"]
-    S2["pull_triggers<br/>jobs, moves, growth, funding, posts"]
-    S3["resolve_entities<br/>merge on id/domain, keep namesakes apart"]
-    S4["enrich_companies"]
-    S5["cascade<br/>R1 TALENT_DRAIN + guards<br/>DISPLACEMENT · CONTAGION · DIRECT"]
-    S6["rank_targets<br/>net-new vs hiring filter<br/>watchlist / hold"]
-    S7["find_deciders<br/>one person per account"]
-    S8["warm_paths"]
-    S9["draft_messages<br/>model writes from numbered claims<br/>verifier deletes uncited sentences"]
-    S10["approval_gate"]
-    S11["score_replay<br/>replay runs only"]
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11
+    P["Candidate profile<br/>live person enrich → model parse → confirm"]
+    D["Departures in the cohort<br/>role family, from → to, dated"]
+    R["Entity resolution<br/>merge on id/domain, keep namesakes apart"]
+    O["Rule O1 + guards<br/>open · watch · held"]
+    M["Match<br/>role family + skills, every reason cited"]
+    W["Intro draft<br/>model writes from numbered claims<br/>verifier deletes uncited sentences"]
+    S["Replay scorer<br/>as of 1 Sep, 0 later facts"]
+    P --> M
+    D --> R --> O --> M --> W
+    O --> S
   end
 
   subgraph Tool["runtime/tool.ts · every external call"]
     T["budget check before the call<br/>timeout · retry with backoff<br/>schema check · ledger row per attempt<br/>live → cache (never live → fixture)"]
   end
 
-  DB[("SQLite data/domino.db<br/>runs · step checkpoints · events<br/>ledger · tool_cache · evidence<br/>approvals · outbox · inbox_received")]
-  CD["Crustdata API<br/>job · person · company · enrich · posts"]
+  DB[("SQLite data/domino.db<br/>runs · checkpoints · events · ledger<br/>tool_cache · evidence · approvals<br/>outbox · inbox_received")]
+  CD["Crustdata API<br/>person enrich/search · job search<br/>company search/enrich · posts"]
   LLM["OpenAI gpt-6-luna<br/>(Anthropic optional)"]
   FX["Fixture world<br/>only when no key or DOMINO_DATA=fixture"]
 
-  REQ -->|POST /api/runs| API
+  CAND --> API
+  COMP --> API
   API -->|fork · kill · resume| Engine
   Engine --> Tool
   Tool --> CD
   Tool --> LLM
   Tool -.-> FX
-  Engine -->|output + done in one transaction per step| DB
+  Engine -->|output + done in one transaction| DB
   Tool -->|ledger · cache| DB
-  DB --> SSE --> VIEW
-  APPROVE -->|POST /api/approvals/:id| GATE
+  DB --> SSE --> FEED
+  COMP -->|approve intro| GATE
   GATE -->|outbox row: pending| DB
   GATE --> DISPATCH --> INBOX
   INBOX -->|insert once per key| DB
 ```
 
 - **Server** (`server/index.ts`): REST, the SSE stream and the built UI. It never runs pipeline steps itself.
-- **Engine** (`server/engine/worker.ts`, `steps.ts`): one child process per run, eleven steps in a fixed order. Each
-  step writes its output and its `done` flag in one SQLite transaction, so a killed engine resumes at the next step and
-  reuses everything before it.
+- **Engine** (`server/engine/`): one child process per run. Each step writes its output and its `done` flag in one
+  SQLite transaction, so a killed engine resumes at the next step and reuses everything before it.
 - **Tool wrapper** (`server/runtime/tool.ts`): the only way out of the process. It checks the budget before each call,
   then applies a timeout, retries with backoff and validates the response schema, and writes a ledger row per attempt.
-- **Domain** (`server/domain/`): entity resolution, the cascade rules, ranking, deciders, drafts and the verifier, and
-  replay scoring. Pure functions, unit-tested.
+- **Domain** (`server/domain/`): entity resolution, rule O1 and its guards, matching, the intro verifier and replay
+  scoring. Pure functions, unit-tested.
 - **Data adapters** (`server/crustdata/`): one spec per endpoint (request builder, parser to dated evidence rows, credit
-  estimate). Notes on what we learned about the API are in [`server/crustdata/NOTES.md`](server/crustdata/NOTES.md).
+  estimate). Notes on the API are in [`server/crustdata/NOTES.md`](server/crustdata/NOTES.md).
 - **State**: everything lives in SQLite at `data/domino.db`. The UI is rebuilt from the append-only events table, so a
-  browser refresh or a server restart loses nothing.
+  refresh or a server restart loses nothing.
 - **Hosting**: runs locally on the demo laptop (`bun start`). Nothing leaves the machine except Crustdata and model
   API calls. Deliveries go to files under `data/outbox/`.
 
-Build contract and event types: [`docs/CONTRACT.md`](docs/CONTRACT.md).
+## How it decides: rule O1
 
-## How it decides
+**O1, rule fixed at 14:08 IST, after seeing the live departure counts and before looking at any replay outcomes (posts
+after 1 Sep).** We say this plainly: the threshold of 2 was chosen knowing that two companies (Poolside, Abacus.AI) sat
+at 2 departures in the live data. The replay is the test it hadn't seen.
 
-Each rule produces an **edge** from the company whose move caused the need to the company that now has it. An edge
-carries its dated evidence rows, a confidence, a one-line rationale, and the competing explanation it couldn't rule
-out. Every rule needs **at least two dated, verifiable evidence rows**. Facts without dates never count.
+> At company A (20–5,000 staff), if there are **2 or more conclusive dated departures** of people in role family F
+> within **90 days**, and **no dated replacement hire and no dated job post for F at A within 30 days of the last
+> departure**, predict an opening for F at A.
 
-**R1 TALENT_DRAIN.** B hired **3 or more** of A's inference, serving or ML-platform engineers within 90 days, with the
-3rd inside the last 30 days. A has to buy capacity or help instead of rebuilding in-house. Guards (any one of them
-moves the account to *Hold* and keeps it from being drafted):
+Role families supported first: inference/serving, ML platform and infrastructure, MLOps, and GPU/LLM infrastructure.
 
-- A move counts only if it is *conclusive*: both old and new titles are recognised serving titles (hardware design and
-  non-engineering titles are excluded outright), the previous role ended at most 60 days before the new one started,
-  and the dates settle the window.
-- Crustdata role dates are month-precision. A month that straddles the 30- or 90-day boundary can't settle the window,
-  so it is held with "month-only dates cannot settle the 30-day window".
-- A shared parent, related domains or a configured company family means an internal transfer, so the account is held.
-- An acquisition or acqui-hire between the two companies is held.
-- More than 40% of A's headcount moving at once looks like a team lift or a data error, so it is held.
-- An ambiguous company identity (several candidate records) is held.
-- Giants (over 5,000 staff) are excluded as losers.
-- **Watchlist:** an account at 2 of 3 is shown with its dated evidence and is never drafted. The card fires on the 3rd.
+**A departure is conclusive** only if both the old and new titles are recognised titles for F (hardware design and
+non-engineering titles are excluded outright), the previous role ended at most 60 days before the new one started, and
+the dates settle the window.
 
-**DISPLACEMENT.** An inference provider was acquired, shut down or repriced (a dated source), and B's dated job posts
-name that provider's product. B needs a contingency plan for the integration. Displacement events are configured per
-seller in `config/seller.json` with their source URL and date, and must match the post's product field exactly.
+**False-drain guards.** Any one of these moves the prediction to **Held**, shown with its reason and never matched or
+drafted:
 
-**CONTAGION.** A peer of B (same industry and size band within 3x, or a listed competitor) made dated technical moves
-(at least two infra job posts or relevant hires), and B has posted no matching roles. B is likely to face the same
-scaling problem next. Held accounts, related domains and companies already hiring are excluded. The peer reason is
-shown on the edge ("same segment, 50–75 staff").
+- Acquisition or acqui-hire between the two companies (people moving because their company was bought).
+- Shared parent, related domains or a configured company family (an internal transfer, not a loss).
+- More than 40% of A's headcount moving at once (a team lift or a data error).
+- An ambiguous company identity (several candidate records).
+- Month-only dates that can't settle the 90- or 30-day window. Crustdata role dates are month-precision, so a month
+  that straddles a boundary is held rather than guessed.
+- Unrecognised titles.
 
-**DIRECT (the baseline).** B posts infra roles itself. This *is* the first-order hiring filter, kept to compare
-against. Every target shows whether the hiring filter would have found it (`netNew`).
+**Statuses:** *open* (O1 fires), *watch* (one conclusive departure, or a replacement may be in progress), *held* (a
+guard tripped).
 
-**Confidence**, written out on every edge:
-`base × (1 − 0.5^n) × 2^(−age/30)`, clamped to 0.05–0.95. Here *n* counts the distinct dated rows and *age* is the
-number of days since the newest row. The bases are 0.98 for talent drain, 0.95 for displacement, 0.86 for contagion
-and 0.74 for direct, plus 0.05 when there is dated funding.
-**Ranking** multiplies confidence by industry fit and size fit (20–2,000 staff) and by a 45-day recency decay.
-Actionable accounts come first. Held and watchlist accounts are listed after them and never get a draft.
+**Confidence** is written out on every prediction: `base × (1 − 0.5^n) × 2^(−age/30)`, clamped to 0.05–0.95, where
+*n* counts the distinct dated rows and *age* is the number of days since the newest row.
 
-**Entity resolution:** one company under two names stays one record (same Crustdata id or domain). Two companies that
+**Matching.** A candidate's confirmed role family and skills are matched against open predictions. Every fit reason
+cites two things: a consented field from the candidate's profile, and a dated evidence row from the opening. A
+reason that can't cite both is struck through as "I can't verify".
+
+**Entity resolution.** One company under two names stays one record (same Crustdata id or domain). Two companies that
 share a name stay apart (different domains). Every merge and every split is shown with its matching key.
 
 ## What's live vs cached
 
-The data badge in the header always says which world a run is in, and every evidence row records its own mode.
+The data badge in the header always says which world you are in, and every evidence row records its own mode.
 
 | Mode | When | What happens |
 |---|---|---|
 | **live** | `CRUSTDATA_API_KEY` set (default) | Every read goes to Crustdata. The raw response is cached in `tool_cache` keyed by endpoint and request |
-| **cache** (fallback) | a live call times out, errors or returns nonsense after its retries | the same request is answered from the cached live response; the timeline shows a `tool.fallback` line and the evidence row says *cached*, with its retrieval time |
-| **unavailable** | no cached response either | the source is skipped with a warning; the run continues without it and never invents data |
-| **fixture** | no key, or `DOMINO_DATA=fixture` | a labelled synthetic world (`server/crustdata/fixtures/`), used for tests and keyless clones. A live run **never** falls back to fixtures |
+| **cache** (fallback) | a live call times out, errors or returns nonsense after its retries | answered from the cached live response; the feed shows a fallback line and the evidence row says *cached*, with its retrieval time |
+| **unavailable** | no cached response either | the source is skipped with a warning; nothing is invented |
+| **fixture** | no key, or `DOMINO_DATA=fixture` | a labelled synthetic world for tests and keyless clones. A live run **never** falls back to fixtures |
 
-In live mode a request already in the cache is answered from it (a ledger row with status `cache_hit` and 0 credits).
-"Re-check" on an evidence row forces a fresh live read. Cached live responses stay on the machine and aren't committed.
+The live decisions are the candidate's person enrich and opening detection on the live cohort.
 
-## Sources, approvals and send-once
+## Sources, consent, approvals and send-once
 
 **Sources.** Every evidence row records the endpoint, the record id, the JSON field, the public URL when there is one,
-the date the fact happened, when DOMINO retrieved it, and whether it came from live, cache or fixture. A draft cites
-rows as `[n]`. Hovering a citation lights up its row in the evidence drawer.
+the date the fact happened, when DOMINO retrieved it, and whether it came from live, cache or fixture.
 
-**Drafts.** The model never sees raw data. It gets numbered claims built from dated rows and writes only the middle of
-the message, citing `[n]`. The greeting, meeting ask and sign-off are fixed seller copy. The verifier then deletes any
-sentence with a number, date or name that isn't in the evidence it cites, and lists what it removed. Claims without a
-date or source go into an "I can't verify" list and never reach the message. With no model key, drafts come from a
-deterministic evidence template that goes through the same verifier.
+**Intro drafts.** The model never sees raw data. It gets numbered claims built from dated rows and the candidate's
+consented fields, and writes only the middle of the intro, citing `[n]`. The verifier then deletes any sentence with a
+number, date or name that isn't in the evidence it cites, and lists what it removed. With no model key, intros come
+from a deterministic template that goes through the same verifier.
 
-**Approvals.** Nothing irreversible happens without a person. Each verified draft creates two pending approvals, a
-`send_message` and a `meeting_hold`. Held or watchlist accounts get none. DOMINO has no code path that sends real
-email or calendar invites: delivery writes `data/outbox/<key>.eml` and `.ics` files addressed to
-`test-inbox+<key>@domino.invalid`.
+**Consent and approval.** The candidate confirms what is shared and requests the intro. A person on the company side
+approves each outreach before it is delivered. DOMINO has no code path that sends real email: delivery writes a file
+under `data/outbox/` addressed to a `@domino.invalid` test inbox.
 
 **Send-once, end to end:**
 
@@ -277,53 +308,57 @@ email or calendar invites: delivery writes `data/outbox/<key>.eml` and `.ics` fi
 3. A separate dispatcher process delivers to the receiver. The receiver inserts into `inbox_received` with the key as
    primary key (`ON CONFLICT DO NOTHING`), so a second delivery of the same key returns `already_delivered`. A
    different message under the same key is refused.
-4. If the dispatcher dies between the inbox accepting the message and the outbox being marked delivered, the outbox
-   row stays `pending` and the timeline says so. Retrying the approval or resuming the run dispatches it again, the
-   receiver answers `already_delivered` for that key, and the outbox row is completed from the original receipt. A
-   retry can't produce a second message. (`?chaos` can inject exactly this crash.)
-5. Approving again shows "already sent, not sent again" (an `action.duplicate_blocked` event).
+4. If the dispatcher dies after the inbox accepted the message, the outbox row stays `pending` and the feed says so.
+   Retrying dispatches again, the receiver answers `already_delivered`, and the row is completed from the original
+   receipt. A retry can't produce a second message.
+5. The UI shows "already delivered, skipped".
 
-**Personal data.** DOMINO keeps one decision-maker per account (name, title, employer, role dates, public profile URL).
-It never requests emails or phone numbers. People who moved appear only as counts and dated rows inside the evidence
-drawer. The sample event stream in `docs/` has names and profile URLs redacted.
+## Privacy
+
+- **Candidates opt in** with their own profile and choose what is shared, field by field. Nothing about a candidate
+  reaches a company until the candidate requests the intro, or, on the company side, appears among matches only if
+  the candidate opted in to being matched.
+- **People who left a company** appear only as role, initial and date ("Inference engineer, P., Sep 2026"), and as
+  counts. No full names, no profile links, no contact details.
+- **No contact details** are requested for anyone. Only the personal data the job needs is kept.
+- **Committed samples are redacted** (names and profile URLs in `docs/sample-run-events.json` read `[redacted]`).
+  Live responses are cached on the local machine and never committed.
+- The demo candidate is either a real person who consented or a labelled fictional fixture.
 
 ## Budgets and the cost ledger
 
-Every run has three ceilings: Crustdata credits, model spend in USD, and wall-clock seconds. The API defaults are 100
-credits, $0.50 and 300 s; the UI request box uses 600 credits. You can lower any ceiling mid-run
-(`POST /api/runs/:id/limits` or the meters in the UI). The tool wrapper checks the *estimated* cost of each call
-**before** making it, and stops with a partial result and status `budget_exhausted` when the next call would cross a
-ceiling.
+Every run has three ceilings: Crustdata credits, model spend in USD, and wall-clock seconds. You can lower any ceiling
+mid-run (`POST /api/runs/:id/limits` or the meters in the UI). The tool wrapper checks the *estimated* cost of each
+call **before** making it, and stops with a partial result and status `budget_exhausted` when the next call would
+cross a ceiling.
 
 The ledger has one row per **attempt** of every external call, including retries, timeouts, cache hits, fixture reads
-and injected failures. Credits come from Crustdata's `X-Credits-Used` header (or the endpoint's rate card when the
-header is missing); model rows record input/output tokens and USD at the cached rate card.
+and injected failures. Credits come from Crustdata's `X-Credits-Used` header (or the endpoint's rate card when it is
+missing). Model rows record input/output tokens and USD at the rate card.
 
-Example: live run `run_1b4fda05` (22 Nov, 13:32 IST), from the request in the opening paragraph. Excerpt:
+Example from an earlier live run of the same engine (`run_1b4fda05`, 22 Nov, 13:32 IST). Excerpt:
 
 | time (UTC) | step | provider | endpoint | mode | status | attempt | credits | tokens in/out | USD | ms |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 08:02:26 | parse_request | openai | gpt-5-mini | model | ok | 1 | 0 | 257 / 268 | 0.00060 | 3,781 |
 | 08:02:30 | pull_triggers | crustdata | job_search | live | ok | 1 | 2.4 | | | 2,988 |
 | 08:02:33 | pull_triggers | crustdata | person_recent_moves | live | ok | 1 | 11.5 | | | 923 |
-| 08:02:34 | pull_triggers | crustdata | company_growth | live | ok | 1 | 41.0 | | | 2,223 |
 | 08:02:36 | enrich_companies | crustdata | company_enrich | live | ok | 1 | 30.0 | | | 8,243 |
-| 08:02:49 | find_deciders | crustdata | person_deciders | live | ok | 1 | 0.23 | | | 408 |
 | 08:02:51 | draft_messages | openai | gpt-5-mini | model | timeout | 1 | 0 | | 0 | 12,001 |
-| 08:03:04 | draft_messages | openai | gpt-5-mini | model | timeout | 2 | 0 | | 0 | 12,001 |
 | 08:05:50 | draft_messages | openai | gpt-5-mini | model | ok | 1 | 0 | 295 / 154 | 0.00038 | 2,813 |
 
-Run totals: **86.3 Crustdata credits, $0.0073 of model spend, 30 ledger rows, 216 s of wall time** (including a
-deliberate kill and resume). The run also hit 14 model timeouts before we fixed the OpenAI adapter; each one is on the
-ledger and was retried. Total Crustdata spend for the whole build day was about 960 credits.
+That run cost 86.3 credits and $0.0073 over 30 ledger rows in 216 s, including a deliberate kill and resume. Its model
+timeouts led us to switch the default model to `gpt-6-luna`. *To fill at 16:30: a ledger excerpt and cost per intro
+from the live Search Desk run.*
 
 ## Experiments
 
-All thresholds and the replay protocol were **written down before any outcome was counted**, and none changed after.
+R1's threshold (3) was fixed before its live count and wasn't changed after. O1's rule was fixed at 14:08 IST, after
+seeing the live departure counts and before looking at any replay outcomes. Neither changed after it was fixed.
 
-### 1. Live yield of the talent-drain rule (13:43 IST)
+### 1. Live yield of the talent-drain signal (13:43 IST)
 
-The question: on live data, how many accounts does R1 at threshold 3 produce this quarter? Full method in
+This experiment ran under the earlier Outbound Desk rule R1 (3 departures). The same funnel feeds O1. Full method in
 [`docs/YIELD.md`](docs/YIELD.md).
 
 | Funnel step (live Crustdata, 24 Aug – 22 Nov 2026) | Count |
@@ -333,140 +368,121 @@ The question: on live data, how many accounts does R1 at threshold 3 produce thi
 | ...whose previous role was itself infra/serving | 233 |
 | ...from a company with ≤ 5,000 staff | 120 |
 | Distinct companies that lost someone | 118 |
-| Companies with 2 such departures (watchlist) | **2** |
+| Companies with 2 such departures | **2** |
 | Companies with ≥ 3 (R1 fires) | **0** |
 
-**The honest zero.** R1 fires on **0** accounts today. We kept the threshold at 3 rather than lowering it after seeing
-the count, because a rule tuned to the data it is scored on proves nothing. Two accounts sit on the **watchlist** at
-2 of 3, with their dated evidence:
+The two companies at 2: **Poolside** (2 inference engineers left, both for NVIDIA, Sep 2026) and **Abacus.AI** (2
+ML-platform engineers left, Oct and Nov 2026). Under O1 they become candidate openings, provided no replacement hire
+or post appears within 30 days and no guard trips.
 
-- **Poolside**: 2 inference engineers left, both for NVIDIA, Sep 2026.
-- **Abacus.AI**: 2 ML-platform engineers left, Oct and Nov 2026.
+### 2. O1 on the live cohort
 
-Neither is drafted; the card fires on the third departure. Live drafts today come from CONTAGION and the DIRECT
-baseline.
-
-What we learned: Crustdata role dates are month-precision, so a 30-day window can only be settled when the whole month
-is inside it. Drains of three or more serving engineers from one company in a quarter are rare in public data. And the
-first query returned zero because it combined filters that matched nothing; counting the funnel step by step found it.
-
-### 2. Latest live forward run
-
-`run_1b4fda05` (13:32 IST): 214 triggers from 363 dated evidence rows, 125 canonical companies after 22 merges,
-20 cascade edges (all CONTAGION), **5 ranked accounts**:
-
-| Account | Rule | Hiring filter would find it? |
-|---|---|---|
-| Arrive AI | CONTAGION (+ dated funding) | no |
-| ChronoScale | CONTAGION (+ dated funding) | no |
-| Linq | CONTAGION (+ dated funding) | no |
-| PaleBlueDot AI | CONTAGION | no |
-| Bright Vision Technologies | DIRECT (baseline) | yes |
-
-The run found 3 decision-makers, wrote 5 verified drafts and queued 10 approvals (a message and a hold for each). It
-cost 86.3 credits and $0.0073 in 216 s.
+*To fill at 16:30 from the live run:* departures counted, companies with 2 or more conclusive departures, openings
+*open* / *watch* / *held* (with the reasons for each hold), and the openings matched to the demo candidate.
 
 ### 3. Replay from 1 September
 
-**Protocol (frozen 22 Nov 2026, 13:40 IST, before any replay outcome was looked at):**
+**Protocol (fixed with O1 at 14:08 IST, before any replay outcome was looked at):**
 
-- **Question:** do accounts flagged by the cross-company rules show the predicted need later, more often than accounts
-  a plain filter would pick?
-- **As-of date:** 1 Sep 2026. Predictions use only facts dated on or before it. Profile-based moves count only once
-  30 days old (people update profiles late), so a move is usable at 1 Sep only if it started by 2 Aug. Month-precision
-  dates count only when the whole month is inside the window.
-- **Cohort:** AI/ML companies with 20–5,000 staff returned by Crustdata company search for the request, plus the
-  companies their departing infra/serving engineers came from. Giants and staffing firms are excluded. The request
-  fixes the cohort; outcomes don't.
-- **Outcome:** within 60 days of the as-of date, a dated serving, infra or ML-platform job post or hire at the account.
-  Outcomes say the company *showed* the need, never that it bought anything.
-- **Baselines:** (1) the first-order hiring filter (companies that posted infra roles before the as-of date);
-  (2) companies whose headcount grew 30% or more.
-- **Reported:** raw counts per arm (predicted, showed the need, did not). We compute no lift statistics, and small
-  numbers stay small, including when DOMINO loses.
-- **Caveat (also on screen):** this isn't a point-in-time snapshot. It is today's Crustdata index filtered by fact
-  dates, so records that changed or disappeared since 1 Sep can't be seen.
+- **As-of date:** 1 Sep 2026. Predictions use only facts dated on or before it ("0 facts dated after 1 Sep" is
+  checked and shown). Profile-based moves count only once 30 days old, because people update profiles late.
+- **Outcome for O1:** a dated job post or a dated hire for role family F at company A within 60 days after the
+  prediction date.
+- **Baselines:** (1) companies whose headcount grew 30% or more; (2) companies with any job post in the last 30 days.
+- **Reported:** raw counts per arm (predicted, showed the opening, did not), with no lift statistics. Small numbers
+  stay small, including when DOMINO loses.
+- **Caveat (also on screen):** not point-in-time. It is today's Crustdata index filtered by fact dates, so records
+  that changed or disappeared since 1 Sep can't be seen.
 
-**Result** (live replay `run_396d5e95`, 1 Sep → 22 Nov, 0 facts after 1 Sep used, 54.4 credits):
-
-| Arm | Predicted | Showed the need | Did not |
+| Arm | Predicted | Opening appeared | Did not |
 |---|---|---|---|
-| DOMINO | 5 | 2 | 3 |
-| First-order hiring filter | 34 | 13 | 21 |
-| Headcount +30% | 0 | 0 | 0 |
-
-What this does and doesn't show: no cross-company edge survived the 1 Sep as-of filter, so all 5 DOMINO picks came
-from the DIRECT rule. The replay tests the harness, the time guards and the baseline. It isn't yet evidence that the
-cascade rules beat hiring. We report it anyway.
+| O1 | *to fill* | | |
+| Headcount +30% | *to fill* | | |
+| Any job post in the last 30 days | *to fill* | | |
 
 ## Robustness cases
 
 | Case | What happens |
 |---|---|
-| Messy request ("pls find ai cos needing gpu infra, india") | parsed into an intent; every default shown as an assumption |
-| Request missing what you sell | one question, with a default; the run waits in `awaiting_input` |
-| Tool timeout | retried with backoff, shown in the timeline (injected faults only with `?chaos` and labelled as injected) |
+| Messy or partial profile (no skills listed, odd titles) | parsed into a role family with the assumption shown for the candidate to confirm or fix |
+| LinkedIn URL that Crustdata can't find | "I can't verify this profile"; the candidate can continue with a manual profile, marked as unverified |
+| Tool timeout | retried with backoff and shown in the feed (injected faults only with `?chaos`, labelled as injected) |
 | Tool returns nonsense | the schema check rejects it; retried and logged |
 | Live call keeps failing | answered from the cached live response with a visible fallback line; never from fixtures |
 | Same company, two names | merged, with the matching key shown |
 | Same name, different companies | kept apart, with the reason |
-| Parent/subsidiary transfer, acqui-hire | not counted as a talent drain; held with the reason |
-| Undated claim | "I can't verify", kept out of the message |
+| Acqui-hire, internal transfer, team lift | held with the reason, never matched |
+| Undated claim | "I can't verify", struck through and kept out of the intro |
 | Engine killed mid-run | resumes from the last checkpoint; no repeated calls or sends |
-| Approve twice, or approve across a server restart | "already sent, not sent again" |
+| Approve twice, or retry after a crash | "already delivered, skipped" |
 | Budget lowered mid-run | stops before the next paid call with a partial result |
-
-These cases are covered by `bun run test` (71 tests in 12 files; 64 run without keys and the 7 live-adapter checks
-need a Crustdata key), `bun run test:e2e` (8 HTTP scenarios) and `bun run smoke`.
-
-**Fresh-clone check (22 Nov, 13:55 IST):** on a clean HTTPS clone with no `.env`, `bun install` (83 packages, 0.1 s),
-`bun run test` (64 pass, 7 skip, 0 fail), `bun run smoke` (pass), `bun run test:e2e` (8 pass) and `bun run typecheck`
-(clean) all succeeded first time. `bun start` built the UI and served it, and the example request reached the approval
-queue in 4 s on the fixture world, with 7 accounts, 5 drafts, 10 approvals, 0 credits and the "Fixture" badge.
 
 ## Limitations and who it could get wrong
 
-- **A drain that isn't one.** Engineers can leave because of a re-org, a deliberately smaller team, or a sabbatical.
-  Every edge shows that competing explanation, rules need two or more dated rows, and a person approves every message.
-- **Late profile updates.** People change their profiles weeks after they move, so a live 30-day window misses some
-  moves and replay adds a 30-day lag. Month-precision dates near a boundary are held rather than guessed.
-- **Thin yield.** At threshold 3, R1 is rare in public data (0 accounts today). Most live drafts come from CONTAGION,
-  which is the weakest mechanism (base 0.86) and the most likely to be wrong about a specific company's roadmap.
-- **Replay isn't point-in-time** (see the caveat above), and the first replay shows no cross-company edges at 1 Sep.
-- **Displacement depends on configured events.** It only fires for provider changes listed with a dated source in
-  `config/seller.json`; the shipped config holds fixture examples.
-- **Coverage bias.** Companies and people that Crustdata indexes thinly (small Indian startups with sparse profiles)
-  produce fewer dated rows, so DOMINO stays quiet about them instead of guessing.
+- **A drain that isn't one.** People leave because of a re-org, a deliberately smaller team, or a sabbatical, and a
+  company may decide not to backfill. Every prediction shows that competing explanation, and nothing goes out without
+  a person's approval.
+- **Late profile updates.** People change their profiles weeks after they move, so live windows miss some moves and
+  replay adds a 30-day lag. Month-only dates near a boundary are held rather than guessed.
+- **Replacements we can't see.** A replacement hired through a referral, or a role filled internally, may not show up
+  in public data, so O1 could predict an opening that was already filled.
+- **Thin signal.** Drains of several people in one role family are rare in public data (2 companies at 2 departures in
+  the quarter we measured).
+- **Coverage bias.** Companies and people with sparse public profiles (many small Indian startups) produce fewer dated
+  rows, so DOMINO says less about them instead of guessing. Candidates with thin profiles get fewer matches.
+- **Replay isn't point-in-time** (see the caveat above).
 - **No real delivery.** By design, everything goes to a local test inbox.
 
-## Approaches considered
+## Approaches considered (and why we pivoted)
+
+**First version: an Outbound Desk for AI-infrastructure vendors (theme 9.1).** The same engine looked for needs
+created by another company's move. Its main rule, **R1 TALENT_DRAIN**, said: if B hires 3 or more of A's serving
+engineers within 90 days, the 3rd in the last 30, then A has lost the people who run its inference and should buy
+managed inference. CONTAGION (a peer's infra moves) and DISPLACEMENT (a provider acquired or shut down) sat alongside
+a first-order hiring baseline. It ran end to end on live data: request, live Crustdata reads, cascade, decider,
+verified draft, approval, send-once.
+
+**The honest zero.** At 13:43 we measured R1's live yield with the threshold fixed beforehand: 1,410 departures came
+down to **0** accounts at 3 departures and 2 at 2 (Poolside, Abacus.AI). We didn't lower the threshold after seeing
+the count; we put the two accounts on a watchlist. Live drafts came from CONTAGION, the weakest mechanism, and a first
+replay from 1 Sep produced no cross-company edges at all (5 picks, all from the hiring baseline; 2 of them showed the
+need, against 13 of 34 for the hiring filter).
+
+**Why we pivoted (14:08).** The talent-drain signal itself was real and dated. It was attached to the wrong buyer: a
+vendor's need for inference is a weak inference from two departures, but a team's need to **replace two engineers** is
+direct. Recruiting is also where the money is paid at a clear moment (a start date), and the outcome can be checked
+against later job posts and hires. So we kept the engine, the guards, the verifier, send-once and the replay, and
+moved the signal to the Search Desk.
 
 | Approach | Why not, or why |
 |---|---|
-| A first-order hiring filter ("X posts an inference role") | Every signal tool already does this, so the meeting goes to whoever emails first. We kept it as the baseline to beat |
-| A chat agent that browses and writes messages | Can't prove where each fact came from or that a message was sent once; facts drift with the model's memory |
-| An LLM deciding which accounts matter | Not reproducible and can't be replayed honestly; we use explicit rules with written guards and let the model write only from numbered claims |
-| **Explicit cross-company rules over dated evidence, a verifier, an approval gate and a replay (chosen)** | Every decision is explainable and replayable from a past date, and the cost of each call is visible |
-| Lowering R1 to 2 departures after seeing 0 | Rejected: thresholds were fixed before counting. 2-of-3 accounts go on a watchlist instead |
+| A job-board scraper that matches candidates to posted roles | Sees an opening only when everyone else does; no edge on timing |
+| A chat agent that browses profiles and writes intros | Can't prove where each fact came from or that an intro was sent once |
+| An LLM ranking companies and candidates | Not reproducible and can't be replayed honestly |
+| Outbound Desk with R1/CONTAGION/DISPLACEMENT (built first) | Worked end to end, but R1 yielded 0 at its pre-set threshold and the vendor need was indirect |
+| Lowering R1 to 2 after seeing 0 | Rejected: a threshold tuned to the data it is scored on proves nothing |
+| **Search Desk: O1 on dated departures, opted-in candidates, cited matches, approval and send-once, replay (chosen)** | The signal maps directly to a hire, the outcome is checkable, and every decision is explainable |
+
+The Outbound Desk demo script is kept in [`docs/DEMO-outbound.md`](docs/DEMO-outbound.md).
 
 ## Models and tools
 
-- **OpenAI `gpt-6-luna`** (reasoning effort none): request parsing to a structured intent, and the cited middle of
-  each draft. Timeouts of 20 s (parse) and 30 s (draft), 2 attempts, every call on the ledger.
-- **Deterministic template**: drafts when no model key is set or the model keeps failing; it goes through the same
+- **OpenAI `gpt-6-luna`** (reasoning effort none): parses the candidate profile into a role family and skills, and
+  writes the cited middle of each intro. Every call is on the ledger with its timeout and attempts.
+- **Deterministic template**: intros when no model key is set or the model keeps failing; it goes through the same
   verifier.
-- **Anthropic `claude-opus-5-5`**: supported provider, used only when it is the only key set (not used in today's runs).
+- **Anthropic `claude-opus-5-5`**: supported provider, used only when it is the only key set (not used today).
 - **Crustdata REST API**: all live data (see [Stack](#stack)).
 - **Built with** Bun, Hono, React, Vite, SQLite and zod, using AI coding tools (Claude Code and OpenAI Codex) under the
   team's direction.
 
 ## Next steps
 
-1. Crustdata watchers on the watchlist accounts (Poolside, Abacus.AI), so R1 fires on the day of the third departure.
-2. Live DISPLACEMENT events from dated news and posts instead of a configured list.
-3. A replay over several as-of dates, enough to compare the cascade rules with the baseline on more than a handful of
-   accounts, and confidence bases learned from it.
-4. Real delivery behind the same gate and key, plus outcome tracking (meeting held, opportunity opened).
+1. Crustdata watchers on the cohort, so an opening is flagged the day its second departure lands.
+2. The manager's three lines as an input, so DOMINO matches a request against predicted and posted openings at once.
+3. Replays over several as-of dates, enough to compare O1 with the baselines on more than a handful of companies, with
+   confidence learned from them.
+4. Outcome tracking through to a start date, which is when a search firm gets paid.
 
 ## Team and declaration
 
