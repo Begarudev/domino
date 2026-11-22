@@ -1,6 +1,7 @@
 // The O1 funnel for today's scan: every count opens its rows (role, initial, month). Shown only with real funnel
 // data from GET /api/openings/funnel; a missing endpoint hides the strip (there is no fixture funnel).
 import { useState } from 'react';
+import Chart from 'react-apexcharts';
 import type { FunnelStage, OpeningsFunnel } from '../../../../shared/desk.ts';
 import type { Sourced } from '../../data/desk.ts';
 import { useQuery } from '../../data/query.ts';
@@ -59,6 +60,21 @@ export function FunnelStrip({ runId }: { runId: string | null }) {
         <span className="faint" title={f.lockedAt}>O1 · {lockText(f.lockedAt)}</span>
         <HowComputed><b>GET /api/openings/funnel</b>: the counts today's O1 scan kept at each step. Job moves read from Crustdata person search, filtered to a tracked role family, to a leave date inside the 90-day window, to a 20–5,000 staff company (Crustdata company enrich), then grouped by company and family; groups with 2 or more become O1 decisions. Click a step to list its rows.</HowComputed>
       </header>
+      <div className="rec-apex" data-testid="funnel-chart">
+        <Chart type="bar" height={Math.max(150, steps.length * 40)} series={[{ name: 'Rows kept', data: steps.map((s) => s.count) }]}
+          options={{
+            chart: { toolbar: { show: false }, fontFamily: 'inherit', animations: { enabled: true, speed: 450, animateGradually: { enabled: true, delay: 60 }, dynamicAnimation: { enabled: false } },
+              events: { dataPointSelection: (_e, _c, cfg) => { const s = steps[cfg?.dataPointIndex ?? -1]; if (s) toggle(s.id); } } },
+            plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '62%', distributed: true } },
+            colors: steps.map((s) => (open === s.id ? '#2e6be6' : '#12a594')),
+            legend: { show: false }, grid: { borderColor: '#ebecef', strokeDashArray: 3, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+            dataLabels: { enabled: true, formatter: (v: number) => fmtInt(v), style: { fontSize: '12px', fontWeight: 600, colors: ['#ffffff'] } },
+            xaxis: { categories: steps.map((s) => SHORT[s.id] ?? s.label), labels: { style: { colors: '#8a8f98', fontSize: '11px' } } },
+            yaxis: { labels: { maxWidth: 220, style: { colors: '#4b5059', fontSize: '12px' } } },
+            tooltip: { y: { formatter: (v: number) => `${fmtInt(v)} · ${Math.round((v / top) * 1000) / 10}% of job moves read · click to list rows` } },
+            states: { active: { filter: { type: 'none' } } },
+          }} />
+      </div>
       <ol className="rec-fun">
         {steps.map((s) => (
           <li key={s.id}>

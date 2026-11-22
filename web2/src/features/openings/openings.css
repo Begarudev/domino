@@ -260,3 +260,4 @@
 .rec-fun li > button.on .rec-fun-bar i { background: var(--h-blue-dot); }
 @keyframes rec-grow { from { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .rec-fun-bar i, .rec-how-pop { animation: none; } }
+.rec-apex { padding: 4px 8px 0; } .rec-apex .apexcharts-bar-area { cursor: pointer; } .rec-funnel .rec-fun-bar { display: none; }
