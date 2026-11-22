@@ -108,7 +108,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
   let current: StepName | null = running;
   if (!current) for (const { event: ev } of events) if (ev.type === 'step.started') current = ev.step;
   const doneCount = snap.steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
-  const stepIdx = current ? STEP_ORDER.indexOf(current) + 1 : 0;
+  const stepIdx = current ? (STEP_ORDER as readonly string[]).indexOf(current) + 1 : 0;
   const statusLine = snap.status === 'running' && current ? `${STEP_SHORT[current]}` : snap.status === 'awaiting_approval' && gate?.sent ? 'Sent once' : STATUS_LINE[snap.status] ?? snap.status;
 
   const isReplayRun = snap.intent?.runKind === 'replay';
@@ -235,7 +235,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
             <span className="mc-crash__sig">SIGKILL · pid {crashed.pid}</span>
             <strong>Engine killed during {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start-up'}</strong>
             <span className="mc-crash__saved">{doneCount} of {STEP_ORDER.length} steps saved</span>
-            <span className="mc-crash__next">Resuming at step {crashed.atStep ? STEP_ORDER.indexOf(crashed.atStep) + 1 : 1} · {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start'}. Finished steps won't run again; nothing is sent twice.</span>
+            <span className="mc-crash__next">Resuming at step {crashed.atStep ? (STEP_ORDER as readonly string[]).indexOf(crashed.atStep) + 1 : 1} · {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start'}. Finished steps won't run again; nothing is sent twice.</span>
             {controls?.resume && !controls.autoResume ? (
               <button type="button" className="mc-crash__resume" onClick={() => controls.resume?.()}>Resume from the checkpoint</button>
             ) : (
