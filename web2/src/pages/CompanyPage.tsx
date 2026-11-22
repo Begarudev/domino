@@ -12,7 +12,7 @@ import { Needs } from '../features/needs/Needs.tsx';
 import { Openings } from '../features/openings/Openings.tsx';
 import { Outreach } from '../features/outreach/Outreach.tsx';
 import { Replay } from '../features/replay/Replay.tsx';
-import { ActivityRail } from '../shell/ActivityRail.tsx';
+import { Reading } from '../features/reading/Reading.tsx';
 import { SourceNote } from '../shell/SourceNote.tsx';
 import { setPageSource } from '../shell/ui.ts';
 
@@ -107,7 +107,7 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
           <section data-testid={`panel-${tab}`}>
             {tab === 'recruitment' && <Openings desk={desk} />}
             {tab === 'outreach' && <Outreach desk={desk} />}
-            {tab === 'reading' && <div className="panel reading-panel"><ActivityRail /></div>}
+            {tab === 'reading' && <Reading desk={desk} />}
             {tab === 'file' && <Analysis desk={desk} />}
             {tab === 'chains' && <Chains desk={desk} />}
             {tab === 'verifier' && <Needs desk={desk} />}

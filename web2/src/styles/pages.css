@@ -13,12 +13,39 @@
 .side a:hover { background: var(--hover); }
 .side a[aria-current='page'] { background: var(--hover); color: var(--ink); }
 .side a .c { color: var(--ink-3); font-weight: 400; }
-.side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 12px; color: var(--ink-3); line-height: 18px; }
-.co-main { flex: 1; padding: 28px 32px 48px; min-width: 0; max-width: 1240px; }
+.side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 13px; color: var(--ink-3); line-height: 18px; }
+.co-main { flex: 1; padding: 20px 24px 40px; min-width: 0; max-width: 1240px; }
 @media (min-width: 1800px) { .co-main { max-width: 1480px; } }
 
 .reading-panel { min-height: 60vh; display: grid; }
 .reading-panel .rail { min-height: 60vh; }
+
+/* candidate side: the same dense sans voice as the company side (Garud 15:17: no display type, no prose intros) */
+.side-candidate .onb-title { font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -.015em; display: block; margin-bottom: 4px; }
+.side-candidate .onb-title-wide, .side-candidate .onb-title-narrow { font-variation-settings: normal; font-weight: inherit; color: var(--ink); }
+.side-candidate .onb-title-narrow::before { content: ' '; }
+.side-candidate .onb-rule { font-size: 13px; color: var(--ink-2); }
+.side-candidate .dash-name, .side-candidate .onb-h2 { font-weight: 600; font-size: 22px; line-height: 28px; letter-spacing: -.015em; font-variation-settings: normal; }
+.side-candidate .dash-h2 { font-weight: 600; font-size: 15px; line-height: 22px; font-variation-settings: normal; }
+.side-candidate .op-co, .side-candidate .pcard-name { font-weight: 600; font-size: 18px; line-height: 24px; letter-spacing: -.01em; font-variation-settings: normal; }
+.side-candidate .op-rule { color: var(--ink-2); font-size: 14px; font-weight: 600; font-variation-settings: normal; }
+
+/* sign-in: an app login, not a cover */
+.signin { max-width: 1040px; margin: 0 auto; padding: 48px 24px; display: grid; grid-template-columns: 1fr 420px; gap: 48px; align-items: start; }
+.signin-head h1 { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.02em; margin: 24px 0 8px; max-width: 18em; }
+.signin-head > p { color: var(--ink-2); font-size: 15px; line-height: 22px; margin: 0; max-width: 34em; }
+.signin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 28px 0 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.signin-stats > div { padding: 12px 16px; }
+.signin-stats > div + div { border-left: 1px solid var(--rule-2); }
+
+.signin-stats dt { font-size: 13px; color: var(--ink-2); }
+.signin-stats dd { margin: 2px 0 0; font-size: 24px; line-height: 30px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.signin-at { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
+.signin-panel { padding: 24px; }
+.signin-panel h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+.signin-go { width: 100%; height: 38px; margin-top: 8px; }
+@media (max-width: 960px) { .signin { grid-template-columns: 1fr; } }
+.cand-wait { display: grid; gap: 12px; justify-items: start; }
 
 /* cohort list */
 .cohort-row {
@@ -36,9 +63,22 @@
 .op-list { display: grid; gap: 12px; }
 .op-row { padding: 16px; display: grid; gap: 12px; }
 .op-top { display: grid; gap: 8px; justify-items: start; }
-.op-role { margin: 0; font-family: var(--serif); font-weight: var(--serif-w); font-size: 24px; line-height: 30px; }
+.op-role { margin: 0; font-weight: 600; font-size: 16px; line-height: 22px; }
 .op-hold { margin: 0; color: var(--ink-2); font-weight: 600; }
 .op-chips { display: grid; gap: 0; border-top: 1px solid var(--rule-2); }
 .op-chip { display: grid; grid-template-columns: 1fr auto; gap: 16px; text-align: left; padding: 9px 0; border: 0; border-bottom: 1px solid var(--rule-2); background: none; }
 .op-chip small { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
 .op-chip:hover:not(:disabled) span { text-decoration: underline; text-decoration-color: var(--ink-3); }
+
+/* big numbers: proportional figures (Schibsted tabular widens the comma: "1 , 410") */
+.signin-stats dd, .rec-fun b, .fun-n, .funnel b, .big-n { font-variant-numeric: lining-nums proportional-nums; }
+.rec-op .rec-role { font-size: 20px; line-height: 26px; letter-spacing: -.01em; }
+.side-candidate .onb-demo { justify-self: start; margin-top: 4px; color: var(--ink-2); }
+.side-candidate .onb-input { height: 40px; font-size: 14px; }
+.side-candidate .onb-go { height: 38px; font-size: 14px; padding: 0 16px; }
+.side-candidate .fit-list li { flex-wrap: nowrap; }
+.side-candidate .fit-list li .fit-text { min-width: 0; }
+.side-candidate .fit-list li.cant { border: 0; padding: 0; background: none; border-radius: 0; font-size: var(--fs-body); color: var(--ink-2); display: flex; }
+/* candidate clause chips own their layout (the shell .clauses li grid is for company clause rows) */
+.side-candidate ol.clauses li { display: block; padding: 0; grid-template-columns: none; cursor: default; }
+.side-candidate ol.clauses li:hover { background: none; }

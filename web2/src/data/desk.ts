@@ -123,7 +123,7 @@ const departure = (id: string, companyId: string, role: string, roleFamily: Role
 // ---------------------------------------------------------------- client
 
 export interface DeskApi {
-  createCandidate(input: { linkedinUrl: string; samples: string[]; consent: Consent }): Promise<Sourced<{ candidateId: string; runId: string | null }>>;
+  createCandidate(input: { linkedinUrl: string; samples: string[]; consent: Consent; dataMode?: 'fixture' | 'cache' | 'live' }): Promise<Sourced<{ candidateId: string; runId: string | null }>>;
   candidate(id: string): Promise<Sourced<Candidate>>;
   confirmCandidate(id: string, consent: Consent): Promise<Sourced<Candidate>>;
   candidateOpenings(id: string): Promise<Sourced<Opening[]>>;
@@ -132,7 +132,8 @@ export interface DeskApi {
   companies(): Promise<Sourced<CompanySummary[]>>;
   company(id: string): Promise<Sourced<CompanyDesk>>;
   dossier(id: string, runId?: string): Promise<Sourced<CompanyDossier>>;
-  scanOpenings(): Promise<{ runId: string } | null>;
+  /** User-initiated only (a button). Never on load, poll or navigation. Defaults to cache mode: 0 credits. */
+  scanOpenings(dataMode?: 'cache' | 'live'): Promise<{ runId: string } | null>;
 }
 
 export class NotLive extends Error {}
@@ -262,9 +263,9 @@ export function createDeskApi(opts: { fixtureOnly: boolean }): DeskApi {
     dossier: (id, runId) => liveOr(
       async () => { const r = unwrap<CompanyDossier>(await getJson(`/api/companies/${encodeURIComponent(id)}/dossier${runId ? `?run=${runId}` : ''}`)); return { ...r, source: r.data.dataMode === 'fixture' ? 'fixture' : r.data.dataMode === 'cache' ? 'cache' : 'live', evidence: r.data.evidence }; },
       () => { throw new Error('No analysis run contains this company yet. Run a company analysis first.'); }, f),
-    async scanOpenings() {
+    async scanOpenings(dataMode: 'cache' | 'live' = 'cache') {
       if (f) return null;
-      try { return await postJson<{ runId: string }>('/api/openings/scan', {}); } catch { return null; }
+      try { return await postJson<{ runId: string }>('/api/openings/scan', { dataMode }); } catch { return null; }
     },
   };
 }

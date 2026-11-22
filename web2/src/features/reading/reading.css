@@ -1,0 +1,115 @@
+/* Reading log + Run desk (design mock screen 5). Funnel ported from the mock (index.html 197–206). */
+
+/* This tab renders its own page header (it carries the run desk on the right), so the shell's generic one steps aside. */
+.co-main:has(> section[data-testid='panel-reading']) > .ph { display: none; }
+
+.rd { display: flex; flex-direction: column; min-height: calc(100vh - 52px - 28px - 48px); }
+.rd-ph { align-items: flex-end; }
+.rd-run { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* ---------- run desk ---------- */
+.rd-desk { display: flex; align-items: center; gap: 10px; flex: none; }
+.rd-ask { display: flex; align-items: center; gap: 6px; }
+.rd-ask input {
+  width: 300px; height: 32px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink);
+  transition: border-color 150ms var(--ease);
+}
+.rd-ask input::placeholder { color: var(--ink-3); }
+.rd-ask input:focus { outline: none; border-color: var(--ink-3); }
+.rd-err { margin: -8px 0 14px; color: var(--err); font-size: 13px; }
+.rd-note { margin: 0 0 14px; color: var(--ink-2); font-size: 13px; }
+.rd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -6px 0 14px; font-size: 13px; }
+.rd-term { padding: 1px 8px; border: 1px solid var(--rule); border-radius: 3px; color: var(--ink-2); background: var(--surface); }
+.rd-term.added { border-style: dashed; border-color: var(--ink-3); color: var(--ink); }
+
+/* ---------- funnel ---------- */
+.funnel { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.funnel > div { padding: 14px 16px; border-right: 1px solid var(--rule-2); position: relative; cursor: pointer; transition: background 150ms var(--ease); min-width: 0; }
+.funnel > div:hover { background: var(--row-hover); }
+.funnel > div.on { background: var(--hover); }
+.funnel > div:last-child { border-right: 0; }
+.funnel b { display: block; font-family: var(--sans); font-weight: 600; font-size: 24px; line-height: 32px; letter-spacing: -.02em; font-variant-numeric: normal; }
+.funnel span { color: var(--ink-2); font-size: 13px; line-height: 16px; display: block; min-height: 32px; }
+.funnel .rd-bar { height: 3px; background: var(--rule-2); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+.funnel .rd-bar i { display: block; height: 100%; width: 100%; background: var(--ink-2); transform-origin: left center; transition: transform 250ms var(--ease); }
+.rd-funnel > div { padding: 12px 12px; }
+.rd-funnel > div:first-child { border-radius: 6px 0 0 6px; }
+.rd-funnel > div:last-child { border-radius: 0 6px 6px 0; }
+.rd-funnel > div:focus-visible { outline-offset: -2px; }
+/* The rule's decisions sit after a firmer divider than the filters before them. */
+.rd-funnel > div.rd-dec { box-shadow: inset 1px 0 0 var(--ink-3); }
+.rd-funnel .rd-provisional .rd-bar i { background: var(--acc); }
+.rd-funnel .rd-held .rd-bar i { background: var(--ink-3); }
+.rd-ghost > div { cursor: default; }
+.rd-ghost b, .rd-ghost span { background: var(--rule-2); border-radius: 3px; color: transparent; width: 60%; }
+.rd-ghost span { width: 80%; margin-top: 4px; min-height: 14px; }
+
+/* ---------- decision table ---------- */
+.rd-panel { margin-top: 16px; flex: 1; display: flex; flex-direction: column; }
+.rd-panel > header { flex-wrap: wrap; }
+.rd-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0; }
+.rd-panel > header h2 { font-size: 15px; }
+.rd-showing { font-weight: 400; }
+.rd-lock { font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.rd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acc); display: inline-block; animation: live-breathe 1.6s var(--ease) infinite; }
+.rd-seg { display: flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.rd-seg button { padding: 2px 10px; font-size: 13px; color: var(--ink-2); border: 0; background: none; transition: background 150ms var(--ease), color 150ms var(--ease); white-space: nowrap; }
+.rd-seg button + button { border-left: 1px solid var(--rule); }
+.rd-seg button span { color: var(--ink-3); margin-left: 2px; }
+.rd-seg button:hover { background: var(--row-hover); }
+.rd-seg button[aria-pressed='true'] { background: var(--ink); color: var(--on-ink); }
+.rd-seg button[aria-pressed='true'] span { color: var(--on-ink); opacity: .75; }
+.rd-def, .rd-slow { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--ink-3); border-bottom: 1px solid var(--rule-2); }
+.rd-slow { color: var(--warn); }
+
+.rd-table { table-layout: fixed; font-size: 13.5px; }
+.rd-table td { padding-top: 8px; padding-bottom: 8px; line-height: 18px; }
+.rd-date, .rd-dom { font-family: var(--mono); font-size: 12px; letter-spacing: -.01em; }
+.rd-table .c-src { width: 116px; }
+.rd-table .c-date { width: 110px; }
+.rd-table .c-dom { width: 140px; }
+.rd-table .c-dec { width: 132px; }
+.rd-table .c-why { width: 25%; }
+.rd-table th:first-child, .rd-table td:first-child { padding-left: 16px; }
+.rd-table th:last-child, .rd-table td:last-child { padding-right: 16px; }
+.rd-table td { overflow-wrap: anywhere; }
+.rd-src { color: var(--ink-2); white-space: nowrap; }
+.rd-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rd-dom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.rd-dec { white-space: nowrap; }
+.rd-x { color: var(--ink-2); font-weight: 700; margin-right: 2px; }
+.rd-why span { display: block; }
+.rd-why span + span { margin-top: 2px; }
+.rd-open { cursor: pointer; }
+.rd-why b { font-weight: 700; }
+.rd-open-mark { font-size: 11px; font-weight: 600 !important; color: var(--acc); border: 1px dashed var(--acc); border-radius: 3px; padding: 0 4px; margin-right: 2px; }
+/* departures listed under the company decision they fed */
+.rd-sub td { border-bottom-color: transparent; padding-top: 5px; padding-bottom: 5px; }
+.rd-sub .rd-title { padding-left: 30px; position: relative; color: var(--ink-2); }
+.rd-sub .rd-title::before { content: ''; position: absolute; left: 14px; top: 0; bottom: 50%; width: 9px; border-left: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.rd-sub .rd-src { color: var(--ink-3); }
+tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
+.rd-table tbody tr:has(+ .rd-sub) td { border-bottom-color: transparent; }
+.rd-table tbody .rd-sub:not(:has(+ .rd-sub)) td { border-bottom-color: var(--rule-2); padding-bottom: 10px; }
+.rd-body { animation: rd-fade 200ms var(--ease) both; }
+@keyframes rd-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rd-body { animation: none; } .funnel .rd-bar i { transition: none; } .rd-dot { animation: none; } }
+
+.rd-none { margin: 0; padding: 20px 16px; color: var(--ink-2); }
+.rd-foot { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 10px 16px; border-top: 1px solid var(--rule-2); font-size: 13px; color: var(--ink-3); }
+.rd-foot:empty { display: none; }
+.rd-foot .btn { margin-left: auto; }
+
+.rd-empty { margin-top: 4px; padding: 24px 28px; }
+.rd-empty h2 { margin: 0; font-family: var(--sans); font-weight: 600; font-size: 16px; line-height: 24px; }
+.rd-empty p { max-width: 640px; }
+/* Where the rows will land: ghost lines under the real column heads, so the empty state isn't a blank stage. */
+.rd-waiting tbody tr:hover { background: none; }
+.rd-waiting td i { display: block; height: 10px; margin: 5px 0; border-radius: 3px; background: var(--rule-2); width: 70%; }
+.rd-waiting td:nth-child(2) i { width: 85%; }
+.rd-waiting tr:nth-child(2n) td i { width: 55%; }
+
+@media (max-width: 1360px) {
+  .rd-ph { flex-wrap: wrap; }
+  .rd-ask input { width: 240px; }
+}

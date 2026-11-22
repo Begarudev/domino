@@ -3,7 +3,7 @@
 // confirms it ("Is this you?") and lands on the dashboard. The model is used only to read the profile.
 import { useEffect, useRef, useState } from 'react';
 import type { Evidence } from '../../../../shared/types.ts';
-import { createDeskApi, isMonthLevel, ROLE_FAMILY_LABELS } from '../../data/desk.ts';
+import { isMonthLevel, ROLE_FAMILY_LABELS } from '../../data/desk.ts';
 import type { Candidate, Consent, DeskApi, Provenance, RoleFamily } from '../../data/desk.ts';
 import { confirmProfile, fieldSourceText } from './contract.ts';
 import { deskApi } from '../../data/query.ts';
@@ -23,7 +23,8 @@ type Phase = 'form' | 'enriching' | 'confirm' | 'failed';
 const POLL_MS = 1500;
 const MIN_READING_MS = 900;
 /** "Continue with the demo candidate": the labelled fictional fixture, whatever the live server says. */
-const demoApi = createDeskApi({ fixtureOnly: true });
+/** Goes through the live server in fixture mode (0 credits) so the company side sees the same candidate. */
+const DEMO_LINKEDIN = 'https://www.linkedin.com/in/asha-kestrel-demo/';
 
 export function Onboarding() {
   const [phase, setPhase] = useState<Phase>('form');
@@ -39,6 +40,7 @@ export function Onboarding() {
   const [source, setSource] = useState<Provenance | null>(null);
   const [failReason, setFailReason] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const api = useRef<DeskApi>(deskApi);
   const alive = useRef(true);
@@ -94,7 +96,8 @@ export function Onboarding() {
     }
   }
 
-  async function start(linkedinUrl: string, using: DeskApi) {
+  async function start(linkedinUrl: string, using: DeskApi, dataMode?: 'fixture') {
+    setDemoMode(dataMode === 'fixture');
     api.current = using;
     if (pollTimer.current) clearTimeout(pollTimer.current);
     setPhase('enriching');
@@ -102,7 +105,7 @@ export function Onboarding() {
     setFailReason(null);
     startedAt.current = performance.now();
     try {
-      const r = await using.createCandidate({ linkedinUrl, samples: filledSamples, consent });
+      const r = await using.createCandidate({ linkedinUrl, samples: filledSamples, consent, ...(dataMode ? { dataMode } : {}) });
       if (!alive.current) return;
       setSource(r.source);
       if (r.data.runId) void runStore.attach(r.data.runId);
@@ -146,7 +149,7 @@ export function Onboarding() {
     window.setTimeout(() => urlInput.current?.focus(), 0);
   }
 
-  const demo = api.current !== deskApi;
+  const demo = demoMode;
   const folded = phase !== 'form';
   const sharing = CONSENT_ITEMS.filter((c) => consent[c.key] && c.key !== 'discoverable').map((c) => c.label.toLowerCase());
 
@@ -154,15 +157,10 @@ export function Onboarding() {
     <div className={`page onb ${folded ? 'is-folded' : ''}`}>
       {!folded && (
         <header className="onb-hero">
-          <h1 className="onb-title">
-            <span className="onb-title-wide">Find the job</span>
-            <span className="onb-title-narrow">before it’s posted</span>
-          </h1>
-          <p className="onb-how">DOMINO watches for companies where two people in your role just left and nobody has been hired or posted to replace them.</p>
+          <h1 className="onb-title">Find openings before they’re posted</h1>
           <p className="onb-rule">
-            Rules decide, and every claim has a dated source. Rule O1 reads dated Crustdata records: at a company of
-            20–5,000 staff, two or more people in one role family leave within 90 days, and no replacement is hired or
-            posted within 30 days of the last one.
+            Rule O1: two or more people in your role family leave one company (20–5,000 staff) within 90 days, and no
+            replacement is hired or posted within 30 days. Every claim has a dated source.
           </p>
         </header>
       )}
@@ -197,6 +195,9 @@ export function Onboarding() {
               <button data-testid="onboard-submit" className="btn primary onb-go" type="submit">Read my profile</button>
               <span className="onb-after">Reads your public profile once from Crustdata, then shows it back to you to confirm.</span>
             </div>
+            <button type="button" className="btn ghost sm onb-demo" data-testid="onboard-demo" onClick={() => void start(DEMO_LINKEDIN, deskApi, 'fixture')}>
+              Use the fictional demo candidate (no live call)
+            </button>
           </div>
 
           <fieldset className="onb-col onb-consent">
@@ -278,7 +279,7 @@ export function Onboarding() {
           <p>Check it’s a public linkedin.com/in/ link, then try again.</p>
           <div className="onb-fail-actions">
             <button data-testid="onboard-retry" className="btn primary" type="button" onClick={startOver}>Try again</button>
-            <button className="btn" type="button" onClick={() => void start('', demoApi)}>Continue with the demo candidate</button>
+            <button className="btn" type="button" onClick={() => void start(DEMO_LINKEDIN, deskApi, 'fixture')}>Continue with the demo candidate</button>
           </div>
         </section>
       )}

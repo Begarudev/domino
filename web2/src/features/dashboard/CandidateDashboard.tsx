@@ -198,7 +198,7 @@ function OpeningCard({ o, cand, evidence, mine, candidateId }: {
                 {o.fit.map((f) => (
                   <li key={f.text} className={f.status === 'verified' ? 'ok' : 'cant'}>
                     <span className="fit-mark" aria-hidden="true">{f.status === 'verified' ? '✓' : '?'}</span>
-                    <span className="fit-text">{f.text}</span>
+                    <span className="fit-text">{f.text.replace(/ \(\d{4}-\d{2}-\d{2}\)$/, '')}</span>
                     {f.status === 'cant_verify' && <span className="tag warn">I can’t verify</span>}
                   </li>
                 ))}

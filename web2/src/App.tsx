@@ -63,7 +63,7 @@ export function App() {
     );
   }
   return (
-    <div className={`app side-${role}`}>
+    <div className={`app side-${role ?? 'none'}`}>
       <TopBar />
       <div className="body">
         <main className="main" id="main">
