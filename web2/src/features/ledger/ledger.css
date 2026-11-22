@@ -1,4 +1,25 @@
 .ledger { display: grid; gap: 16px; }
+.lg-picker { display: flex; align-items: center; gap: 10px; font-size: var(--fs-ui); color: var(--ink-2); }
+.lg-picker select { flex: 1; max-width: 720px; height: 30px; padding: 0 8px; border: var(--hair); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: var(--fs-ui); }
+.lg-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.lg-kpi { display: grid; gap: 2px; padding: 14px 16px; background: var(--surface); border: var(--hair); border-radius: 8px; }
+.lg-kpi-l { font-size: var(--fs-ui); color: var(--ink-2); }
+.lg-kpi-v { font-size: 28px; line-height: 1.15; font-weight: var(--w-semi); color: var(--ink); font-variant-numeric: tabular-nums; }
+.lg-kpi-s { font-size: var(--fs-ui); color: var(--ink-3); }
+.lg-how { font-size: var(--fs-ui); color: var(--ink-2); max-width: 980px; }
+.lg-how summary { cursor: pointer; color: var(--ink); font-weight: var(--w-semi); margin-bottom: 4px; }
+.lg-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-bottom: var(--hair-2); }
+.lg-search { width: 260px; height: 28px; padding: 0 10px; border: var(--hair); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: var(--fs-ui); }
+.lg-chip { height: 26px; padding: 0 10px; border: var(--hair); border-radius: 999px; background: var(--surface); color: var(--ink-2); font-size: var(--fs-ui); cursor: pointer; }
+.lg-chip.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.lg-chip.on .faint { color: inherit; opacity: .7; }
+.lg-grp { cursor: pointer; }
+.lg-grp:hover td { background: var(--row-hover); }
+.lg-x { border: 0; background: none; padding: 0 4px 0 0; color: var(--ink-2); cursor: pointer; }
+.lg-n { font-variant-numeric: tabular-nums; margin-right: 4px; }
+.lg-table tr.lg-child td { background: var(--canvas); color: var(--ink-2); }
+.lg-table tr.lg-child td:first-child { padding-left: 28px; }
+@media (max-width: 1100px) { .lg-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .lg-run { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: var(--fs-body); }
 .lg-req { color: var(--ink-2); max-width: 760px; }
 .lg-strip { padding: 16px; display: grid; gap: 16px; }
