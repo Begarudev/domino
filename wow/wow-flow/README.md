@@ -1,12 +1,13 @@
 # Talent flow (centrepiece `flow`)
 
-A time-lapse of job moves between AI companies, played from the replay's start to its end.
+A time-lapse of job moves between AI companies that shows DOMINO's rule O1 at work: people leave, no replacement is posted, DOMINO predicts the opening, and the later dated job post or hire proves it.
 
-- Companies are lit nodes, sized by headcount. Every dated move flies between them, from the old employer to the new one: amber for serving and inference roles, pale for other roles, frost for moves after the freeze, which are not used.
-- When one company takes 3 or more of another's serving engineers within 90 days, the trail becomes a river. The losing company cracks, sheds shards and shrinks. A rose ring blooms around it with the inferred need and one dot for each dated evidence row (hollow dots are undated).
-- At the freeze date, a frost line sweeps across the field and stops the clock. Particles still in the air hang in place. DOMINO's predictions drop in as dashed cyan halos; the hiring filter's picks show as dotted slate halos.
-- Playing forward, each dated outcome falls onto its company. The halo snaps solid and the score ticks: DOMINO against the hiring filter. A miss stays dashed with "no dated sign yet".
-- Finale: the camera zooms in on the top account. The first message assembles itself: each cited sentence flies out of its evidence bead with a source chip (`[n] date · endpoint · field · mode`). The verifier's removed sentence is struck through. "I can't verify" items stay out of the message, and the approval gate is stated.
+- Companies are lit nodes, sized by headcount. Every dated move flies from the old employer to the new one: amber for inference, ML platform, MLOps and GPU roles; pale for other roles; frost for moves after the freeze, which are not used.
+- Rule O1: when a company loses 2 or more people in one role family within 90 days and posts no replacement, the trail becomes a river and the company cracks. A rose ring reads "Predicted opening: <role>", with "N departures · no replacement posted" under it. Pairs that fall below the rule, or where a replacement was posted, stay a thin line with the reason.
+- At 1 Sep a frost line sweeps across the field and the predictions lock (dashed cyan). The job-post filter's picks show as dotted slate rings.
+- Playing forward, each dated job post or hire lands on its company: the ring turns solid, an outcome chip appears beside it, and the score ticks. The score panel reads "Which predicted openings were later posted or filled?". It compares DOMINO with the job-post filter (any job post in the last 30 days), and the headcount +30% filter appears in a footnote.
+- A confidence percentage appears only when it comes from the engine (`node.confidence` on non-fixture data). On fixture data the line shows the evidence count instead.
+- The drafted-message finale is off by default, because the v2 desk owns outreach. To bring it back, pass `<TalentFlow withLetter />`.
 
 ## Run it
 
@@ -28,7 +29,7 @@ Standalone query flags:
 | `?data=engine-live` | Uses a real live-run snapshot recorded from the engine |
 | `?speed=` | Sets the playback speed |
 
-Keys: Space plays or pauses, R restarts, F jumps to the finale, and the arrow keys step one second. Drag the timeline to scrub.
+Keys: Space plays or pauses, R restarts, F jumps to the end, and the arrow keys step one second. Drag the timeline to scrub.
 
 ## Data
 
@@ -37,10 +38,10 @@ The view is driven only by `RunSnapshot`, through `CentrepieceProps`:
 | Visual | Source in `RunSnapshot` |
 |---|---|
 | Moves | `triggers` of kind `hire` or `departure` that have a `relatedCompanyId`; one particle per dated `/person/search` evidence row. Title regex `SERVING_RE` marks serving roles. |
-| Rivers | 3 or more serving moves in 90 days, or a `TALENT_DRAIN` graph edge |
-| Need rings | Graph nodes with a cross-company mechanism; dots count their evidence rows |
+| Rivers (O1) | 2 or more role-family departures in 90 days from a company that has a `TALENT_DRAIN` graph node with a `need`; with no graph, the count alone. A `job_post` trigger for the family within 30 days marks a pair as replaced. |
+| Predicted-opening rings | Graph nodes with `need` (the role) and a cross-company mechanism; dots count evidence rows. `unverifiable` nodes read 'Not yet'. |
 | Predictions and score | `replay.outcomes` and `replay.domino`, `baselineFirstOrder`, `baselineHeadcount`, `factsAfterAsOfUsed`, `snapshotLabel` |
-| Letter | The top non-held target's draft (`checks`, `citations`, `unverifiable`). With no draft (replay runs), it shows "Why DOMINO called X" from the node's dated evidence. |
+| Letter (only with `withLetter`) | The top non-held target's draft (`checks`, `citations`, `unverifiable`). With no draft (replay runs), it shows "Why DOMINO called X" from the node's dated evidence. |
 
 While `running` is true, the view holds at the start. It plays from 0 when the run finishes. `replayToken` restarts it. `reducedMotion` jumps to the end state.
 
@@ -54,4 +55,4 @@ While `running` is true, the view holds at the start. It plays from 0 when the r
 PW=<path to playwright-core> node wow/wow-flow/shoot.mjs
 ```
 
-The env vars `SHOTS`, `EXTRA`, `VW`/`VH`, `VIDEO` and `FPS` are described in the file. `wow-flow-playthrough.mp4` is a 35-second headless recording. Headless Chromium measured 60 fps.
+The env vars `SHOTS`, `EXTRA`, `VW`/`VH`, `VIDEO` and `FPS` are described in the file. `wow-flow-playthrough.mp4` is a 33-second headless recording. Headless Chromium measured 60 fps.
