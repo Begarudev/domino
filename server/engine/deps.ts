@@ -9,7 +9,7 @@ export {
   buildClaims, templateDraft, draftFrame, llmDraftPrompt, verifyDraft, filterAsOf, scoreReplay,
 } from '../domain/index.ts';
 export {
-  jobSearch, personSearchRecentMoves, readMovesPages, companySearchGrowth, companyEnrich, personSearchDeciders, fixtureFor,
+  jobSearch, jobSearchDisplacement, personSearchRecentMoves, readMovesPages, companySearchGrowth, companyEnrich, personSearchDeciders, fixtureFor,
   activeNewsEvents, newsSearch, newsFetch, newsFetchUrls,
   acquihireCheck, newsAcquihireSearch, newsAcquihireResolve, newsAcquihireFetch,
 } from '../crustdata/index.ts';

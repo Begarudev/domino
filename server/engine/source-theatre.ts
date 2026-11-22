@@ -64,6 +64,10 @@ function querySummary(endpoint: string, path: string, request: unknown, input: u
       return `Company profiles${names ? ' for ' + names : ''}${others > 0 ? ` and ${others} more` : ''}`;
     }
     case 'person_deciders': return `Decision-maker roles at ${query.company?.name ?? 'the target company'}`;
+    case 'person_departures': return `Talent drain: people who left inference, ML platform, MLOps or GPU/LLM infrastructure roles, ${range()}`;
+    case 'job_replacements': return `Replacement check: ${(input as { checks?: unknown[] }).checks?.length ?? 0} company job searches for the same role family`;
+    case 'person_replacements': return `Replacement check: hires into the same role family`;
+    case 'company_headcount': return `Company size and 90-day headcount change`;
     case 'outcome_check': return `Replay ${path === '/job/search' ? 'job posts' : 'hires'}, ${range()}`;
     default: return `${endpoint.replaceAll('_', ' ')}, ${range()}`;
   }
@@ -75,6 +79,8 @@ function eventStep(step: string, endpoint: string): StepName {
   if (endpoint === 'company_enrich') return 'enrich_companies';
   if (endpoint === 'person_deciders') return 'find_deciders';
   if (endpoint === 'outcome_check') return 'score_replay';
+  if (endpoint === 'person_departures') return 'pull_departures';
+  if (endpoint === 'job_replacements' || endpoint === 'person_replacements') return 'check_replacements';
   return 'pull_triggers';
 }
 
@@ -111,6 +117,13 @@ export function describeRead(
         ...timing(row, person.startedAt), signal: matched(person.evidenceIds) ? 'Selected decision-maker role' : null,
         matched: matched(person.evidenceIds),
       });
+    }
+  } else if (['person_departures', 'person_replacements', 'job_replacements', 'company_headcount'].includes(endpoint)) {
+    const kind = endpoint === 'job_replacements' ? 'job_post' : endpoint === 'company_headcount' ? 'headcount' : 'person_move';
+    const signal = endpoint === 'person_departures' ? 'Left an infra/serving role' : endpoint === 'company_headcount'
+      ? 'Size and 90-day change' : 'Possible replacement';
+    for (const row of batch.evidence) {
+      items.push({ kind, title: row.claim, company: null, url: publicUrl(row.source.url), ...timing(row), signal, matched: matched([row.id]) });
     }
   } else if (path === '/person/search') {
     const hires: MoveTrigger[] = batch.triggers.filter(trigger => trigger.kind === 'hire');

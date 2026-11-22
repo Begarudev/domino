@@ -21,15 +21,15 @@ export function predictionEvidence(evidence: Evidence[], intent: Intent): Eviden
 }
 
 const specs = [
-  deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
+  deps.jobSearch, deps.jobSearchDisplacement, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
   deps.jobSearchOutcomes, deps.personSearchOutcomes,
   deps.newsSearch, deps.newsFetch,
   deps.newsAcquihireSearch, deps.newsAcquihireResolve, deps.newsAcquihireFetch,
 ];
 
-export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, SourceResult>, input: I, time: SourceTime) {
+export async function readSource<I, O extends SourceResult = SourceResult>(ctx: ToolContext, spec: EndpointSpec<I, O>, input: I, time: SourceTime) {
   let observation: CrustReadMeta | undefined;
-  const raw = await ctx.crust(spec, input, time, deps.fixtureFor, () => ({ evidence: [] }),
+  const raw = await ctx.crust(spec, input, time, deps.fixtureFor, () => ({ evidence: [] }) as unknown as O,
     read => { observation = read; });
   const previous = ctx.store.sql.prepare(`SELECT evidence.id, json_extract(evidence.json, '$.mode') AS mode,
     json_extract(evidence_sources.json, '$.rawId') AS rawId FROM evidence JOIN evidence_sources USING (id)
@@ -56,6 +56,8 @@ export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, Sour
     evidence, sources, mentions: withIds(raw.mentions), people: withIds(raw.people), triggers: withIds(raw.triggers),
     observation, endpoint: spec.name, path: spec.path, input, time, nextCursor: raw.nextCursor, readSummary: raw.readSummary,
     acquisitionLeads: withIds(raw.acquisitionLeads), acquisitions: raw.acquisitions ?? [],
+    // Typed outputs that cite evidence ids (e.g. openings departures) map them through `remap` to run-scoped ids.
+    parsed: raw, remap: (id: string) => ids.get(id) ?? id,
   };
 }
 
