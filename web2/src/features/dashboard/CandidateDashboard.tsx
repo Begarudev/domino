@@ -141,6 +141,20 @@ function headline(o: Opening, evidence: Evidence[]): string {
   return 'O1 · Predicted opening';
 }
 
+const STATE_TEXT = { held: 'Held', provisional: 'Provisional', watch: 'Watch', open: 'Predicted opening' } as const;
+/** Rule and state as shared meaning chips (rule O1 blue, provisional, watch, held), then the rest of the headline as text. */
+function OpRule({ o, held, evidence }: { o: Opening; held: boolean; evidence: Evidence[] }) {
+  const label = held ? 'held' : openingLabel(o);
+  const rest = headline(o, evidence).replace(/^(O1 · )?(Held|Provisional|Watch|Predicted opening)( · )?/, '');
+  return (
+    <p className={`op-rule ${label}`} data-num>
+      <span className="ctag rule-o1">O1</span>
+      <span className={`ctag tone-${label}`}>{STATE_TEXT[label]}</span>
+      {rest && <span className="op-rule-rest">{rest}</span>}
+    </p>
+  );
+}
+
 /** The engine's clauses; for a fixture opening without them, derived from its dated reasons (never a score). */
 function clausesOf(o: OpeningX, evidence: Evidence[]): RuleClause[] {
   if (o.clauses?.length) return o.clauses;
@@ -192,7 +206,7 @@ function OpeningCard({ o, cand, evidence, mine, candidateId, compact }: {
           <h3 className="op-co">{o.companyName}</h3>
           <span className="op-role">{o.roleTitle}</span>
         </div>
-        <p className={`op-rule ${held ? 'held' : openingLabel(o)}`} data-num>{headline(o, evidence)}</p>
+        <OpRule o={o} held={held} evidence={evidence} />
       </div>
 
       <ol className="clauses" aria-label="Rule O1 clauses">
@@ -221,7 +235,7 @@ function OpeningCard({ o, cand, evidence, mine, candidateId, compact }: {
                     <span className="fit-mark" aria-hidden="true">{f.status === 'verified' ? '✓' : '?'}</span>
                     <span className="fit-text">{fitText(f.text)}</span>
                     {/\(month precision\)/.test(f.text) && <span className="tag">month-level</span>}
-                    {f.status === 'cant_verify' && <span className="tag warn">I can’t verify</span>}
+                    {f.status === 'cant_verify' && <span className="ctag tone-cant-verify">I can’t verify</span>}
                   </li>
                 ))}
               </ul>
@@ -351,12 +365,12 @@ function IntroConfirm({ p, busy, onSend, onCancel }: { p: IntroPreview; busy: bo
 }
 
 const STATUS: Record<IntroX['status'], { text: string; cls: string }> = {
-  new: { text: 'New', cls: 'live' },
-  awaiting_approval: { text: 'Awaiting approval', cls: 'warn' },
-  not_drafted: { text: 'Not drafted: not enough verified evidence', cls: 'warn' },
-  accepted: { text: 'Accepted', cls: 'ok' },
-  declined: { text: 'Declined', cls: 'bad' },
-  delivered: { text: 'Delivered', cls: 'ok' },
+  new: { text: 'New', cls: 'tone-open' },
+  awaiting_approval: { text: 'Awaiting approval', cls: 'tone-watch' },
+  not_drafted: { text: 'Not drafted: not enough verified evidence', cls: 'tone-cant-verify' },
+  accepted: { text: 'Accepted', cls: 'tone-met' },
+  declined: { text: 'Declined', cls: 'tone-not-met' },
+  delivered: { text: 'Delivered', cls: 'tone-delivered' },
 };
 
 function IntroRow({ r, mine }: { r: IntroX; mine?: boolean }) {
@@ -367,7 +381,7 @@ function IntroRow({ r, mine }: { r: IntroX; mine?: boolean }) {
       <div className="inbox-top">
         <b className="inbox-co">{r.companyName}</b>
         <span className="inbox-role">{r.roleTitle}</span>
-        <span className={`tag ${s.cls}`}>{s.text}</span>
+        <span className={`ctag ${s.cls}`}>{s.text}</span>
         <span className="inbox-date" data-num>{mine ? 'You asked' : 'Received'} {fmtDate(r.receivedAt)}, {fmtTime(r.receivedAt)}</span>
       </div>
       {!mine && <div className="inbox-msg">{r.message.split(/\n\n+/).map((p, i) => <p key={i}>{p}</p>)}</div>}

@@ -28,8 +28,8 @@ export function Outreach({ desk }: { desk: CompanyDesk }) {
   if (!intro) {
     return (
       <div className="empty-act" data-testid="outreach-empty">
-        <p><b>No intro drafted yet.</b> Ask for one from a matched candidate in Recruitment.</p>
-        <button className="btn" onClick={() => navigate({ page: 'company', id: routeId, tab: 'recruitment' })}>Open Recruitment</button>
+        <p><b>No intro drafted yet.</b> Ask for one from a matched candidate in Hire.</p>
+        <button className="btn" onClick={() => navigate({ page: 'company', id: routeId, tab: 'recruitment' })}>Open Hire</button>
       </div>
     );
   }
