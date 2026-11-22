@@ -106,8 +106,9 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
   const replay = snapshot.replay;
   const badge = modeBadge(snapshot.dataMode);
   const dateNow = layout.isReplay ? addDays(layout.asOf, day) : layout.asOf;
-  const predictedCount = layout.tiles.filter((t) => t.role === 'target').length;
-  const baseCount = layout.tiles.filter((t) => t.role === 'baseline').length;
+  // denominators come from the engine's score so the live tally ends on the same numbers as the score card
+  const predictedCount = replay?.domino.predicted ?? layout.tiles.filter((t) => t.role === 'target').length;
+  const baseCount = replay?.baselineFirstOrder.predicted ?? layout.tiles.filter((t) => t.role === 'baseline').length;
   const frac = layout.horizonDays ? exactDay / layout.horizonDays : 0;
 
   const caption = !layout.isReplay
@@ -117,6 +118,12 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
         : phase === 'replay' ? 'Now the real record: a tile falls only on a dated event.'
           : `Scored on what happened by ${fmtDay(layout.horizonEnd)}.`;
 
+  const hint = !layout.isReplay
+    ? (phase === 'idle' ? 'Each tile is a company. Each chain is a dated reason one company\'s change creates another\'s need.' : '')
+    : phase === 'idle' ? 'Each tile is a company. Each chain is a dated reason one company\'s change creates another\'s need.'
+      : phase === 'replay' ? 'Green: it happened, with the date and the source. Grey: nothing dated yet.'
+        : phase === 'score' || phase === 'done' ? 'Front: DOMINO\'s chains. Back row: what a plain hiring filter picked.' : '';
+
   const ticks = layout.tiles.filter((t) => t.outcomeDay != null && (t.role === 'target' || t.role === 'baseline'));
 
   return (
@@ -124,13 +131,14 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
       <div className="dp-clock">
         <div className="dp-clock-date">{fmtFull(dateNow)}</div>
         <div className="dp-clock-cap">{caption}</div>
+        {hint && <div className="dp-clock-hint">{hint}</div>}
       </div>
       <div className={`dp-badge ${badge.cls}`}>{badge.text}</div>
 
       {layout.isReplay && phase !== 'idle' && phase !== 'score' && phase !== 'done' && (
         <div className="dp-tally">
-          <div><b>{dHits}</b><span>of {predictedCount}</span><i>DOMINO</i></div>
-          <div className="dp-tally-base"><b>{bHits}</b><span>of {baseCount}</span><i>hiring filter</i></div>
+          <div><b>{Math.min(dHits, predictedCount)}</b><span>of {predictedCount}</span><i>DOMINO</i></div>
+          <div className="dp-tally-base"><b>{Math.min(bHits, baseCount)}</b><span>of {baseCount}</span><i>hiring filter</i></div>
         </div>
       )}
 

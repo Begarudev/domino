@@ -8,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: +w, height: +h }, device
 const logs = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(m.type() + ': ' + m.text()); });
 page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
-await page.goto(`http://localhost:4410/wow-physical.html?${query}`, { waitUntil: 'networkidle' });
+await page.goto(process.env.BASE_URL ? process.env.BASE_URL + '?' + query : `http://localhost:4410/wow-physical.html?${query}`, { waitUntil: 'networkidle' });
 await page.waitForSelector('canvas', { timeout: 20000 });
 await page.waitForTimeout(2500);
 const gl = await page.evaluate(() => { const c = document.createElement('canvas').getContext('webgl2'); const d = c && c.getExtension('WEBGL_debug_renderer_info'); return d ? c.getParameter(d.UNMASKED_RENDERER_WEBGL) : 'n/a'; });

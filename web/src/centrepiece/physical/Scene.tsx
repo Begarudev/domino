@@ -458,8 +458,8 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
     if (H.phase === 'score' || H.phase === 'done' || reducedMotion) {
       // fit the table into the left ~66% of the frame; the score column owns the rest
       const tanH = Math.tan(THREE.MathUtils.degToRad(17));
-      const usable = 0.6;
-      const dist = Math.max((spanZ * 0.5 * 0.94) / (tanH * 0.8), (spanX * 0.5) / (tanH * aspect * usable)) * 1.05;
+      const usable = aspect > 1.65 ? 0.62 : 0.58;
+      const dist = Math.max((spanZ * 0.5 * 0.94) / (tanH * 0.8), (spanX * 0.5 + 0.8) / (tanH * aspect * usable)) * 1.06;
       const visW = 2 * dist * tanH * aspect;
       const shift = visW * (0.5 - usable / 2) * 0.92;
       const elev = THREE.MathUtils.degToRad(64);
