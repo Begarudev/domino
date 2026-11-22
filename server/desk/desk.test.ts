@@ -344,6 +344,22 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.equal(preview.shared.find(field => field.field === 'skills')?.value, 'Kubernetes');
   });
 
+  test('read-only clarity views: every opening incl. watch, what the scan covered, and a run summary', async () => {
+    const all = await call<{ runId: string; scannedFamilies: string[]; openings: { status: string; roleFamily: string }[] }>('/api/openings');
+    assert.ok(all.openings.length > 0);
+    assert.deepEqual(all.scannedFamilies, ['inference', 'ml_platform', 'mlops', 'gpu_llm_infra']);
+    const open = await call<{ openings: { status: string }[] }>('/api/openings?status=open');
+    assert.ok(open.openings.every(row => row.status === 'open'));
+    const coverage = await call<{ notScanned: { id: string }[]; counts: { companiesChecked: number }; rule: string }>('/api/openings/coverage');
+    assert.deepEqual(coverage.notScanned.map(row => row.id), ['backend_payments']);
+    assert.ok(coverage.counts.companiesChecked > 0);
+    const summary = await call<{ runId: string; steps: { step: string }[]; credits: number }>(`/api/runs/${all.runId}/summary`);
+    assert.equal(summary.runId, all.runId);
+    assert.ok(summary.steps.length > 0);
+    assert.equal(summary.credits, 0, 'the fixture scan spends nothing');
+    await call('/api/runs/run_missing/summary', undefined, [404]);
+  });
+
   test('company view: drain as role + initial, discoverable matches only, company-to-candidate intro reaches the inbox', async () => {
     const hidden = await onboard({ shareHistory: false, shareSkills: true, shareSamples: false, discoverable: false }, ['secret sample'], 'fictional-asha-3');
     assert.deepEqual(hidden.history, []);

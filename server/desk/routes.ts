@@ -19,6 +19,7 @@ import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
 import { compareOpenings, whyThisTarget } from './why.ts';
 import { servedFrom } from './rules.ts';
+import { runSummary, scanCoverage, SCANNED_FAMILIES } from './clarity.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
   listCandidateRows, listIntroRows, openingsSnapshot, reconsentCandidate, setCandidateRun, setIntroRun,
@@ -141,6 +142,29 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const funnel = runId ? store.getOutput<{ funnel?: OpeningsFunnel }>(runId, 'detect_openings')?.funnel : undefined;
     if (!funnel) return c.json({ error: 'No completed openings scan with a funnel yet' }, 404);
     return c.json({ ...funnel, served: servedFrom(store, runId!) });
+  });
+
+  // Every opening in the latest scan, watch and held included (read-only, 0 credits). ?status=open|watch|held|all
+  // (default all) and ?family=<role family> filter. Each opening's reasons give its dated departures as role + initial + month.
+  api.get('/openings', c => {
+    const scan = store.transaction(() => openingsSnapshot(store), 'read');
+    if (!scan) return c.json({ error: 'No completed openings scan yet', code: 'no_data' }, 404);
+    const status = c.req.query('status') ?? 'all';
+    const family = c.req.query('family');
+    const openings = scan.openings.filter(row => (status === 'all' || row.status === status) && (!family || row.roleFamily === family));
+    return c.json({ runId: scan.runId, scannedFamilies: SCANNED_FAMILIES, openings: openings.map(publicOpening) });
+  });
+
+  // What today's scan covered: role families read (and not), job moves read, companies checked, rule applied, scan time.
+  api.get('/openings/coverage', c => {
+    const coverage = store.transaction(() => scanCoverage(store), 'read');
+    return coverage ? c.json(coverage) : c.json({ error: 'No completed openings scan yet', code: 'no_data' }, 404);
+  });
+
+  // One run, step by step: reads by type, rules fired or held, claims verified, drafted or not, approvals, sends, timings.
+  api.get('/runs/:id/summary', c => {
+    const summary = store.transaction(() => runSummary(store, c.req.param('id')), 'read');
+    return summary ? c.json(summary) : c.json({ error: 'Run not found' }, 404);
   });
 
   // ---------- candidates ----------
