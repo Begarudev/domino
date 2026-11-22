@@ -73,7 +73,7 @@ export interface RuleCard {
   id: 'O1' | 'R1' | 'CONTAGION' | 'DISPLACEMENT' | 'DIRECT' | string;
   name: string; statement: string; thresholds: string[]; guards: string[];
   lockedAt: string;                 // "22 Nov 2026 14:08 IST (after live counts, before replay outcomes)"
-  counts: { label: string; value: number }[]; // e.g. fired 0 · watchlist 2 · held 1
+  counts: { label: string; value: number; sourceRunId?: string | null }[]; // e.g. fired 0 · watchlist 2 · held 1; a count's own run when it differs from the card's
   sourceRunId: string | null;
 }
 
