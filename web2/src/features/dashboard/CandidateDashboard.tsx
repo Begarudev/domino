@@ -30,6 +30,12 @@ const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso.slice(0, 
 /** '2026-10' -> '2026-10-31'; a full date stays as it is. */
 const lastDay = (d: string) => (d.length === 7 ? new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0)).toISOString().slice(0, 10) : d.slice(0, 10));
 const ENTER_MS = 200;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Fit lines arrive with ISO months ("since 2023-03") and a "(month precision)" aside; show "Mar 2023" and let a chip carry the precision. */
+const fitText = (t: string) => t
+  .replace(/ \(\d{4}-\d{2}-\d{2}\)$/, '')
+  .replace(/ \(month precision\)/g, '')
+  .replace(/\b(\d{4})-(\d{2})\b(?!-)/g, (m, y: string, mo: string) => (MONTHS[+mo - 1] ? `${MONTHS[+mo - 1]} ${y}` : m));
 
 export function CandidateDashboard({ candidateId }: { candidateId: string }) {
   const cand = useQuery(`cand:${candidateId}`, () => deskApi.candidate(candidateId));
@@ -213,7 +219,8 @@ function OpeningCard({ o, cand, evidence, mine, candidateId, compact }: {
                 {o.fit.map((f) => (
                   <li key={f.text} className={f.status === 'verified' ? 'ok' : 'cant'}>
                     <span className="fit-mark" aria-hidden="true">{f.status === 'verified' ? '✓' : '?'}</span>
-                    <span className="fit-text">{f.text.replace(/ \(\d{4}-\d{2}-\d{2}\)$/, '')}</span>
+                    <span className="fit-text">{fitText(f.text)}</span>
+                    {/\(month precision\)/.test(f.text) && <span className="tag">month-level</span>}
                     {f.status === 'cant_verify' && <span className="tag warn">I can’t verify</span>}
                   </li>
                 ))}

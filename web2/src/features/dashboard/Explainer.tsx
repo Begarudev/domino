@@ -45,7 +45,8 @@ export function CheckedStrip({ scan }: { scan: Scan }) {
   const settled = stage(f, 'open');
   const held = stage(f, 'held');
   const openings = (settled?.count ?? 0) + (prov?.count ?? 0);
-  const time = f?.served?.readFrom ? scanTime(f.served.readFrom, f.served.readTo) : null;
+  const stamp = f?.served?.readFrom ?? (f?.lockedAt && !Number.isNaN(Date.parse(f.lockedAt)) ? f.lockedAt : null);
+  const time = stamp ? scanTime(stamp, f?.served?.readFrom ? f.served.readTo : undefined) : null;
   if (scan.loading && !f) return <div className="checked ghost-row"><span className="ghost" style={{ width: '70%', height: 40 }} /></div>;
   if (!f) return <p className="dash-quiet">Today’s scan summary isn’t available ({scan.error ?? 'no funnel'}).</p>;
   const btn = (k: StripKey, num: string, label: string) => (
@@ -57,10 +58,12 @@ export function CheckedStrip({ scan }: { scan: Scan }) {
     <section className="checked-wrap" aria-labelledby="chk-h">
       <h2 id="chk-h" className="dash-h3">What DOMINO checked for you</h2>
       <div className="checked">
-        {btn('moves', fmtInt(profiles?.count ?? 0), 'job moves read from Crustdata')}
+        {btn('moves', fmtInt(profiles?.count ?? 0), 'job moves read')}
         {btn('companies', fmtInt(scan.companies.length), 'companies checked')}
-        {btn('rule', `O1`, `applied: ${countWord(groups?.count ?? 0, 'group')} at 2+, ${countWord(openings, 'opening')}, ${fmtInt(held?.count ?? 0)} held`)}
-        {btn('time', time?.split(', ')[1] ?? 'Scan', `scanned ${time?.split(', ')[0] ?? 'today'}`)}
+        {btn('rule', fmtInt(openings), `${openings === 1 ? 'opening' : 'openings'} under rule O1 · ${countWord(groups?.count ?? 0, 'group')} at 2+ · ${fmtInt(held?.count ?? 0)} held`)}
+        {time
+          ? btn('time', time.split(', ')[1]?.replace(' IST', '') ?? '', `IST · scanned ${time.split(', ')[0]}`)
+          : btn('time', 'Today', 'latest scan, run record')}
       </div>
       {open && (
         <div className="chk-records" key={open}>
@@ -71,12 +74,25 @@ export function CheckedStrip({ scan }: { scan: Scan }) {
             </>
           )}
           {open === 'companies' && (
-            <ul className="chk-rows">
-              {[...scan.companies].sort((a, b) => b.departures90d - a.departures90d).slice(0, 40).map((c) => (
-                <li key={c.id}><span className="r-main">{c.name}</span><span className="r-meta" data-num>{c.headcount ? `${fmtInt(c.headcount)} staff` : 'size unknown'} · {countWord(c.departures90d, 'departure')} in 90 days{c.openings ? ` · ${countWord(c.openings, 'opening')}` : ''}</span></li>
-              ))}
-              {scan.companies.length > 40 && <li className="r-more">and {fmtInt(scan.companies.length - 40)} more with fewer departures</li>}
-            </ul>
+            <>
+              <p className="chk-note">Every company in today’s scan, most departures first.</p>
+              <div className="chk-grid-wrap">
+                <table className="chk-grid">
+                  <thead><tr><th scope="col">Company</th><th scope="col" className="n">Staff</th><th scope="col" className="n">Departures, 90 days</th><th scope="col" className="n">Openings</th></tr></thead>
+                  <tbody>
+                    {[...scan.companies].sort((a, b) => b.departures90d - a.departures90d).slice(0, 40).map((c) => (
+                      <tr key={c.id}>
+                        <td title={c.name}>{c.name}</td>
+                        <td className="n">{c.headcount ? fmtInt(c.headcount) : <span className="mute">unknown</span>}</td>
+                        <td className="n">{fmtInt(c.departures90d)}</td>
+                        <td className="n">{c.openings ? fmtInt(c.openings) : <span className="mute">0</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {scan.companies.length > 40 && <p className="r-more">Showing 40 of {fmtInt(scan.companies.length)}. The other {fmtInt(scan.companies.length - 40)} have fewer departures.</p>}
+            </>
           )}
           {open === 'rule' && (
             <>
