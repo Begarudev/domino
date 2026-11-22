@@ -291,7 +291,7 @@ const Row = memo(function Row({ r, settled }: { r: LogRow; settled: boolean }) {
       <td className="rd-title" title={r.title}>{r.title}</td>
       <td className="rd-date" title={r.monthLevel ? 'month-level date' : undefined}>{r.date}</td>
       <td className={r.domain ? 'mono rd-dom' : 'faint'} title={r.domain ?? 'no domain on record'}>{r.domain ?? '–'}</td>
-      <td className="rd-dec"><DecisionMark d={r.decision} /></td>
+      <td className="rd-dec"><DecisionMark d={r.decision} why={r.why[0]} /></td>
       <td className="muted rd-why">{r.why.map((w, i) => <Clause key={i} text={w} />)}</td>
     </tr>
   );
@@ -305,12 +305,14 @@ function Clause({ text }: { text: string }) {
 }
 
 /** Decision and source chips use the shared colour classes (styles/colors.css): one hue per meaning on every screen. */
+// Discarding is a rule outcome, not a failure: neutral grey, with its reason. Red stays for not met / can't verify.
 const TONE: Record<Decision, string> = {
-  kept: 'tone-met', provisional: 'tone-provisional', discarded: 'tone-not-met', held: 'tone-held', inconclusive: 'tone-not-evaluated',
+  kept: 'tone-met', provisional: 'tone-provisional', discarded: 'tone-not-evaluated', held: 'tone-held', inconclusive: 'tone-not-evaluated',
 };
-function DecisionMark({ d }: { d: Decision }) {
-  const label = d === 'kept' ? 'kept at this step' : d === 'inconclusive' ? 'not conclusive' : d;
-  return <span className={`ctag ${TONE[d]}`}>{label}</span>;
+function DecisionMark({ d, why }: { d: Decision; why?: string }) {
+  const reason = d === 'discarded' && why ? why.replace(/^(✓|⏳️?)\s*/, '') : '';
+  const label = d === 'kept' ? 'kept at this step' : d === 'inconclusive' ? 'not conclusive' : d === 'discarded' ? (reason ? `Discarded · ${reason}` : 'Discarded') : d;
+  return <span className={`ctag ${TONE[d]} rd-dec-tag`} title={label}>{label}</span>;
 }
 
 function srcClass(source: string): string {
