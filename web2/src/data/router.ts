@@ -2,15 +2,22 @@
 // speed) survive navigation so a labelled sample or mock session stays labelled.
 import { useSyncExternalStore } from 'react';
 
-export type CompanyTab = 'drain' | 'openings' | 'matches' | 'analysis' | 'outreach' | 'ledger' | 'replay';
-export const COMPANY_TABS: { id: CompanyTab; label: string }[] = [
-  { id: 'openings', label: 'Predicted openings' },
-  { id: 'drain', label: 'Talent drain' },
-  { id: 'matches', label: 'Matched candidates' },
-  { id: 'analysis', label: 'Company analysis' },
-  { id: 'outreach', label: 'Outreach' },
-  { id: 'ledger', label: 'Ledger' },
-  { id: 'replay', label: 'Replay' },
+export type CompanyTab =
+  | 'openings' | 'drain' | 'matches'
+  | 'reading' | 'analysis' | 'chains' | 'needs' | 'outreach'
+  | 'replay' | 'ledger';
+export type TabGroup = 'Hiring' | 'DOMINO workflows' | 'Proof';
+export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hint: string }[] = [
+  { id: 'openings', label: 'Predicted openings', group: 'Hiring', hint: 'Roles likely to open, with dated reasons' },
+  { id: 'drain', label: 'Talent drain', group: 'Hiring', hint: 'Who left, for where, and when' },
+  { id: 'matches', label: 'Matched candidates', group: 'Hiring', hint: 'Opted-in candidates with sourced fit' },
+  { id: 'reading', label: 'Reading desk', group: 'DOMINO workflows', hint: 'News, job posts and company records as they’re read' },
+  { id: 'analysis', label: 'Company dossier', group: 'DOMINO workflows', hint: 'Timeline, headcount, funding, talent flows' },
+  { id: 'chains', label: 'Cross-company chains', group: 'DOMINO workflows', hint: 'How one company’s move creates another’s need' },
+  { id: 'needs', label: 'Predicted needs', group: 'DOMINO workflows', hint: 'Each claim verified, or marked “I can’t verify”' },
+  { id: 'outreach', label: 'Outreach', group: 'DOMINO workflows', hint: 'Sourced draft, approve, send once' },
+  { id: 'replay', label: 'Replay', group: 'Proof', hint: 'Predictions from 1 Sep against what happened' },
+  { id: 'ledger', label: 'Ledger', group: 'Proof', hint: 'Every paid call, against the caps' },
 ];
 
 export type Route =

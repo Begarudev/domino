@@ -154,7 +154,8 @@ export function foldFeeds(prev: Feeds, events: StoredEvent[], snapAfter: RunSnap
           appended!.push({
             key: `${st.seq}:${i}`, seq: st.seq, kind: KIND_MAP[it.kind] ?? 'news', title: it.title, company: it.company,
             date: it.date, dateLabel: it.precision === 'month' && it.date ? fmtDate(it.date.slice(0, 7)) : fmtDate(it.date),
-            domain: hostname(it.url) ?? domainOf(it.company), signal: it.signal, matched: it.matched, url: it.url,
+            domain: (hostname(it.url) === 'linkedin.com' ? domainOf(it.company) : null) ?? hostname(it.url) ?? domainOf(it.company),
+            signal: it.signal, matched: it.matched, url: it.url,
             callMode: ev.mode, endpoint: ev.endpoint,
           });
         });
