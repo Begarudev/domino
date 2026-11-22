@@ -196,8 +196,9 @@
 .wl-top { display: flex; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; }
 .wl-co { font-size: 15px; font-weight: 650; }
 .wl-meta { font-size: 13px; color: var(--paper-2); }
-.wl-state { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--paper-2); }
-.wl-state.st-held, .wl-state.st-watch { color: var(--warn); }
+.wl-state { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.op-rule { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.op-rule-rest { margin-left: 2px; font-weight: 500; color: var(--paper-2); }
 .pips { display: inline-flex; gap: 3px; }
 .pips i { width: 7px; height: 12px; border-radius: 2px; border: 1.5px solid var(--paper-3); }
 .pips i.on { background: var(--paper-2); border-color: var(--paper-2); }
