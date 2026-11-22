@@ -1,6 +1,6 @@
 import type { Intent } from '../../shared/types.ts';
 import type { OutcomeFact, TriggerBatch } from '../domain/types.ts';
-import { companyFilter, estimate, mentionFor, sameCompany } from './common.ts';
+import { companyFilter, estimate, mentionFor, sameCompany, sameEmployer } from './common.ts';
 import type { CompanyInput } from './common.ts';
 import { buildJobs, jobCompanyFields, JOB_LIMIT, parseJobs } from './job-search.ts';
 import { buildPeopleMoves, MOVES_LIMIT, parsePeopleMoves } from './person-search.ts';
@@ -10,12 +10,13 @@ type Input = { intent: Intent; companies: (CompanyInput & { key: string })[] };
 type Output = { outcomes: OutcomeFact[]; evidence: TriggerBatch['evidence'] };
 
 function extract(batch: TriggerBatch, companies: Input['companies'], kind: OutcomeFact['kind']): Output {
+  const matches = kind === 'hire' ? sameEmployer : sameCompany;
   const outcomes: OutcomeFact[] = [];
   for (const trigger of batch.triggers) {
     if (trigger.kind !== kind) continue;
     const employer = mentionFor(batch, trigger.companyId);
     if (!employer) continue;
-    const company = companies.find(item => sameCompany(item, employer));
+    const company = companies.find(item => matches(item, employer));
     if (company) outcomes.push({
       companyKey: company.key, kind, date: trigger.date, summary: trigger.summary, evidenceIds: trigger.evidenceIds,
     });

@@ -6,7 +6,7 @@ import type { ProfileEvidence } from '../domain/replay-guard.ts';
 import type { CompanyMention, ParseMeta, PersonMention, TriggerBatch } from '../domain/types.ts';
 import {
   companyFilter, condition, dates, emptyBatch, estimate, evidenceRow, geographyFilter, group, int, matchesGeography,
-  sameCompany, str, strs, validate,
+  sameEmployer, str, strs, validate,
 } from './common.ts';
 import type { CompanyInput } from './common.ts';
 import type { EndpointSpec } from './spec.ts';
@@ -25,7 +25,7 @@ const roleFields = [
 ];
 const deciderRoleFields = ['position_id', 'name', 'title', 'start_date', 'end_date', 'crustdata_company_id', 'company_website'];
 const roleSchema = z.object({
-  position_id: z.union([z.string(), z.number()]).nullish().transform(v => v == null ? v : String(v)), name: str, title: str, start_date: str, end_date: str, is_default: z.boolean().nullish(),
+  position_id: z.union([z.string(), z.number()]).nullish(), name: str, title: str, start_date: str, end_date: str, is_default: z.boolean().nullish(),
   crustdata_company_id: int, company_website: str, company_professional_network_profile_url: str,
   company_professional_network_industry: str, company_industries: strs, company_headcount_latest: int,
   company_headquarters_country: str,
@@ -73,19 +73,22 @@ function employerPaths(prefix: string) {
 function roles(profile: Profile): RoleEntry[] {
   const details = profile.experience?.employment_details;
   return (['current', 'past'] as const).flatMap(kind => (details?.[kind] ?? []).map((data, index) => ({
-    data, path: '$.' + EMPLOYMENT + '.' + kind + (data.position_id
+    data, path: '$.' + EMPLOYMENT + '.' + kind + (data.position_id != null && data.position_id !== ''
       ? '[?(@.position_id == ' + JSON.stringify(data.position_id) + ')]' : '[' + index + ']'),
     start: isoDay(data.start_date), end: isoDay(data.end_date), current: kind === 'current',
   })));
 }
 
+function roleEmployer(data: Role): CompanyInput {
+  return { name: data.name?.trim() ?? '', domain: data.company_website, crustdataId: data.crustdata_company_id };
+}
+
 function employer(role: RoleEntry, key: string, historical: boolean): CompanyMention | null {
+  const identity = roleEmployer(role.data);
+  if (!identity.name) return null;
   const data = role.data;
-  const name = data.name?.trim();
-  if (!name) return null;
   return {
-    key, name, domain: data.company_website, linkedinUrl: data.company_professional_network_profile_url,
-    crustdataId: data.crustdata_company_id, hq: data.company_headquarters_country,
+    ...identity, key, linkedinUrl: data.company_professional_network_profile_url, hq: data.company_headquarters_country,
     industry: historical ? undefined : data.company_industries?.[0] || data.company_professional_network_industry,
     headcount: historical ? undefined : data.company_headcount_latest, evidenceIds: [],
   };
@@ -122,7 +125,7 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
       if (!title || !matchesSignal(title, intent.signalKeywords)) return false;
       if (companies) {
         const company = employer(role, '', true);
-        return Boolean(company && companies.some(target => sameCompany(target, company)) && inWindow(role.start, after, through));
+        return Boolean(company && companies.some(target => sameEmployer(target, company)) && inWindow(role.start, after, through));
       }
       if (!matchesGeography(role.data.company_headquarters_country, intent.geography)) return false;
       if (historical) return inWindow(role.start, after, through) && role.start <= shiftDays(through, -PROFILE_LAG_DAYS)
@@ -134,7 +137,7 @@ export function parsePeopleMoves(raw: unknown, intent: Intent, meta: ParseMeta, 
     for (const role of companies ? eligible : eligible.slice(0, 1)) {
       const title = role.data.title!;
       const at = role.start;
-      const position = role.data.position_id || stableId('position_', role.data.name || '', title, at || '');
+      const position = String(role.data.position_id ?? '') || stableId('position_', role.data.name || '', title, at || '');
       const mentionKey = 'person_recent_moves:' + recordId + ':' + position;
       const next = employer(role, mentionKey + ':company', historical);
       if (!next || seen.has(mentionKey)) continue;
@@ -215,8 +218,7 @@ export const personSearchDeciders: EndpointSpec<{ intent: Intent; company: Compa
       if (!name) continue;
       const work = roles(profile);
       const role = work.find(entry => {
-        const atCompany = employer(entry, '', true);
-        if (!atCompany || !sameCompany(company, atCompany) || !entry.data.title ||
+        if (!sameEmployer(company, roleEmployer(entry.data)) || !entry.data.title ||
           !matchesDecider(entry.data.title, intent.deciderTitles)) return false;
         if (intent.runKind === 'replay') {
           return entry.start && entry.start <= shiftDays(intent.asOf, -PROFILE_LAG_DAYS)

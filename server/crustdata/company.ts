@@ -9,7 +9,7 @@ import {
 import type { CompanyInput } from './common.ts';
 import type { EndpointSpec } from './spec.ts';
 
-const GROWTH_LIMIT = 40;
+const GROWTH_LIMIT = 20;
 const GROWTH_RATE = 1.03; // 0.03 base + taxonomy, headcount and funding on both filter and response.
 const JUMP_PCT = 15;
 const FUNDRAISE_DATE = 'funding.last_fundraise_date';
@@ -37,7 +37,7 @@ type CompanyRow = z.infer<typeof companySchema>;
 const searchResponse = z.object({ companies: z.array(companySchema) }).passthrough();
 const enrichResponse = z.array(z.object({
   matched_on: str, match_type: str,
-  matches: z.array(z.object({ confidence_score: num, company_data: companySchema }).passthrough()),
+  matches: z.array(z.object({ confidence_score: num, company_data: companySchema.nullable() }).passthrough()),
 }).passthrough());
 
 function roundName(value?: string | null): string | null {
@@ -204,14 +204,16 @@ export const companyEnrich: EndpointSpec<{ companies: CompanyInput[] }, Pick<Tri
     const seen = new Set<string>();
     for (const result of validate(enrichResponse, raw)) {
       const match = result.matches.filter(candidate => {
-        const basic = candidate.company_data.basic_info;
+        const row = candidate.company_data;
+        if (!row) return false;
+        const basic = row.basic_info;
         const identity = {
           name: basic?.name || '', domain: basic?.primary_domain || basic?.website,
-          crustdataId: candidate.company_data.crustdata_company_id ?? basic?.crustdata_company_id,
+          crustdataId: row.crustdata_company_id ?? basic?.crustdata_company_id,
         };
         return companies.some(company => sameCompany(identity, company));
       }).sort((a, b) => (b.confidence_score ?? 0) - (a.confidence_score ?? 0))[0];
-      if (!match) continue;
+      if (!match?.company_data) continue;
       const row = toCompany(match.company_data, meta, 'company_enrich', historical);
       if (!row || seen.has(row.recordId)) continue;
       seen.add(row.recordId);
