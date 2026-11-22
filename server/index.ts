@@ -300,9 +300,14 @@ export function startServer() {
   return server;
 }
 
+export function portError(error: NodeJS.ErrnoException): never {
+  const busy = error.code === 'EADDRINUSE';
+  console.error(busy
+    ? `DOMINO could not start: port ${config.port} is already in use. Try another port: DOMINO_PORT=${config.port + 1} bun start`
+    : `DOMINO could not bind port ${config.port} (${error.code ?? error.message}).`);
+  process.exit(1);
+}
+
 if (import.meta.main) {
-  startServer().on('error', () => {
-    console.error('DOMINO could not bind the server port.');
-    process.exit(1);
-  });
+  startServer().on('error', portError);
 }

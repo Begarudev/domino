@@ -25,8 +25,5 @@ if (existsSync(webConfig) && latestChange(html) < Math.max(
   runBun('run', 'build:web');
 }
 
-const { startServer } = await import('../server/index.ts');
-startServer().on('error', () => {
-  console.error('DOMINO could not bind the server port.');
-  process.exit(1);
-});
+const { portError, startServer } = await import('../server/index.ts');
+startServer().on('error', portError);
