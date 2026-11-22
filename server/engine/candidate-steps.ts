@@ -252,12 +252,24 @@ async function draftIntro(ctx: ToolContext) {
     generator: 'template', verified: checked.verified && checked.body.trim().length > 0,
     meeting: { title: `Intro: ${opening.roleTitle}`, durationMin: 20, proposedSlots: [] },
   };
+  // Same gate as outbound (steps.ts draftGate): >= 2 verified, dated, cited facts and a named role. An intro also needs
+  // at least one of those facts to be about the opening, or it would be a profile with no reason to reach out.
+  // Loaded lazily: steps.ts imports this module, so a static import would be circular.
+  const { draftGate } = await import('./steps.ts');
+  const named = { companyId: opening.companyId, decider: { personId: '', name: opening.roleTitle, title: opening.roleTitle, reason: 'Intro role', evidenceIds: [] } };
+  const openingRows = new Set(snapshot.evidence.map(item => item.id));
+  const openingFacts = draft.citations.filter(item => openingRows.has(item.evidenceId) && evidence.get(item.evidenceId)?.verifiable).length;
+  const gate = draftGate(draft, named as unknown as Parameters<typeof draftGate>[1], [...evidence.values()])
+    ?? (openingFacts ? null : { reason: 'Not drafted: no verified, dated fact about the opening' });
+  draft.status = gate ? 'not_drafted' : 'ready';
+  draft.blockedReason = gate?.reason ?? null;
   const cited = new Set(draft.citations.map(item => item.evidenceId));
   const removed = checked.checks.filter(item => item.status === 'removed').length;
   const output: IntroDraft = {
     introId: intro.id, direction: intro.direction, draft, company, recipient: toCompany ? 'Hiring team' : candidate.displayName,
     need: familyNoun[opening.roleFamily], roleTitle: opening.roleTitle, evidence: [...evidence.values()].filter(item => cited.has(item.id)),
   };
+  if (gate) return { output, summary: gate.reason };
   return {
     output,
     summary: `Intro drafted with ${draft.citations.length} citations` +
@@ -269,12 +281,12 @@ async function draftIntro(ctx: ToolContext) {
 function introGate(ctx: ToolContext, c: Partial<CandidateOutputs>) {
   const { draft, introId } = c.draft_intro!;
   const output: Approval[] = [];
-  if (draft?.verified) {
+  if (draft?.verified && draft.status !== 'not_drafted') {
     const idempotencyKey = hash([ctx.runId, introId, draft.body, 'send_message'].join('|')).slice(0, 16);
     output.push({ id: `ap_${idempotencyKey}`, runId: ctx.runId, companyId: draft.companyId, draftId: draft.id, kind: 'send_message',
       status: 'pending', idempotencyKey, createdAt: now() });
   }
-  return { output, summary: output.length ? 'Intro ready for approval (test inbox only)' : 'No verified intro to send',
+  return { output, summary: output.length ? 'Intro ready for approval (test inbox only)' : draft?.blockedReason ?? 'No verified intro to send',
     events: output.map(approval => ({ type: 'approval.requested' as const, approval })) };
 }
 

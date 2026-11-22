@@ -126,6 +126,11 @@ const openings: Opening[] = [{
   roleTitle: 'Inference Engineer', status: 'held', confidence: 0.5, predictedAt: '2026-11-22', rule: 'O1',
   reasons: [], holdReasons: ['acqui-hire'], evidenceIds: ['ev_held'], runId: 'run_seed_openings',
 }];
+const ghost: Opening = {
+  id: 'op_ghost_mlp', companyId: 'co_ghost', companyName: 'Ghost Fictional', roleFamily: 'ml_platform', roleTitle: 'ML Platform Engineer',
+  status: 'open', predictedAt: '2026-11-22', rule: 'O1', runId: 'run_seed_openings', evidenceIds: [],
+  reasons: [{ kind: 'talent_drain', label: 'Two ML platform moves reported (unsourced)', date: '2026-10-01', evidenceId: null }],
+};
 const departures: Departure[] = [
   { id: 'dp_1', companyId: 'co_orbit', role: 'ML Platform Engineer', roleFamily: 'ml_platform', initial: 'R.', date: '2026-10-01',
     precision: 'month', toCompanyId: null, toCompanyName: 'Elsewhere Fictional', evidenceId: 'ev_drain_a' },
@@ -185,7 +190,7 @@ describe('search desk over HTTP (fixture mode)', () => {
         { id: 'co_kestrel', name: 'Kestrel Fictional', aliases: [], headcount: 300, evidenceIds: [] },
       ], departures, evidence: [] },
       check_replacements: { replacements: [], staleCompanyIds: [], evidence: [] },
-      detect_openings: { openings, funnel: { runId: 'run_seed_openings', rule: 'O1', lockedAt: '2026-11-22T08:38:00Z', snapshot: 'fixture', stages: [{ id: 'departures', label: 'Dated departures', count: 2 }] } },
+      detect_openings: { openings: [...openings, ghost], funnel: { runId: 'run_seed_openings', rule: 'O1', lockedAt: '2026-11-22T08:38:00Z', snapshot: 'fixture', stages: [{ id: 'departures', label: 'Dated departures', count: 2 }] } },
     } as const;
     for (const [step, output] of Object.entries(outputs)) {
       store.setOutput(runId, step as keyof typeof outputs, output);
@@ -260,7 +265,7 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.ok(confirmed.confirmedAt);
 
     const ranked = await call<OpeningForCandidate[]>(`/api/candidates/${candidate.id}/openings`);
-    assert.deepEqual(ranked.map(row => row.id), ['op_orbit_mlp']);
+    assert.deepEqual(ranked.map(row => row.id), ['op_orbit_mlp', 'op_ghost_mlp']);
     assert.ok(ranked[0].fit.some(reason => reason.status === 'verified' && reason.profileField === 'roleFamily'));
     assert.ok(ranked[0].fit.some(reason => reason.status === 'verified' && reason.evidenceId === 'ev_drain_a'));
     assert.ok(ranked[0].fit.some(reason => reason.status === 'cant_verify'));
@@ -285,6 +290,13 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.ok(ready.evidenceIds?.includes('ev_drain_a'));
     assert.ok(!/managed GPU inference/.test(ready.message));
 
+    // Same gate as outbound: the ghost opening has no verified, dated fact, so the intro is not drafted or sent.
+    const ghostIntro = await call<IntroRequest>(`/api/candidates/${candidate.id}/intros`, { openingId: 'op_ghost_mlp' });
+    const blocked = await waitFor(async () => (await call<IntroRequest[]>(`/api/candidates/${candidate.id}/intros`))
+      .find(row => row.id === ghostIntro.id && row.status === 'not_drafted'), 20_000);
+    assert.match(blocked.blockedReason ?? '', /^Not drafted: no verified, dated fact about the opening/);
+    assert.equal(blocked.approvalId, null);
+
     const again = await call<IntroRequest>(`/api/candidates/${candidate.id}/intros`, { openingId: 'op_orbit_mlp' });
     assert.equal(again.id, intro.id, 'a repeated request reuses the intro');
 
@@ -308,9 +320,16 @@ describe('search desk over HTTP (fixture mode)', () => {
     await call(`/api/candidates/${hidden.id}/confirm`, {});
 
     const summary = await call<CompanySummary[]>('/api/companies');
-    assert.deepEqual(summary.map(row => [row.id, row.openings, row.departures90d]), [['co_orbit', 1, 2], ['co_kestrel', 0, 0]]);
+    assert.deepEqual(summary.map(row => [row.id, row.openings, row.departures90d]), [['co_orbit', 1, 2], ['co_ghost', 1, 0], ['co_kestrel', 0, 0]]);
     const view = await call<CompanyView>('/api/companies/co_orbit');
     assert.equal(view.runId, 'run_seed_openings');
+    const why = view.openings[0].why!;
+    assert.equal(why.verdict, 'Open: every O1 clause met');
+    assert.deepEqual([why.ranking.position, why.ranking.of], [2, 3], 'open Ghost precedes open Orbitline in A–Z order');
+    assert.match(why.ranking.rule, /status .* then company name A–Z\. No score is used/);
+    assert.deepEqual([why.companyRanking.position, why.companyRanking.of], [1, 3]);
+    assert.ok(why.eligibility.some(clause => clause.state === 'met' && clause.evidenceIds.includes('ev_drain_a')));
+    assert.ok(why.eligibility.some(clause => clause.state === 'cant_verify'));
     assert.deepEqual(view.departures.map(row => [row.role, row.initial, row.date]), [['ML Platform Engineer', 'R.', '2026-10-01'], ['ML Platform Engineer', 'T.', '2026-10-01']]);
     assert.ok(view.matches.length >= 1);
     assert.ok(view.matches.every(match => match.candidateId !== hidden.id), 'non-discoverable candidates stay hidden');
