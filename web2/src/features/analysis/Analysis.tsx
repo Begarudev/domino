@@ -38,6 +38,9 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
   const meta = [company.domain, company.industry, company.hq].filter(Boolean) as string[];
   const rules: DossierRule[] = d?.rules ?? [o1FromDesk(desk)].filter((r): r is DossierRule => !!r);
   if (openRule) lastRule.current = openRule;
+  const family = d?.predictedNeeds[0]?.need ?? null;
+  // O1's departure clause says how many departures were conclusive; ranking counts every record in the window.
+  const o1Conclusive = rules.find((r) => r.id === 'O1')?.clauses.find((c) => c.id === 'o1.departures')?.text.match(/^(\d+) conclusive/)?.[1] ?? null;
   const shown = rules.find((r) => r.id === (openRule ?? lastRule.current)) ?? null;
 
   return (
@@ -62,7 +65,7 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
         <div className="cf-err" role="alert" data-testid="file-error">
           <div>
             <b>Company file unavailable for {company.name}.</b>
-            <span>{q.error.replace(/\.$/, '')}. The rows below come from the company view; the rest stays empty until a run covers this company.</span>
+            <span>The O1 decision and talent flows below are from the company view{desk.checkedAt ? ` (checked ${fmtDate(desk.checkedAt, true)})` : ''}. The dossier request said: {q.error.replace(/\.$/, '')}.</span>
           </div>
           <button className="btn small" onClick={q.refetch}>Try again</button>
         </div>
@@ -71,7 +74,7 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
       <div className={`cf-top ${hasFunding(d) ? '' : 'no-fund'}`}>
         <Headcount d={d} desk={desk} />
         <Funding d={d} />
-        <Rules rules={rules} fromDesk={!d} name={desk.company.name} open={openRule} onToggle={(id) => setOpenRule(openRule === id ? null : id)} />
+        <Rules rules={rules} fromDesk={!d} name={desk.company.name} open={openRule} onToggle={(id) => setOpenRule(openRule === id ? null : id)} family={family} ev={ev} />
       </div>
 
       <div className={`cf-x ${openRule && shown ? 'on' : ''}`}><div className="cf-x-in">
@@ -84,7 +87,7 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
           <span className="cf-why-pos num">{d.whyTarget.companyRanking.position} of {fmtInt(d.whyTarget.companyRanking.of)} companies</span>
           <span className="cf-why-rule">{d.whyTarget.companyRanking.rule}</span>
           <span className="cf-why-because"><span className="faint">Because</span>{d.whyTarget.companyRanking.because.map((b) => <span key={b} className="cf-why-b">{b}</span>)}
-            <span className="cf-why-note faint">Ranking counts every departure record in the window; O1 counts only conclusive ones.</span></span>
+            {o1Conclusive && <span className="cf-why-b">O1 counts {o1Conclusive} of them as conclusive</span>}</span>
         </section>
       )}
 
@@ -146,6 +149,7 @@ function Spark({ series, mark, onOpen }: { series: { date: string; count: number
           {m && <line x1={x(m.date)} x2={x(m.date)} y1="0" y2="100" className="cf-spark-m" vectorEffect="non-scaling-stroke" />}
           <polyline points={pts} vectorEffect="non-scaling-stroke" />
         </svg>
+        {m && <span className="cf-spark-ml" style={{ left: `${x(m.date)}%` }}>{fmtDate(m.date)} · {fmtInt(m.count)}</span>}
         {series.map((p) => <i key={p.date} className={`cf-dot ${p === end ? 'end' : ''}`} style={{ left: `${x(p.date)}%`, top: `${y(p.count)}%` }} title={`${fmtInt(p.count)} on ${fmtDate(p.date, true)}`} />)}
       </span>
       <span className="cf-spark-ax"><span>{fmtDate(series[0].date, true)}</span><span>{plural(series.length, 'dated point')}</span><span>{fmtDate(end.date, true)}</span></span>
@@ -199,7 +203,7 @@ function o1FromDesk(desk: CompanyDesk): DossierRule | null {
   return { id: 'O1', name: 'Predicted opening', state, summary, clauses: o.clauses ?? [] };
 }
 
-function Rules({ rules, fromDesk, name, open, onToggle }: { rules: DossierRule[]; fromDesk: boolean; name: string; open: string | null; onToggle: (id: string) => void }) {
+function Rules({ rules, fromDesk, name, open, onToggle, family, ev }: { rules: DossierRule[]; fromDesk: boolean; name: string; open: string | null; onToggle: (id: string) => void; family: string | null; ev: EvMap }) {
   return (
     <section className="panel cf-p" data-testid="file-rules">
       <header><h2>Rules on this company</h2><span className="faint">clauses, not scores</span></header>
@@ -211,16 +215,18 @@ function Rules({ rules, fromDesk, name, open, onToggle }: { rules: DossierRule[]
             const met = r.clauses.filter((c) => c.state === 'met').length;
             const tally = r.id === 'R1' && r.clauses[0] ? r.clauses[0].text.replace(/ conclusive departures$/, ' conclusive departures') : r.clauses.length ? `${met} of ${r.clauses.length} evaluated clauses met` : 'needs a company analysis run';
             const decided = decidingFact(r);
+            const proofId = r.state === 'held' ? r.clauses.find((c) => c.state === 'failed' && c.evidenceIds.length)?.evidenceIds[0] : undefined;
             const x = open === r.id;
             return (
               <li key={r.id} className={`cf-rule ${x ? 'x' : ''}`} data-testid={`file-rule-${r.id}`}>
                 <button className="cf-rule-btn" aria-expanded={x} aria-controls="cf-rule-detail" onClick={() => onToggle(r.id)}>
-                  <span className="cf-rule-name"><b>{r.id}</b>{r.id.length <= 3 && <> {r.name.toLowerCase()}</>}</span>
+                  <span className="cf-rule-name"><b>{r.id}</b>{r.id.length <= 3 && <> {r.id === 'O1' && family ? `${family} opening` : r.name.toLowerCase()}</>}</span>
                   <span className={STATE[r.state].cls}>{STATE[r.state].label}</span>
                   <span className="cf-chev" aria-hidden>›</span>
                   <span className="cf-rule-tally">{r.id.length > 3 && `${r.name.toLowerCase()} · `}{tally}</span>
                   {decided && <span className="cf-rule-fact">{decided}</span>}
                 </button>
+                {proofId && <div className="cf-rule-proof"><Sources ids={[proofId]} ev={ev} /></div>}
               </li>
             );
           })}
@@ -318,7 +324,7 @@ function Flows({ d, desk, ev }: { d?: CompanyDossier | null; desk: CompanyDesk; 
       <header><h2>Talent flows, last 90 days</h2><span className="faint">{outs} out · {ins} in · person search</span></header>
       {rows.length ? (
         <table className="t cf-t">
-          <thead><tr><th>Direction</th><th>Person</th><th>Company</th><th>{ins ? 'Month' : 'Left in'}</th></tr></thead>
+          <thead><tr><th>Direction</th><th>Person</th><th>Company</th><th>{ins ? 'Month' : 'Left in'}</th><th><span className="sr">Source</span></th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.key} className={r.evId ? 'cf-click' : ''} tabIndex={r.evId ? 0 : undefined}
@@ -328,6 +334,7 @@ function Flows({ d, desk, ev }: { d?: CompanyDossier | null; desk: CompanyDesk; 
                 <td>{r.initial ? `${r.initial}, ` : ''}{r.role}</td>
                 <td>{r.other ? `${r.dir === 'out' ? 'to' : 'from'} ${r.other}` : <span className="faint">not recorded</span>}</td>
                 <td className="mono cf-date">{when(r.date, r.month)}</td>
+                <td>{r.evId && <span className="srclink">Source</span>}</td>
               </tr>
             ))}
           </tbody>

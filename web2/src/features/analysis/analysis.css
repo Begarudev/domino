@@ -153,3 +153,20 @@ ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 40
 .cf-run { font-size: 13px; color: var(--ink-2); }
 .cf-news-src { font-size: 13px; color: var(--ink-2); }
 .cf-why-note { flex-basis: 100%; font-size: 12px; }
+
+/* round 2 council fixes */
+.cf-rd .cf-clauses { grid-template-columns: minmax(0, 1fr); row-gap: 10px; }
+.cf-rd .cf-clauses li { padding-bottom: 10px; border-bottom: 1px solid var(--rule-2); }
+.cf-rd .cf-clauses li:last-child { border-bottom: 0; padding-bottom: 0; }
+.cf-rule-proof { padding: 0 16px 8px; margin-top: -4px; }
+.cf-rule-proof .cf-srcs { margin-top: 0; }
+.cf-news-row .cf-date, .cf-t .cf-date { font-size: 13px; color: var(--ink-2); }
+.cf-news-src { font-size: 13px; color: var(--ink-2); text-decoration-color: var(--ink-3); }
+.cf-t td:last-child { text-align: right; font-size: 13px; }
+.cf-t .srclink { color: var(--ink-2); border-bottom-color: var(--ink-3); }
+.cf-t tr:hover .srclink { color: var(--ink); }
+.cf-p > header .faint { color: var(--ink-2); }
+.cf-spark-ml { position: absolute; top: -2px; transform: translateX(6px); font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cf-spark-plot { margin-top: 16px; }
+.cf-spark-m { stroke: var(--ink-3); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
