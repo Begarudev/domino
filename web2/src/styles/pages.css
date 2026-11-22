@@ -73,3 +73,9 @@
 /* big numbers: proportional figures (Schibsted tabular widens the comma: "1 , 410") */
 .signin-stats dd, .rec-fun b, .fun-n, .funnel b, .big-n { font-variant-numeric: lining-nums proportional-nums; }
 .rec-op .rec-role { font-size: 20px; line-height: 26px; letter-spacing: -.01em; }
+.side-candidate .onb-demo { justify-self: start; margin-top: 4px; color: var(--ink-2); }
+.side-candidate .onb-input { height: 40px; font-size: 14px; }
+.side-candidate .onb-go { height: 38px; font-size: 14px; padding: 0 16px; }
+.side-candidate .fit-list li { flex-wrap: nowrap; }
+.side-candidate .fit-list li .fit-text { min-width: 0; }
+.side-candidate .fit-list li.cant { border: 0; padding: 0; background: none; border-radius: 0; font-size: var(--fs-body); color: var(--ink-2); display: flex; }

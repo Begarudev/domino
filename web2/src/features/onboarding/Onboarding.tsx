@@ -157,15 +157,10 @@ export function Onboarding() {
     <div className={`page onb ${folded ? 'is-folded' : ''}`}>
       {!folded && (
         <header className="onb-hero">
-          <h1 className="onb-title">
-            <span className="onb-title-wide">Find the job</span>
-            <span className="onb-title-narrow">before it’s posted</span>
-          </h1>
-          <p className="onb-how">DOMINO watches for companies where two people in your role just left and nobody has been hired or posted to replace them.</p>
+          <h1 className="onb-title">Find openings before they’re posted</h1>
           <p className="onb-rule">
-            Rules decide, and every claim has a dated source. Rule O1 reads dated Crustdata records: at a company of
-            20–5,000 staff, two or more people in one role family leave within 90 days, and no replacement is hired or
-            posted within 30 days of the last one.
+            Rule O1: two or more people in your role family leave one company (20–5,000 staff) within 90 days, and no
+            replacement is hired or posted within 30 days. Every claim has a dated source.
           </p>
         </header>
       )}
@@ -200,6 +195,9 @@ export function Onboarding() {
               <button data-testid="onboard-submit" className="btn primary onb-go" type="submit">Read my profile</button>
               <span className="onb-after">Reads your public profile once from Crustdata, then shows it back to you to confirm.</span>
             </div>
+            <button type="button" className="btn ghost sm onb-demo" data-testid="onboard-demo" onClick={() => void start(DEMO_LINKEDIN, deskApi, 'fixture')}>
+              Use the fictional demo candidate (no live call)
+            </button>
           </div>
 
           <fieldset className="onb-col onb-consent">
