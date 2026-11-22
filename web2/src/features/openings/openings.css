@@ -1,0 +1,173 @@
+/* Recruitment (mock screen 4). Shell primitives (.panel, table.t, .st, .clauses, .count, .receipt, .funnel look) are
+   reused; this file only lays them out and adds the clause expand. Motion: 200 ms ease-out, transform/opacity plus
+   the one height transition the clause expand needs. */
+
+.rec { display: grid; gap: 16px; align-content: start; }
+.rec-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1080px) { .rec-top { grid-template-columns: minmax(0, 1fr); } }
+
+.rec-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+.rec-pick .btn.on { background: var(--hover); border-color: var(--ink-3); }
+
+.rec-click { cursor: pointer; }
+.rec-click:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.rec-empty { margin: 0; padding: 18px 16px; display: grid; gap: 4px; }
+.rec-empty b { font-weight: 600; }
+.rec-foot { margin: 0; padding: 10px 12px 12px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule-2); }
+.rec-h-sub { font-weight: 400; margin-left: 6px; }
+
+/* departures: the person column keeps role and initial on one line where it fits */
+.rec-dep table.t td:first-child { min-width: 160px; }
+.rec-dep table.t td:last-child { min-width: 150px; }
+
+/* ---------------------------------------------------------------- the decision */
+.rec-role { font-size: 22px; line-height: 28px; margin: 0; }
+.rec-role-sub { margin: 2px 0 0; font-size: 12px; }
+.rec-clauses { margin: 10px -10px 0; }
+.rec-clauses li.rec-clause { display: block; padding: 0; cursor: default; }
+.rec-clauses li.rec-clause:hover { background: none; }
+.rec-clause-btn {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; width: 100%;
+  padding: 7px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left;
+  cursor: pointer; transition: background 150ms var(--ease);
+}
+.rec-clause-btn:hover, .rec-clause.x > .rec-clause-btn { background: var(--hover); }
+.rec-clause-btn:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.rec-clause-text { min-width: 0; }
+.rec-count { white-space: nowrap; font-size: 13px; }
+.rec-fail { color: var(--err); font-weight: 700; }
+.rec-clause.st-failed .rec-clause-text { color: var(--ink); }
+.rec-clauses li.rec-sub { display: block; padding: 12px 10px 4px; font-size: 12px; color: var(--ink-2); cursor: default; }
+.rec-clauses li.rec-sub:hover { background: none; }
+.rec-whyrow { margin-top: 6px; border-top: 1px solid var(--rule-2); padding-top: 6px !important; }
+
+/* the expand: grid rows 0fr -> 1fr animates the height without measuring; opacity rides along */
+.rec-x { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 200ms var(--ease), opacity 200ms var(--ease); }
+.rec-x.on { grid-template-rows: 1fr; opacity: 1; }
+.rec-x-in { min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .rec-x { transition: none; } }
+.rec-why { padding: 4px 10px 10px 38px; color: var(--ink-2); font-size: 13px; line-height: 19px; display: grid; gap: 8px; }
+.rec-why p { margin: 0; }
+.rec-why b { color: var(--ink); font-weight: 600; }
+.rec-ev { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; border-left: 2px solid var(--rule); }
+.rec-ev-btn {
+  display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; width: 100%; padding: 4px 8px; border: 0; background: none;
+  color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; border-radius: 3px; transition: background 150ms var(--ease);
+}
+.rec-ev-btn:hover { background: var(--row-hover); }
+.rec-ev-date { color: var(--ink-2); white-space: nowrap; }
+.rec-ev-claim { border-bottom: 1px solid transparent; }
+.rec-ev-btn:hover .rec-ev-claim { text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+
+/* held: same weight as a hit, hatched like the chip */
+.rec-held {
+  margin: 12px 0 2px; padding: 10px 12px; border: 1px solid var(--ink-3); border-radius: 4px;
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px);
+}
+.rec-held-h { margin: 0 0 6px; font-weight: 600; }
+.rec-held ul { margin: 0; padding: 0 0 0 16px; display: grid; gap: 4px; }
+.rec-held-src { text-align: left; color: var(--ink); line-height: 20px; }
+
+/* ---------------------------------------------------------------- people you can hire */
+.rec-full table.t td { padding-top: 10px; padding-bottom: 10px; }
+.rec-fit { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rec-field { margin-left: 8px; font-size: 12px; }
+.rec-gap { margin-top: 6px; }
+.rec-hire .receipt { display: inline-flex; }
+
+.rec-stage { border-top: 1px solid var(--rule-2); }
+.rec-stage-h { display: flex; justify-content: space-between; gap: 16px; padding: 10px 16px; font-size: 13px; }
+.rec-stage-h b { font-weight: 600; }
+.rec-stage-empty { margin: 0; padding: 0 16px 14px; }
+.rec-stage-t td { font-size: 13px; }
+.rec-stage-t td:first-child { padding-left: 16px; }
+.rec-stage-d { font-size: 12px; margin-top: 2px; }
+.rec-more { margin: 8px 16px 14px; }
+
+/* folded guards */
+.rec-guards { list-style: none; margin: 0; padding: 4px 10px 10px 38px; display: grid; gap: 10px; color: var(--ink-2); font-size: 13px; line-height: 19px; }
+.rec-guards p { margin: 0 0 4px; }
+.rec-guard-t { color: var(--ink); }
+
+/* dates and destinations never wrap; the person column takes the slack */
+.rec-dep table.t td:nth-child(2), .rec-dep table.t td:nth-child(3) { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- funnel: the mock's .funnel look, stacked */
+.rec-col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.rec-fun { list-style: none; margin: 0; padding: 6px 0; }
+.rec-fun li > button, .rec-fun-o > button {
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 150ms var(--ease);
+}
+.rec-fun li > button {
+  width: 100%; display: grid; grid-template-columns: 76px minmax(0, 1fr) 34%; gap: 14px; align-items: center; padding: 3px 16px;
+}
+.rec-fun li > button:hover, .rec-fun-o > button:hover { background: var(--row-hover); }
+.rec-fun li > button.on, .rec-fun-o > button.on { background: var(--hover); }
+.rec-fun button:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.rec-fun b { font-family: var(--serif); font-weight: 500; font-size: 22px; line-height: 28px; letter-spacing: -.01em; text-align: right; }
+.rec-fun-l { color: var(--ink-2); font-size: 13px; line-height: 18px; }
+.rec-fun-bar { height: 3px; background: var(--rule-2); border-radius: 2px; overflow: hidden; }
+.rec-fun-bar i { display: block; height: 100%; background: var(--ink-2); }
+.rec-fun-out { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 4px; padding: 4px 16px 4px 16px; border-top: 1px solid var(--rule-2); margin-top: 4px; }
+.rec-fun-o { display: inline-flex; align-items: baseline; }
+.rec-fun-o > button { display: inline-flex; align-items: baseline; gap: 6px; padding: 0 6px; border-radius: 3px; }
+.rec-fun-o:first-child > button { min-width: 76px; justify-content: flex-end; padding-left: 0; }
+.rec-fun-o span { color: var(--ink-2); font-size: 13px; }
+.rec-fun .rec-plus { font-family: var(--serif); font-size: 18px; color: var(--ink-3); margin: 0 2px; }
+.rec-fun-quiet { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+.rec-fun-quiet .srclink { font-size: 12px; }
+
+/* nested lists inside a clause must not inherit the shell's `.clauses li` grid/hover */
+.rec-clauses .rec-ev li, .rec-clauses .rec-guards > li { display: block; padding: 0; border-radius: 0; cursor: default; }
+.rec-clauses .rec-ev li:hover, .rec-clauses .rec-guards > li:hover { background: none; }
+
+/* the outcome row lines its first number up with the counts above */
+.rec-fun-o:first-child > button { min-width: 0; justify-content: flex-start; gap: 14px; }
+.rec-fun-o:first-child b { display: inline-block; width: 76px; }
+
+/* held reasons: a dash marker in its own column, so a wrapped source line keeps its marker on the first line */
+.rec-held ul { list-style: none; padding: 0; }
+.rec-held li { display: grid; grid-template-columns: 14px minmax(0, 1fr); }
+.rec-held li::before { content: '–'; color: var(--ink-3); }
+
+/* held card: the hatch marks the edge only, so the dated sources read cleanly on a projector */
+.rec-held { position: relative; background: var(--surface); padding-left: 20px; }
+.rec-held::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; border-radius: 3px 0 0 3px; border-right: 1px solid var(--ink-3);
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px);
+}
+
+/* round 2 (council): the dated proof line under the role, grouped funnel rows, projector contrast */
+.rec-role { font-size: 26px; line-height: 32px; }
+.rec-proof { list-style: none; margin: 12px 0 4px; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; }
+.rec-proof li { display: inline-flex; align-items: center; }
+.rec-proof li + li::before { content: '→'; color: var(--ink-3); margin: 0 8px; }
+.rec-proof button, .rec-proof span {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--rule); background: var(--surface);
+  color: var(--ink); line-height: 20px; white-space: nowrap;
+}
+.rec-proof button { cursor: pointer; transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+.rec-proof button:hover { background: var(--hover); border-color: var(--ink-3); }
+.rec-proof .tone-open > * { color: var(--acc); border: 1px dashed var(--acc); }
+.rec-proof .tone-held > * { color: var(--ink-2); border-color: var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
+.rec-grp td { background: var(--hover); font-size: 13px; padding-top: 6px; padding-bottom: 6px; }
+.rec-grp:hover td { background: var(--hover); }
+.rec-stage-t td.rec-grp-row { padding-left: 28px; }
+.rec .struck { color: var(--ink-2); }
+.rec-foot { font-size: 13px; color: var(--ink-2); }
+.rec-fun-l { font-size: 14px; }
+.rec-proof button, .rec-proof span { font-size: 13px; padding: 2px 7px; }
+.rec-proof li + li::before { margin: 0 6px; }
+
+/* council r2: the held proof chips carry no hatch (the hatch marks only the card edge and the header chip) */
+.rec-proof .tone-held > * { background: var(--surface); }
+
+/* wide screens (1920 projector): larger proof, clauses, tables */
+@media (min-width: 1800px) {
+  .rec { font-size: 16px; }
+  .rec table.t td { font-size: 16px; padding-top: 11px; padding-bottom: 11px; }
+  .rec-proof button, .rec-proof span { font-size: 15px; padding: 3px 9px; }
+  .rec-role { font-size: 30px; line-height: 36px; }
+  .rec-count, .rec-foot, .rec-fun-l { font-size: 15px; }
+  .rec-fun b { font-size: 26px; line-height: 32px; }
+}
