@@ -7,15 +7,15 @@ import { useSyncExternalStore } from 'react';
 export type CompanyTab = 'recruitment' | 'buyers' | 'outreach' | 'reading' | 'file' | 'chains' | 'verifier' | 'replay' | 'ledger';
 export type TabGroup = 'Act' | 'Read' | 'Check';
 export const COMPANY_TABS: { id: CompanyTab; label: string; group: TabGroup; hint: string }[] = [
-  { id: 'recruitment', label: 'Hire', group: 'Act', hint: 'Who left, what that predicts, and who you can hire. People appear as role and initial.' },
-  { id: 'buyers', label: 'Find buyers', group: 'Act', hint: 'Companies whose moves predict they need what you sell, each with a sourced draft to the deciding role.' },
-  { id: 'outreach', label: 'Outreach', group: 'Act', hint: 'A footnoted draft, your approval, then delivered once.' },
-  { id: 'reading', label: 'Reading log', group: 'Read', hint: 'Every record the run read, kept or discarded, and why.' },
-  { id: 'file', label: 'Company file', group: 'Read', hint: 'Dated facts, headcount, talent flows and the rules that apply. No generated prose.' },
-  { id: 'chains', label: 'Chains', group: 'Read', hint: 'Rules that link a move at one company to a need at another, with today’s fire counts.' },
-  { id: 'verifier', label: 'Verifier', group: 'Read', hint: 'Each claim checked against a dated source, or marked “I can’t verify”.' },
-  { id: 'replay', label: 'Replay', group: 'Check', hint: 'O1 historical check: data frozen at 1 Sep, then compared with what happened next.' },
-  { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Calls, spend and limits for this run.' },
+  { id: 'recruitment', label: 'Hire', group: 'Act', hint: 'Openings a rule predicts at this company from dated departures, and opted-in people you could hire for them.' },
+  { id: 'buyers', label: 'Find buyers', group: 'Act', hint: 'Companies whose dated moves predict they need what you sell, and the role that decides. Nothing is sent without you.' },
+  { id: 'outreach', label: 'Outreach', group: 'Act', hint: 'Each draft with its footnoted sources. You approve it, then it is delivered once; nothing goes out without you.' },
+  { id: 'reading', label: 'Reading log', group: 'Read', hint: 'Every record DOMINO read for this decision, and why it kept or dropped it.' },
+  { id: 'file', label: 'Company file', group: 'Read', hint: 'Everything known about this company as dated, sourced facts: headcount, who joined and left, and which rules apply.' },
+  { id: 'chains', label: 'Chains', group: 'Read', hint: 'The rules that turn a move at one company into a need at another, and which ones fired or held today.' },
+  { id: 'verifier', label: 'Verifier', group: 'Read', hint: 'Every claim behind a decision, checked against a dated source. What can’t be checked is shown, not hidden.' },
+  { id: 'replay', label: 'Replay', group: 'Check', hint: 'Whether rule O1 would have been right: data frozen at 1 Sep, then compared with what actually happened next.' },
+  { id: 'ledger', label: 'Ledger', group: 'Check', hint: 'Every data call this run made, what it cost, and the limits that cap it.' },
 ];
 /** Tabs whose feature is built. Unbuilt tabs are hidden, never shown as stubs. */
 export const BUILT_TABS = new Set<CompanyTab>(['recruitment', 'buyers', 'outreach', 'reading', 'file', 'chains', 'verifier', 'replay', 'ledger']);

@@ -47,7 +47,7 @@ export function LoginPage() {
             {stats.map((s) => <div key={s.small}><dt>{s.small}</dt><dd data-num>{s.big}</dd></div>)}
           </dl>
         )}
-
+        <Dominoes />
       </header>
       <section className="signin-panel panel" aria-label="Sign in">
         <h2>Company or candidate?</h2>
@@ -92,5 +92,30 @@ function CompanyPick() {
         {q.data && !rows.length && <p className="pick-note">No company matches “{term}”.</p>}
       </div>
     </div>
+  );
+}
+
+// The domino effect, drawn once: a move at one company becomes a need DOMINO acts on. Static after it enters.
+const LANES: { id: string; name: string; steps: string[] }[] = [
+  { id: 'hire', name: 'Hire', steps: ['Company A loses 2 ML engineers', 'A will need to hire', 'DOMINO introduces an opted-in candidate'] },
+  { id: 'sell', name: 'Sell', steps: ['Company B raises or ships', 'B needs GPU inference', 'DOMINO drafts outreach to the decider', 'You approve, it’s sent once'] },
+];
+
+function Dominoes() {
+  return (
+    <figure className="dominoes" aria-label="How a move at one company becomes a need">
+      <figcaption>How it works</figcaption>
+      {LANES.map((l, li) => (
+        <div className="dom-lane" key={l.id} data-testid={`domino-${l.id}`}>
+          <span className="dom-name">{l.name}</span>
+          <ol>
+            {l.steps.map((s, i) => (
+              <li key={s} className={i === 0 ? 'dom-cause' : s.startsWith('DOMINO') || s.startsWith('You') ? 'dom-act' : ''}
+                style={{ animationDelay: `${li * 160 + i * 110}ms` }}>{s}</li>
+            ))}
+          </ol>
+        </div>
+      ))}
+    </figure>
   );
 }
