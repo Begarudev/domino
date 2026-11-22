@@ -88,9 +88,17 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
   const pause = () => { cancelAnimationFrame(raf.current); setPlaying(false); };
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
-  const N = score.cohort ?? score.outcomes.length;
+  // The server lists outcomes only for companies some selector picked; the whole-cohort base rate lives in its note
+  // ("Base rate: 6 of 91 cohort companies"). Prefer an explicit field, then that sentence, then the scored list (labelled as such).
+  const noteRate = score.note?.match(/Base rate:\s*([\d,]+)\s+of\s+([\d,]+)/i);
+  const num = (s: string) => Number(s.replace(/,/g, ''));
+  const N = score.cohort ?? (noteRate ? num(noteRate[2]) : score.outcomes.length);
+  const cohortHits = noteRate && score.cohort == null ? num(noteRate[1]) : score.outcomes.filter((o) => o.hit).length;
+  const cohortLabel = score.cohort != null || noteRate ? 'Whole cohort (base rate)' : 'Companies scored (any selector)';
   const d = score.domino, base = score.baselineFirstOrder;
-  const cohortHits = score.outcomes.filter((o) => o.hit).length;
+  const hc = (score as Score & { baselineHeadcount?: ReplayScore['baselineFirstOrder'] }).baselineHeadcount;
+  const lead = (n: number | null) => (n != null ? `${fmtInt(n)} days` : <span className="faint">–</span>);
+  const hitCell = (s: { predicted: number; hits: number }) => (s.predicted ? `${fmtInt(s.hits)} of ${fmtInt(s.predicted)}` : <span className="faint">–</span>);
   const ticks = monthTicks(start, end);
 
   return (
@@ -98,7 +106,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
       <section className="panel">
         <header>
           <h2>{fmtDate(score.asOf, true)} replay · outcomes through {fmtDate(score.horizonEnd, true)}</h2>
-          <span className={`st ${score.factsAfterAsOfUsed === 0 ? 'verified' : 'held'}`}>O1 inputs · {fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)}</span>
+          <span className={`ctag ${score.factsAfterAsOfUsed === 0 ? 'tone-verified' : 'tone-held'}`}>O1 inputs · {fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)}</span>
         </header>
         {score.snapshotLabel && <p className="rp-src">Snapshot: {score.snapshotLabel}</p>}
         <div className="pad rp-play">
@@ -126,13 +134,14 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
         <section className="panel rp-summary" data-testid="replay-summary">
           <header><h2>Scorecard</h2><button className="btn sm" onClick={() => setDrawer((v) => !v)} aria-expanded={drawer} data-testid="replay-drawer">{drawer ? 'Hide protocol' : 'Show protocol and cohorts'}</button></header>
           <div className="pad">
-            <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. <span className="rp-lead-2">{d.predicted === 0 ? 'Precision unavailable.' : `${fmtInt(d.hits)} had the tracked outcome.`}</span></p>
+            <p className="rp-lead">O1 selected <b>{fmtInt(d.predicted)}</b> of {fmtInt(N)} companies. <span className="rp-lead-2">{d.predicted === 0 ? 'It made no prediction at this cutoff.' : `${fmtInt(d.hits)} had the tracked outcome.`}</span></p>
             <table className="t rp-table">
               <thead><tr><th>Selector</th><th className="num">Companies selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
               <tbody>
-                <tr><td><b>O1</b> (locked rule)</td><td className="num">{fmtInt(d.predicted)}</td><td className="num">{d.predicted ? `${fmtInt(d.hits)} of ${fmtInt(d.predicted)}` : <span className="faint">–</span>}</td><td className="num">{d.medianLeadDays != null ? `${fmtInt(d.medianLeadDays)} days` : <span className="faint">–</span>}</td></tr>
-                <tr><td>Job-post baseline</td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{fmtInt(base.hits)} of {fmtInt(base.predicted)}</td><td className="num">{base.medianLeadDays != null ? `${fmtInt(base.medianLeadDays)} days` : <span className="faint">–</span>}</td></tr>
-                <tr><td>Whole cohort (base rate)</td><td className="num">{fmtInt(N)}</td><td className="num">{fmtInt(cohortHits)} of {fmtInt(N)}</td><td className="num"><span className="faint">–</span></td></tr>
+                <tr><td><b>O1</b> (locked rule)</td><td className="num">{fmtInt(d.predicted)}</td><td className="num">{hitCell(d)}</td><td className="num">{lead(d.medianLeadDays)}</td></tr>
+                <tr><td>Job-post baseline <span className="faint">(any post, last 30 days)</span></td><td className="num">{fmtInt(base.predicted)}</td><td className="num">{hitCell(base)}</td><td className="num">{lead(base.medianLeadDays)}</td></tr>
+                {hc && <tr><td>Headcount baseline <span className="faint">(+30%)</span></td><td className="num">{fmtInt(hc.predicted)}</td><td className="num">{hitCell(hc)}</td><td className="num">{lead(hc.medianLeadDays)}</td></tr>}
+                <tr><td>{cohortLabel}</td><td className="num">{fmtInt(N)}</td><td className="num">{fmtInt(cohortHits)} of {fmtInt(N)}</td><td className="num"><span className="faint">–</span></td></tr>
               </tbody>
             </table>
             <p className="rp-why">{score.note}</p>
