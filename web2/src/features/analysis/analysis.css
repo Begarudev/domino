@@ -182,3 +182,30 @@ ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 40
 .cf .panel { border-radius: var(--r-lg); }
 .cf-name { font-size: var(--fs-h); line-height: var(--lh-h); letter-spacing: var(--track-tight); font-weight: var(--w-semi); }
 .cf-p > header h2 { letter-spacing: var(--track-snug); }
+
+/* q10: Attio record-page grids. Graph on top, then full-width single-line sections. */
+.cf-bottom { grid-template-columns: minmax(0, 1fr); }
+.cf-wide { width: 100%; }
+.cf-count-pill { margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--hover); border-radius: 999px; padding: 0 7px; line-height: 18px; vertical-align: 1px; }
+.cf-tools { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--rule-2); }
+.cf-search { height: 28px; width: 240px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 8px; font: inherit; font-size: 13px; background: var(--surface); color: var(--ink); }
+.cf-search:focus-visible { outline: 2px solid var(--ink-3); outline-offset: 1px; }
+.cf-chip { height: 26px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.cf-chip.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.cf-tools-n { margin-left: auto; font-size: 12px; }
+.cf-t { table-layout: fixed; width: 100%; }
+.cf-t th:first-child, .cf-t td:first-child { width: auto; }
+.cf-t th:nth-child(2), .cf-t td:nth-child(2) { width: 34%; }
+.cf-t th:nth-child(3), .cf-t td:nth-child(3) { width: 112px; }
+.cf-t th:nth-child(4), .cf-t td:nth-child(4) { width: 40px; text-align: right; }
+.cf-t td { white-space: nowrap; overflow: hidden; }
+.cf-person, .cf-co { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; vertical-align: middle; }
+.cf-ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cf-av { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10px; font-weight: 600; letter-spacing: 0; background: var(--hover); color: var(--ink-2); border: 1px solid var(--rule); }
+.cf-logo { flex: none; width: 20px; height: 20px; border-radius: 5px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--acc-weak); color: var(--acc); border: 1px solid var(--acc-line); }
+.cf-in { flex: none; font-size: 11px; font-weight: 600; color: var(--acc); background: var(--acc-weak); border-radius: 4px; padding: 0 5px; line-height: 16px; }
+.cf-mchip { display: inline-block; font-size: 12px; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 6px; padding: 0 6px; line-height: 18px; }
+.cf-src-i { color: var(--ink-3); font-size: 13px; }
+.cf-click:hover .cf-src-i { color: var(--ink); }
+.cf-collapsed { margin: 0; display: flex; gap: 10px; align-items: baseline; padding: 10px 16px; border: 1px dashed var(--rule); border-radius: 8px; font-size: 13px; color: var(--ink-2); }
+.cf-collapsed b { color: var(--ink); font-weight: 600; white-space: nowrap; }

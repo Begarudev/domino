@@ -41,7 +41,8 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
   if (openRule) lastRule.current = openRule;
   const family = d?.predictedNeeds[0]?.need ?? null;
   // O1's departure clause says how many departures were conclusive; ranking counts every record in the window.
-  const o1Conclusive = rules.find((r) => r.id === 'O1')?.clauses.find((c) => c.id === 'o1.departures')?.text.match(/^(\d+) conclusive/)?.[1] ?? null;
+  const o1Rule = rules.find((r) => r.id === 'O1');
+  const o1Conclusive = o1Rule?.state === 'not_evaluated' ? null : o1Rule?.clauses.find((c) => c.id === 'o1.departures')?.text.match(/^(\d+) conclusive/)?.[1] ?? null;
   const shown = rules.find((r) => r.id === (openRule ?? lastRule.current)) ?? null;
 
   return (
@@ -304,6 +305,8 @@ function Sources({ ids, ev }: { ids: string[]; ev: EvMap }) {
 interface FlowRow { key: string; dir: 'in' | 'out'; role: string; initial: string | null; other: string | null; date: string | null; month: boolean; evId: string | null }
 
 function Flows({ d, desk, ev }: { d?: CompanyDossier | null; desk: CompanyDesk; ev: EvMap }) {
+  const [query, setQuery] = useState('');
+  const [dirF, setDirF] = useState<'all' | 'out' | 'in'>('all');
   // For a departure the dated fact is the month the person LEFT (the evidence's end date); the flow's own date is
   // when the next role started. Show the month they left so it matches the rule clauses ("Oct, Oct").
   const rows: FlowRow[] = d
@@ -321,24 +324,36 @@ function Flows({ d, desk, ev }: { d?: CompanyDossier | null; desk: CompanyDesk; 
   const allMonth = rows.length > 0 && rows.every((r) => r.month);
   const ins = rows.length - outs;
 
+  const ql = query.trim().toLowerCase();
+  const shownRows = rows.filter((r) => (dirF === 'all' || r.dir === dirF) && (!ql || `${r.role} ${r.other ?? ''}`.toLowerCase().includes(ql)));
   return (
-    <section className="panel cf-p" data-testid="file-flows">
-      <header><h2>Talent flows, last 90 days</h2><span className="faint">{outs} out · {ins} in · person search</span></header>
+    <section className="panel cf-p cf-wide" data-testid="file-flows">
+      <header><h2>Talent flows, last 90 days <span className="cf-count-pill num">{rows.length}</span></h2><span className="faint">{outs} out · {ins} in · Crustdata person search</span></header>
+      {rows.length > 0 && (
+        <div className="cf-tools">
+          <input className="cf-search" type="search" placeholder="Search role or company" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search talent flows" />
+          {ins > 0 && (['all', 'out', 'in'] as const).map((k) => (
+            <button key={k} className={`cf-chip ${dirF === k ? 'on' : ''}`} onClick={() => setDirF(k)}>{k === 'all' ? 'All' : k === 'out' ? `Left · ${outs}` : `Joined · ${ins}`}</button>
+          ))}
+          <span className="faint cf-tools-n">{shownRows.length} of {rows.length}</span>
+        </div>
+      )}
       {rows.length ? (
         <table className="t cf-t">
-          <thead><tr><th>Direction</th><th>Person</th><th>Company</th><th>{ins ? 'Month' : 'Left in'}</th><th><span className="sr">Source</span></th></tr></thead>
+          <thead><tr><th>Role</th><th>{ins ? 'Other company' : 'Went to'}</th><th>{ins ? 'Month' : 'Left in'}</th><th><span className="sr">Source</span></th></tr></thead>
           <tbody>
-            {rows.map((r) => (
+            {shownRows.map((r) => (
               <tr key={r.key} className={r.evId ? 'cf-click' : ''} tabIndex={r.evId ? 0 : undefined}
+                title={r.evId ? 'Open the source record' : undefined}
                 onClick={r.evId ? () => openEvidence(r.evId!) : undefined}
                 onKeyDown={r.evId ? (e) => { if (e.key === 'Enter') openEvidence(r.evId!); } : undefined}>
-                <td><span className={`cf-dir ${r.dir}`}>{r.dir}</span></td>
-                <td>{r.initial ? `${r.initial}, ` : ''}{r.role}</td>
-                <td>{r.other ? `${r.dir === 'out' ? 'to' : 'from'} ${r.other}` : <span className="faint">not recorded</span>}</td>
-                <td className="mono cf-date">{when(r.date, r.month)}</td>
-                <td>{r.evId && <span className="srclink">Source</span>}</td>
+                <td><span className="cf-person">{r.initial && <span className="cf-av" aria-hidden>{r.initial.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()}</span>}<span className="cf-ell">{r.role}</span>{r.dir === 'in' && <span className="cf-in">joined</span>}</span></td>
+                <td>{r.other ? <span className="cf-co"><span className="cf-logo" aria-hidden>{r.other.trim().charAt(0).toUpperCase()}</span><span className="cf-ell">{r.other}</span></span> : <span className="faint">not recorded</span>}</td>
+                <td><span className="cf-mchip num">{when(r.date, r.month)}</span></td>
+                <td className="cf-src">{r.evId && <span aria-label="Source record" className="cf-src-i">↗</span>}</td>
               </tr>
             ))}
+            {shownRows.length === 0 && <tr><td colSpan={4} className="faint">No flow matches “{query}”.</td></tr>}
           </tbody>
         </table>
       ) : (
@@ -358,8 +373,14 @@ function News({ d, ev, name }: { d?: CompanyDossier | null; ev: EvMap; name: str
   const rows = d ? [...d.timeline.filter((t) => t.kind !== 'departure' && t.kind !== 'hire'), ...d.jobPosts] : [];
   rows.sort((a, b) => b.date.localeCompare(a.date));
   const news = rows.filter((r) => r.kind === 'news').length;
+  if (!rows.length) return (
+    <p className="cf-collapsed" data-testid="file-news">
+      <b>News and checks</b>
+      <span>{d ? `No dated news, check or headcount record for ${name} in this file. ${d.source === 'openings_scan' ? 'The openings scan does not read news; a company analysis run (Crustdata news) would fill this.' : 'Crustdata news returned nothing dated for this run.'}` : 'Not loaded: news and checks come with the company file (GET /api/companies/:id/dossier).'}</span>
+    </p>
+  );
   return (
-    <section className="panel cf-p" data-testid="file-news">
+    <section className="panel cf-p cf-wide" data-testid="file-news">
       <header><h2>News and checks, dated</h2><span className="faint">{d ? `${plural(news, 'article')} · ${plural(rows.length - news, 'other record')}` : 'unavailable'}</span></header>
       {rows.length ? (
         <ul className="cf-news">
