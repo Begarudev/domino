@@ -176,7 +176,8 @@ export function detectOpenings(input: O1Input): O1Result {
     const lastLeftStart = (group.conclusive.length ? group.conclusive : all).map(d => d.left[0]).sort().at(-1)!;
     const destinations = [...new Set(all.map(d => d.toCompanyName).filter((n): n is string => Boolean(n)))];
     const settledTo = [...new Set(group.conclusive.map(d => d.toCompanyName).filter((n): n is string => Boolean(n)))];
-    const drainLabel = `${group.conclusive.length} ${familyLabel} ${group.conclusive.length === 1 ? 'person' : 'people'} left ` +
+    const drainLabel = !group.conclusive.length ? `${group.unsettled.length} ${familyLabel} departures, each in a month that straddles the 90-day edge` :
+      `${group.conclusive.length} ${familyLabel} ${group.conclusive.length === 1 ? 'person' : 'people'} left ` +
       `${[...new Set(group.conclusive.map(d => monthLabel(d.left[0])))].join(' and ') || '—'}` +
       `${settledTo.length ? ` (to ${settledTo.join(', ')})` : ''}` +
       (group.unsettled.length ? `; ${group.unsettled.length} more with a month that straddles the 90-day edge` : '');

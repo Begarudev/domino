@@ -7,15 +7,24 @@
     {
       "name": "Ira",
       "pastEmployers": [
-        {"name": "Peregrine Systems", "from": "2021-04-01", "to": "2023-09-01"}
+        {
+          "name": "Peregrine Systems",
+          "from": "2021-04-01",
+          "to": "2023-09-01"
+        }
       ]
     }
   ],
-  "customers": ["Marigold Compute"],
+  "customers": [
+    "Marigold Compute"
+  ],
   "meeting": {
     "title": "Managed inference discussion",
     "durationMin": 20,
-    "slots": ["2026-11-24T11:00:00+05:30", "2026-11-25T15:30:00+05:30"]
+    "slots": [
+      "2026-11-24T11:00:00+05:30",
+      "2026-11-25T15:30:00+05:30"
+    ]
   },
   "acquisitionEvents": [
     {
@@ -51,6 +60,46 @@
       "sourceUrl": "https://example.com/news/lumen-serve-acquired",
       "note": "Lumen Serve was acquired on 2026-11-01.",
       "fixtureOnly": true
+    },
+    {
+      "provider": "Hugging Face",
+      "product": "Text Generation Inference",
+      "kind": "acquired",
+      "date": "2026-09-03",
+      "sourceUrl": "https://blogs.nvidia.com/blog/nvidia-to-acquire-hugging-face/",
+      "note": "NVIDIA announced it will acquire Hugging Face, maker of Text Generation Inference (NVIDIA blog, 3 Sep 2026)."
+    },
+    {
+      "provider": "Hugging Face",
+      "product": "Hugging Face Inference",
+      "kind": "acquired",
+      "date": "2026-09-03",
+      "sourceUrl": "https://blogs.nvidia.com/blog/nvidia-to-acquire-hugging-face/",
+      "note": "NVIDIA announced it will acquire Hugging Face, which runs the Hugging Face Inference API and Endpoints (NVIDIA blog, 3 Sep 2026)."
+    },
+    {
+      "provider": "Nebius",
+      "product": "Nebius",
+      "kind": "repriced",
+      "date": "2026-09-17",
+      "sourceUrl": "https://www.thestar.com.my/tech/tech-news/2026/09/18/nebius-hikes-ai-cloud-prices-again-as-demand-for-computing-power-soars",
+      "note": "Nebius raised on-demand GPU prices by up to 21% from 1 Oct, its second increase in three months (Reuters via The Star, 17 Sep 2026)."
+    },
+    {
+      "provider": "Chroma",
+      "product": "Chroma Cloud",
+      "kind": "shutdown",
+      "date": "2026-10-23",
+      "sourceUrl": "https://alphasignal.ai/news/replit-acquires-chromadb-and-shuts-down-chroma-cloud-in-60-days",
+      "note": "Replit acquired Chroma and is winding down Chroma Cloud over 60 days; writes stop 22 Nov 2026 (AlphaSignal, 23 Oct 2026)."
+    },
+    {
+      "provider": "OpenRouter",
+      "product": "OpenRouter",
+      "kind": "acquired",
+      "date": "2026-08-19",
+      "sourceUrl": "https://stripe.com/newsroom/news/stripe-agrees-to-acquire-openrouter",
+      "note": "Stripe agreed to acquire OpenRouter, the model routing gateway (Stripe newsroom, 19 Aug 2026)."
     }
   ]
 }
