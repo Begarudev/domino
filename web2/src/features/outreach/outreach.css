@@ -91,3 +91,8 @@
 .fn-src { font-variant-numeric: tabular-nums; }
 .fn-mark { font-variant-numeric: tabular-nums; }
 .out-steps small { font-variant-numeric: tabular-nums; }
+/* g6 act-check: proportional digits, counts never clip, footnote chips one size */
+.out-count, .out-rc-time, .fn-src, .fn-mark, .out-steps small, .out-steps .n { font-variant-numeric: normal; }
+.out-count-l, .out-count { white-space: nowrap; }
+.fn-src .tag { font-size: var(--fs-cap); }
+.out-meta .mono { margin-left: 0; }

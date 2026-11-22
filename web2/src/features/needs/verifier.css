@@ -97,3 +97,9 @@
 .vt-l { font-size: var(--fs-ui); }
 .guard-head h2 { font-size: 18px; letter-spacing: var(--track-tight); }
 .steps { border-radius: var(--r-ctl); }
+/* g6 act-check: proportional digits, step strip shares width without wrapping labels, tally numbers never clip */
+.vt b, .ver-sum header .faint, .ver-date { font-variant-numeric: normal; white-space: nowrap; }
+.steps > * { min-width: 0; }
+.steps b, .steps span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt { min-width: 0; }
+.vt-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
