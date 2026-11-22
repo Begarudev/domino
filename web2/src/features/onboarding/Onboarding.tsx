@@ -155,6 +155,16 @@ export function Onboarding() {
 
   return (
     <div className={`page onb ${folded ? 'is-folded' : ''}`}>
+      <ol className="onb-steps" aria-label="Onboarding steps">
+        {['Your profile', 'Reading', 'Confirm'].map((label, i) => {
+          const at = phase === 'enriching' ? 1 : phase === 'confirm' ? 2 : 0;
+          return (
+            <li key={label} className={i < at ? 'done' : i === at ? 'now' : ''} aria-current={i === at ? 'step' : undefined}>
+              <span className="onb-step-n">{i < at ? '✓' : i + 1}</span>{label}
+            </li>
+          );
+        })}
+      </ol>
       {!folded && (
         <header className="onb-hero">
           <h1 className="onb-title">Find openings before they’re posted</h1>
@@ -204,6 +214,18 @@ export function Onboarding() {
             <legend className="onb-label">What you agree to share</legend>
             <ConsentList consent={consent} onToggle={toggle} />
             <p className="onb-keep">DOMINO keeps only what the match needs. You can withdraw any time.</p>
+            <div className="onb-preview" aria-live="polite" data-testid="onboard-preview">
+              <span className="onb-preview-h">What a company will see</span>
+              <ul>
+                {CONSENT_ITEMS.map((c) => (
+                  <li key={c.key} className={consent[c.key] ? 'on' : 'off'}>
+                    <span className="onb-preview-dot" aria-hidden="true" />{c.label}
+                    <small>{consent[c.key] ? 'shared' : 'hidden'}</small>
+                  </li>
+                ))}
+                <li className="off"><span className="onb-preview-dot" aria-hidden="true" />Contact details<small>never</small></li>
+              </ul>
+            </div>
           </fieldset>
         </form>
       )}

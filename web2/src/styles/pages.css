@@ -156,3 +156,26 @@
 
 /* Schibsted tabular figures widen commas and colons: big numbers and the run chip use proportional figures */
 .signin-stats dd, .rec-fun b, .fun-n, .funnel b, .big-n, .runchip, .pl-node b { font-variant-numeric: lining-nums proportional-nums; }
+
+/* q2: sign-in panel centred in the viewport; How it works as a connected flow */
+.signin { min-height: calc(100vh - 56px); align-items: center; padding-top: 40px; padding-bottom: 40px; }
+.signin-panel { align-self: center; }
+.dominoes { gap: 16px; padding: 18px; }
+.dom-lane { grid-template-columns: 64px 1fr; align-items: start; row-gap: 8px; }
+.dom-name { display: inline-flex; align-items: center; gap: 6px; padding-top: 8px; }
+.dom-chip { width: 8px; height: 8px; border-radius: 50%; background: #0f9488; }
+.dom-chip-sell { background: #d97706; }
+.dom-lane ol { gap: 22px; }
+.dom-lane li { display: flex; gap: 8px; align-items: flex-start; flex: 1 1 0; min-width: 0; padding: 10px; background: var(--surface); }
+.dom-lane li + li::before { left: -21px; width: 16px; height: 1px; background: var(--rule); }
+.dom-lane li + li::after { left: -8px; border-left-color: var(--ink-2); }
+.dom-ic { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: var(--canvas); color: var(--ink-2); border: var(--hair); }
+.dom-k0 .dom-ic { color: #b45309; background: #fef3c7; border-color: #fde68a; }
+.dom-k1 .dom-ic { color: #0f766e; background: #e6f6f4; border-color: #b7e4de; }
+.dom-k2 .dom-ic, .dom-k3 .dom-ic { color: #fff; background: var(--ink); border-color: var(--ink); }
+.dom-lane li.dom-k2, .dom-lane li.dom-k3 { border-color: var(--acc-line); background: var(--acc-weak); }
+.dom-txt { display: grid; gap: 2px; min-width: 0; color: var(--ink); }
+.dom-txt small { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.dom-ex { grid-column: 2; margin: 0; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-2); padding-left: 2px; }
+.dom-lane li { animation-duration: 360ms; }
+@media (max-width: 1200px) { .dom-lane ol { flex-wrap: wrap; } .dom-lane li { flex-basis: 40%; } }
