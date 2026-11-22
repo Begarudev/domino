@@ -20,7 +20,8 @@
 /* ---- head: what is selected, how much rests on it, and the one truthful data-mode line ---- */
 .evd-head { padding: var(--s2) var(--s5) var(--s4); display: grid; gap: var(--s2); border-bottom: 1px solid var(--line-soft); }
 .evd-bar { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s5) var(--s2); border-bottom: 1px solid var(--line-soft); background: var(--bg-deep); }
-.evd-label { font-size: var(--fs-ui); font-weight: 650; color: var(--paper-2); margin-right: auto; font-variation-settings: 'wdth' var(--w-condensed); }
+.evd-label { font-size: var(--fs-body); font-weight: 650; color: var(--paper-2); margin-right: auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evd-label span { color: var(--paper); }
 .evd-kind { font-size: var(--fs-ui); color: var(--live-text); font-weight: 600; }
 .evd-title {
   font-size: 28px; line-height: 1.08; font-weight: 800; color: var(--paper);
@@ -41,7 +42,9 @@
 .evd-tally { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; font-size: var(--fs-body); color: var(--paper-2); margin-top: var(--s1); }
 .evd-n { font-size: 28px; font-weight: 800; line-height: 1; font-variation-settings: 'wdth' var(--w-title); font-variant-numeric: tabular-nums; }
 .evd-n.is-ok { color: var(--ok-text); }
-.evd-n.is-warn { color: var(--warn); margin-left: var(--s3); }
+.evd-n.is-warn { color: var(--warn); }
+.evd-jump { display: inline-flex; align-items: baseline; gap: 10px; margin-left: var(--s3); color: var(--paper-2); text-decoration: none; border-bottom: 1px dashed rgba(232, 168, 58, 0.5); }
+.evd-jump:hover, .evd-jump:focus-visible { color: var(--paper); border-bottom-color: var(--warn); }
 
 .evd-mode { font-size: var(--fs-ui); line-height: 1.4; color: var(--paper-2); padding: 6px var(--s3); border-radius: var(--r-sm); background: var(--panel); }
 .evd-mode::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: var(--s2); vertical-align: 1px; background: var(--paper-3); }
@@ -84,20 +87,22 @@
 
 .evc-top { display: flex; align-items: baseline; gap: var(--s3); }
 .evc-date { font-size: var(--fs-lead); font-weight: 800; color: var(--paper); font-variation-settings: 'wdth' var(--w-title); font-variant-numeric: tabular-nums; }
-.evc-cite { font-size: var(--fs-ui); font-weight: 700; color: var(--live-text); }
-.evc-state { margin-left: auto; font-size: var(--fs-ui); font-weight: 650; color: var(--ok-text); white-space: nowrap; }
+.evc-cite { font-size: var(--fs-ui); font-weight: 700; color: var(--paper); background: var(--live); border-radius: var(--r-sm); padding: 1px 7px; align-self: center; }
+.evc-line { font-size: var(--fs-ui); font-weight: 650; color: var(--live-text); border: 1px solid rgba(142, 170, 255, 0.45); border-radius: var(--r-sm); padding: 0 6px; align-self: center; }
+.evc-state { margin-left: auto; font-size: var(--fs-body); font-weight: 650; color: var(--ok-text); white-space: nowrap; }
 .is-cached .evc-state { color: var(--live-text); }
 .is-unverifiable .evc-state { color: var(--warn); }
 
 .evc-claim { font-size: 17px; line-height: 1.38; color: var(--paper); font-weight: 480; }
-.evc-source { font-size: 16px; line-height: 1.35; color: var(--paper-2); }
+.evc-source { font-size: 16px; line-height: 1.35; color: var(--paper-2); font-weight: 450; }
+.evc-when { white-space: nowrap; }
 .evc-path { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: var(--fs-cap); color: var(--paper-3); font-variation-settings: 'wdth' var(--w-condensed); }
 
 /* Unverifiable: the claim is struck and dimmed, the reason stays readable. */
 .is-unverifiable .evc-date { color: var(--warn); font-variation-settings: 'wdth' var(--w-normal); font-weight: 700; }
-.is-unverifiable .evc-claim { color: var(--paper-3); text-decoration: line-through; text-decoration-color: rgba(232, 168, 58, 0.7); text-decoration-thickness: 1.5px; }
+.is-unverifiable .evc-claim { color: var(--paper-2); text-decoration: line-through; text-decoration-color: rgba(232, 168, 58, 0.7); text-decoration-thickness: 1px; }
 .is-unverifiable .evc-source, .is-unverifiable .evc-path { opacity: 0.7; }
-.evc-reason { font-size: var(--fs-body); line-height: 1.4; color: var(--paper); }
+.evc-reason { font-size: 16px; line-height: 1.4; color: var(--paper); }
 .evc-reason::before { content: 'Why: '; color: var(--warn); font-weight: 650; }
 
 /* ---- expanded ---- */

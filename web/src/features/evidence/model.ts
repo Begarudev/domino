@@ -84,10 +84,16 @@ function cardFor(ev: Evidence, idx: StreamIndex, markers: Map<string, number>, r
   };
 }
 
-const byDate = (a: SourceCard, b: SourceCard) => (b.date ?? '').localeCompare(a.date ?? '');
+// Cited sources lead (in marker order: what the draft rests on), then newest fact first.
+// Order: sources the draft cites (marker order), then sources on the cascade line into this node, then newest first.
+const order = (lead: Set<string>) => (a: SourceCard, b: SourceCard) =>
+  (a.marker ?? Infinity) - (b.marker ?? Infinity)
+  || Number(lead.has(b.key)) - Number(lead.has(a.key))
+  || (b.date ?? '').localeCompare(a.date ?? '');
 
 export interface DrawerModel {
   kept: SourceCard[];
+  lead: Set<string>;            // evidence ids on the cascade line into the selected node
   excluded: SourceCard[];
   modes: Map<DataMode, number>;
 }
@@ -98,6 +104,7 @@ export function buildCards(snap: RunSnapshot, idx: StreamIndex, selection: Selec
   let companyId: string | null = null;
   let markers = new Map<string, number>();
   let claims: { claim: string; reason: string }[] = [];
+  const lead = new Set<string>();
 
   if (!selection) ids = snap.evidence.map((e) => e.id);
   else if (selection.kind === 'edge') ids = snap.graph.edges.find((e) => e.id === selection.id)?.evidenceIds ?? [];
@@ -110,13 +117,14 @@ export function buildCards(snap: RunSnapshot, idx: StreamIndex, selection: Selec
     ids = [...(n?.evidenceIds ?? []), ...(t?.decider?.evidenceIds ?? []), ...(d?.citations.map((c) => c.evidenceId) ?? [])];
     markers = new Map(d?.citations.map((c) => [c.evidenceId, c.marker]) ?? []);
     claims = [...(idx.unverifiableByCompany.get(selection.id) ?? []), ...(d?.unverifiable ?? [])];
+    for (const e of snap.graph.edges) if (e.to === selection.id) for (const id of e.evidenceIds) lead.add(id);
   }
   if (!selection) for (const list of idx.unverifiableByCompany.values()) claims.push(...list);
 
   const reasons = new Map(claims.map((c) => [c.claim, c.reason]));
   const rows = [...new Set(ids)].map((id) => byId.get(id)).filter((e): e is Evidence => !!e);
   const cards = rows.map((ev) => cardFor(ev, idx, markers, reasons));
-  const kept = cards.filter((c) => c.state !== 'unverifiable').sort(byDate);
+  const kept = cards.filter((c) => c.state !== 'unverifiable').sort(order(lead));
   const excluded = cards.filter((c) => c.state === 'unverifiable');
 
   // Excluded claims that have no evidence row of their own still get a card: never hidden.
@@ -129,7 +137,7 @@ export function buildCards(snap: RunSnapshot, idx: StreamIndex, selection: Selec
   }
   const modes = new Map<DataMode, number>();
   for (const r of rows) modes.set(r.mode, (modes.get(r.mode) ?? 0) + 1);
-  return { kept, excluded, modes };
+  return { kept, lead, excluded, modes };
 }
 
 /** One truthful sentence about where these rows came from. Shown once, never as a per-card "Live" badge. */

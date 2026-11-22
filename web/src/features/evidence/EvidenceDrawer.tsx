@@ -9,16 +9,20 @@ import { buildCards, endpointLabel, indexStream, modeLine, providerLabel } from 
 import type { SourceCard } from './model.ts';
 import './evidence.css';
 
-const hhmm = (iso: string) => {
+// One clock everywhere: the viewer's local time with its zone name (IST on the demo machine).
+const clock = (iso: string, seconds: boolean) => {
   const t = new Date(iso);
-  return Number.isNaN(t.getTime()) ? iso : t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (Number.isNaN(t.getTime())) return iso;
+  const day = `${t.getDate()} ${t.toLocaleString('en-GB', { month: 'short' })}`;
+  const time = t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}), timeZoneName: 'short' });
+  return `${day}${seconds ? ` ${t.getFullYear()}` : ''} ${time.replace('GMT+5:30', 'IST')}`;
 };
-const retrieved = (iso: string) => `retrieved ${fmtDate(iso.slice(0, 10))} ${hhmm(iso)}`;
+const retrieved = (iso: string) => `retrieved ${clock(iso, false)}`;
 const host = (url: string) => { try { const u = new URL(url); return `${u.host}${u.pathname}`.replace(/\/$/, ''); } catch { return url; } };
 const STATE_TEXT = { verified: 'Verified', cached: 'Cached', unverifiable: "I can't verify" } as const;
 
 function Card(props: {
-  card: SourceCard; index: number; open: boolean; highlight: boolean; reducedMotion: boolean;
+  card: SourceCard; index: number; open: boolean; onLine?: boolean; highlight: boolean; reducedMotion: boolean;
   onToggle: () => void; onRecheck: (ev: Evidence) => Promise<void>;
 }) {
   const { card, open, reducedMotion } = props;
@@ -38,14 +42,15 @@ function Card(props: {
       <button type="button" className="evc-hit" aria-expanded={open} aria-controls={bodyId} onClick={props.onToggle}>
         <span className="evc-top">
           <span className="evc-date">{card.date ? fmtDate(card.date, { year: true }) : 'Undated'}</span>
-          {card.marker != null && <span className="evc-cite" title={`Cited as [${card.marker}] in the draft`}>[{card.marker}]</span>}
+          {card.marker != null && <span className="evc-cite" title={`Cited as [${card.marker}] in the draft`}>Cited [{card.marker}]</span>}
+          {props.onLine && <span className="evc-line" title="Backs the cascade line into this company">Cascade link</span>}
           <span className="evc-state">{STATE_TEXT[card.state]}</span>
         </span>
         <span className="evc-claim">{card.claim}</span>
         {out && card.reason && <span className="evc-reason">{card.reason}</span>}
         {ev && (
           <span className="evc-source">
-            {providerLabel(ev)} · {endpointLabel(ev.source.endpoint)} · {retrieved(ev.retrievedAt)}
+            {providerLabel(ev)} · {endpointLabel(ev.source.endpoint)} · <span className="evc-when">{retrieved(ev.retrievedAt)}</span>
           </span>
         )}
         {!ev && <span className="evc-source">Left out of the draft by the claim check</span>}
@@ -69,7 +74,7 @@ function Card(props: {
               {card.signal && <><dt>DOMINO took</dt><dd className="evc-signal">{card.signal}</dd></>}
               {ev.source.url && <><dt>Source</dt><dd><a href={ev.source.url} target="_blank" rel="noreferrer noopener">{host(ev.source.url)}</a></dd></>}
               {ev.source.recordId && <><dt>Record</dt><dd className="evc-mono">{ev.source.recordId}</dd></>}
-              <dt>Retrieved</dt><dd className="evc-mono">{ev.retrievedAt.replace('T', ' ').slice(0, 19)} UTC</dd>
+              <dt>Retrieved</dt><dd className="evc-mono">{clock(ev.retrievedAt, true)}</dd>
               {card.read && <><dt>From the read</dt><dd>{card.read.query}{card.read.total != null ? `, ${card.read.count} of ${card.read.total} shown` : ''}</dd></>}
               {card.fallback && <><dt>Fallback</dt><dd>{card.fallback.from} to {card.fallback.to}: {card.fallback.reason}</dd></>}
             </dl>
@@ -103,8 +108,9 @@ export function EvidenceDrawer(props: {
   const mode = modeLine(model.modes, props.cacheFetchedAt);
   const total = model.kept.length + model.excluded.length;
 
-  let kind = 'All sources this run';
-  let title: ReactNode = 'Every source behind this run';
+  let kind: string | null = null;
+  let title: ReactNode = 'Run evidence';
+  let barName: string | null = null;
   let detail: ReactNode = null;
 
   if (selection?.kind === 'edge') {
@@ -112,6 +118,7 @@ export function EvidenceDrawer(props: {
     if (e) {
       kind = `${MECH_LABEL[e.mechanism]}, ${name(e.from)} to ${name(e.to)}`;
       title = e.label;
+      barName = `${name(e.from)} to ${name(e.to)}`;
       detail = (
         <>
           <p className="evd-text">{e.rationale}</p>
@@ -127,6 +134,7 @@ export function EvidenceDrawer(props: {
     const incoming = snap.graph.edges.filter((e) => e.to === selection.id);
     kind = n?.status === 'unverifiable' ? "Hypothesis I can't verify" : t ? `Target ${t.rank} of ${snap.targets.length}` : conf == null ? 'Trigger company' : 'Hypothesis';
     title = n?.name ?? name(selection.id);
+    barName = n?.name ?? name(selection.id);
     detail = (
       <>
         {(t?.need ?? n?.need) && (
@@ -151,25 +159,31 @@ export function EvidenceDrawer(props: {
     title = 'What this citation rests on';
   }
 
+  const onLine = (c: SourceCard) => c.marker == null && model.lead.has(c.key);
   const toggle = (k: string) => setOpenKey((cur) => (cur === k ? null : k));
 
   return (
     <LazyMotion features={domAnimation} strict>
       <section className="evd" aria-label="Evidence">
         <div className="evd-bar">
-          <h2 className="evd-label">Evidence</h2>
+          <h2 className="evd-label">Evidence{barName && <span>, {barName}</span>}</h2>
           {selection && <button type="button" className="btn btn-quiet btn-xs" onClick={() => props.onSelect(null)}>All sources</button>}
           <button type="button" className="btn btn-quiet btn-xs" onClick={props.onClose}>Close</button>
         </div>
         <div className="evd-scroll">
         <header className="evd-head">
-          <p className="evd-kind">{kind}</p>
+          {kind && <p className="evd-kind">{kind}</p>}
           <h3 className="evd-title">{title}</h3>
           {detail}
           {total > 0 && (
             <p className="evd-tally">
               <span className="evd-n is-ok">{model.kept.length}</span> dated and sourced
-              {model.excluded.length > 0 && <><span className="evd-n is-warn">{model.excluded.length}</span> I can't verify</>}
+              {model.excluded.length > 0 && (
+                <a className="evd-jump" href="#evd-out"
+                  onClick={(e) => { e.preventDefault(); document.getElementById('evd-out')?.scrollIntoView({ block: 'start', behavior: props.reducedMotion ? 'auto' : 'smooth' }); }}>
+                  <span className="evd-n is-warn">{model.excluded.length}</span> I can't verify
+                </a>
+              )}
             </p>
           )}
           <p className={`evd-mode is-${mode.mode}`}>{mode.text}</p>
@@ -187,14 +201,14 @@ export function EvidenceDrawer(props: {
           {model.kept.length > 0 && (
             <ul className="evc-list">
               {model.kept.map((c, i) => (
-                <Card key={c.key} card={c} index={i} open={openKey === c.key} highlight={props.hoverEvidence === c.key}
+                <Card key={c.key} card={c} index={i} open={openKey === c.key} onLine={onLine(c)} highlight={props.hoverEvidence === c.key}
                   reducedMotion={props.reducedMotion} onToggle={() => toggle(c.key)} onRecheck={props.onRecheck} />
               ))}
             </ul>
           )}
           {model.excluded.length > 0 && (
             <>
-              <h4 className="evd-out">Left out: I can't verify {model.excluded.length === 1 ? 'this' : `these ${model.excluded.length}`}</h4>
+              <h4 className="evd-out" id="evd-out">Left out: I can't verify {model.excluded.length === 1 ? 'this' : `these ${model.excluded.length}`}</h4>
               <ul className="evc-list">
                 {model.excluded.map((c, i) => (
                   <Card key={c.key} card={c} index={model.kept.length + i} open={openKey === c.key} highlight={props.hoverEvidence === c.key}
