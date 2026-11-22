@@ -170,6 +170,8 @@ a:hover { text-decoration: underline; }
 .tabs a[aria-current='page'] { color: var(--paper); border-bottom-color: var(--live); }
 .tabs .count { margin-left: 6px; color: var(--paper-3); font-weight: 500; }
 
+.page-fade { min-height: 100%; }
+
 /* ---------------------------------------------------------------- sign-in */
 .app-login { grid-template-rows: var(--bar-h) 1fr; }
 .app-login .main { display: grid; }

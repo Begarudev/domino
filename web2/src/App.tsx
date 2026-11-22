@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { useEnterOnce } from './lib/motion.ts';
 import { navigate, useRoute } from './data/router.ts';
 import type { Route } from './data/router.ts';
 import { runStore } from './data/store.ts';
@@ -13,6 +15,12 @@ import { getShell, useShell } from './shell/ui.ts';
 import type { Role } from './shell/ui.ts';
 
 let booted = false;
+
+/** Page change: a 200 ms fade and 6 px rise, once per page (tabs inside a page don't refade the whole page). */
+function PageFade({ children }: { children: ReactNode }) {
+  const ref = useEnterOnce<HTMLDivElement>(false, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], 200);
+  return <div ref={ref} className="page-fade">{children}</div>;
+}
 
 /** Where a route belongs. Each role only ever sees its own side; anything else goes back to sign-in or home. */
 function guard(route: Route, role: Role | null): Route | null {
@@ -60,9 +68,11 @@ export function App() {
       <TopBar />
       <div className="body">
         <main className="main" id="main">
-          {route.page === 'candidate' && <CandidatePage route={route} />}
-          {route.page === 'companies' && <CompaniesPage />}
-          {route.page === 'company' && <CompanyPage route={route} />}
+          <PageFade key={route.page === 'candidate' ? `c-${route.sub}` : route.page}>
+            {route.page === 'candidate' && <CandidatePage route={route} />}
+            {route.page === 'companies' && <CompaniesPage />}
+            {route.page === 'company' && <CompanyPage route={route} />}
+          </PageFade>
         </main>
         <ActivityRail />
       </div>
