@@ -8,7 +8,19 @@ function StepMark({ s }: { s: StepState }) {
   return <span className={`mark mark-${s.status}${s.resumedFromCheckpoint ? ' mark-reused' : ''}`} aria-hidden="true" />;
 }
 
-function Item({ it }: { it: TimelineItem }) {
+/** Collapse runs of identical sub-events (e.g. six model timeouts in a row) into one line with a count. */
+function grouped(items: TimelineItem[]) {
+  const out: { it: TimelineItem; n: number }[] = [];
+  for (const it of items) {
+    const last = out[out.length - 1];
+    const key = (x: TimelineItem) => `${x.tone}|${x.text.replace(/[\d.]+ (ms|s)\b/g, '#')}`;
+    if (last && !it.rule && !last.it.rule && key(last.it) === key(it)) last.n += 1;
+    else out.push({ it, n: 1 });
+  }
+  return out;
+}
+
+function Item({ it, n = 1 }: { it: TimelineItem; n?: number }) {
   if (it.rule) {
     return (
       <li className={`tl-rule tl-rule-${it.tone}`}>
@@ -19,7 +31,7 @@ function Item({ it }: { it: TimelineItem }) {
   }
   return (
     <li className={`tl-item tl-${it.tone}`}>
-      <span>{it.text}</span>
+      <span>{it.text}{n > 1 && <b className="tl-count"> ×{n}</b>}</span>
       {it.detail && <span className="tl-detail">{it.detail}</span>}
     </li>
   );
@@ -59,7 +71,7 @@ export function Timeline(props: { state: UIState; hasRun: boolean; onKill: () =>
                   </div>
                   {s.summary && s.status !== 'pending' && <p className="step-summary">{s.summary}</p>}
                   {s.attempt > 1 && s.status !== 'pending' && <p className="step-summary">Attempt {s.attempt}</p>}
-                  {items.length > 0 && <ul className="tl-items">{items.map((it, i) => <Item key={`${it.seq}-${i}`} it={it} />)}</ul>}
+                  {items.length > 0 && <ul className="tl-items">{grouped(items).map(({ it, n }, i) => <Item key={`${it.seq}-${i}`} it={it} n={n} />)}</ul>}
                 </li>
               );
             })}

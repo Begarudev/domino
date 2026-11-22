@@ -112,7 +112,7 @@ function Meter(props: { label: string; used: string; limit: string; frac: number
 }
 
 export function StatusLine(props: {
-  snap: RunSnapshot; mock: boolean; connected: boolean; hasRun: boolean; fallbacks: number; onLower: (l: Partial<RunLimits>) => void;
+  snap: RunSnapshot; mock: boolean; connected: boolean; hasRun: boolean; fallbacks: number; health: { dataMode: string; llm: string } | null; onLower: (l: Partial<RunLimits>) => void;
 }) {
   const { snap, mock } = props;
   const b = snap.budget;
@@ -123,13 +123,18 @@ export function StatusLine(props: {
   return (
     <div className="status">
       {mock && <span className="badge badge-mock" title="Recorded mock stream; the server is not connected">Mock data</span>}
-      {props.hasRun && <span className={`badge badge-${snap.dataMode}`}>{dataModeText(snap)}</span>}
+      {props.hasRun ? (
+        <span className={`badge badge-${snap.dataMode}`}>{dataModeText(snap)}</span>
+      ) : props.health && ['live', 'cache', 'fixture'].includes(props.health.dataMode) ? (
+        // Before any run, show the server's configured source, not a placeholder.
+        <span className={`badge badge-${props.health.dataMode}`}>{dataModeText({ ...snap, dataMode: props.health.dataMode as RunSnapshot['dataMode'] })}</span>
+      ) : null}
       {snap.dataMode === 'live' && props.fallbacks > 0 && (
         <span className="badge badge-cache" title="Live calls that failed after retries were answered from the response cache">
           Cached live responses for {props.fallbacks} call{props.fallbacks > 1 ? 's' : ''}
         </span>
       )}
-      {props.hasRun && <span className="status-llm">{llmText(snap.llm)}</span>}
+      {(props.hasRun || props.health) && <span className="status-llm">{llmText(props.hasRun ? snap.llm : props.health!.llm)}</span>}
       {!props.connected && <span className="badge badge-warn">Reconnecting to the event stream</span>}
       <div className="meters">
         <Meter label="Credits" used={fmtNum(b.used.credits)} limit={fmtNum(b.limits.maxCredits)} frac={b.used.credits / (b.limits.maxCredits || 1)} exhausted={b.exhausted === 'credits'} />

@@ -106,7 +106,7 @@ export function App() {
           <span className="brand-sub">Outbound desk</span>
         </div>
         <RequestBar initial={requestText} busy={busy === 'run'} onRun={onRun} />
-        <StatusLine snap={snap} mock={!!backend?.mock} connected={connected} hasRun={hasRun} fallbacks={state.fallbacks} onLower={onLower} />
+        <StatusLine snap={snap} mock={!!backend?.mock} connected={connected} hasRun={hasRun} fallbacks={state.fallbacks} health={backend?.health ?? null} onLower={onLower} />
       </header>
 
       {error && (
