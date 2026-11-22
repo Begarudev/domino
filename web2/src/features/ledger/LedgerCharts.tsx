@@ -22,7 +22,7 @@ function base(onPick: (i: number) => void): ApexOptions {
     legend: { show: false },
     grid: { borderColor: tok('--h-grey-bd', '#e6e6e6'), strokeDashArray: 0, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
     states: { active: { filter: { type: 'none' } }, hover: { filter: { type: 'darken' } } },
-    yaxis: { labels: { style: { fontSize: '12px' }, maxWidth: 180 } },
+    yaxis: { labels: { style: { fontSize: '12px' }, maxWidth: 260 } },
   };
 }
 
