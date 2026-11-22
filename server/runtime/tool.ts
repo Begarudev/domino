@@ -146,6 +146,19 @@ export function exhaust(store: Store, runId: string, reason: Exhausted) {
   store.recordEvent(runId, { type: 'budget.update', budget });
 }
 
+export interface CrustReadMeta {
+  callId: string;
+  mode: DataMode;
+  request: unknown;
+  totalAvailable: number | null;
+}
+
+function totalAvailable(raw: unknown) {
+  if (!raw || typeof raw !== 'object' || !('total_count' in raw)) return null;
+  const count = typeof raw.total_count === 'string' && /^\d+$/.test(raw.total_count) ? Number(raw.total_count) : raw.total_count;
+  return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
 interface Attempt<T> {
   mode: LedgerEntry['mode'];
   estimate?: AttemptCost;
@@ -214,18 +227,21 @@ export class ToolContext {
   async crust<I, O>(
     spec: EndpointSpec<I, O>, input: I, time: Pick<ParseMeta, 'asOf' | 'windowDays'>,
     fixture: (path: string, body: unknown) => unknown, unavailable: () => O,
+    onRead?: (read: CrustReadMeta) => void,
   ): Promise<O> {
     const body = sanitize(spec.build(input));
     const request = canonicalJson(body);
     const key = hash(spec.path + request);
     const callId = randomUUID();
-    const parse = (raw: unknown, mode: DataMode) => spec.parse(raw, input, {
-      ...time, mode, endpoint: spec.path, retrievedAt: now(),
-    });
+    const parse = (raw: unknown, mode: DataMode, injected = false) => {
+      const result = spec.parse(raw, input, { ...time, mode, endpoint: spec.path, retrievedAt: now() });
+      if (!injected) onRead?.({ callId, mode, request: body, totalAvailable: totalAvailable(raw) });
+      return result;
+    };
 
     const run = (mode: DataMode, attempt: Attempt<O>['run'], estimate?: AttemptCost) => this.attempts({
       provider: 'crustdata', endpoint: spec.name, path: spec.path, body,
-      attempt: { mode, run: attempt, inject: raw => parse(raw, mode), estimate, timeoutMs: 15_000 },
+      attempt: { mode, run: attempt, inject: raw => parse(raw, mode, true), estimate, timeoutMs: 15_000 },
     }, callId);
 
     if (this.mode === 'fixture') {
@@ -436,7 +452,8 @@ export class ToolContext {
       else this.store.recordEvent(this.runId, { type: 'budget.update', budget });
       return reason;
     });
-    if (charge) throw new BudgetError(charge);
+    // A successful data read stays available for evidence publication after a reported charge crosses the ceiling.
+    if (charge && (mode !== 'live' || failure || this.recheck)) throw new BudgetError(charge);
     return { output, failure };
   }
 

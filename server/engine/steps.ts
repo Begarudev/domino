@@ -11,7 +11,7 @@ import { root } from '../env.ts';
 import { modelClient } from '../llm/client.ts';
 import { hash, ToolContext } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
-import { dateShift, predictionEvidence, publishEvidence, readSource } from './sources.ts';
+import { dateShift, predictionEvidence, publishSource, readSource } from './sources.ts';
 
 const sellerFile = resolve(root, 'config/seller.json');
 const seller: SellerProfile = existsSync(sellerFile) ? JSON.parse(readFileSync(sellerFile, 'utf8')) : {
@@ -59,6 +59,31 @@ const refinements = z.object({
   signalKeywords: z.array(z.string().trim().min(1).max(100)).min(1).max(16).optional(),
 });
 
+export function refineIntent(intent: Intent, request: string, modelResult: unknown): Intent {
+  const parsed = refinements.safeParse(modelResult);
+  if (!parsed.success) return intent;
+  const { buyerProfile, geography, deciderTitles, signalKeywords } = parsed.data;
+  const candidateGeography = geography && !/^(?:anywhere|global(?:ly)?|worldwide|all|none|any)$/i.test(geography)
+    && request.toLowerCase().includes(geography.toLowerCase()) ? geography : null;
+  const appendTerms = (current: string[], extra: string[] = [], max: number) => {
+    const combined = new Map(current.map(value => [value.toLowerCase(), value]));
+    for (const value of extra) if (!combined.has(value.toLowerCase())) combined.set(value.toLowerCase(), value);
+    return [...combined.values()].slice(0, max);
+  };
+  const updated: Intent = {
+    ...intent,
+    buyerProfile: buyerProfile ?? intent.buyerProfile,
+    geography: intent.geography ?? candidateGeography,
+    deciderTitles: appendTerms(intent.deciderTitles, deciderTitles, 12),
+    signalKeywords: appendTerms(intent.signalKeywords, signalKeywords, 16),
+  };
+  if (JSON.stringify(updated) === JSON.stringify(intent)) return intent;
+  updated.assumptions = intent.assumptions.filter(item =>
+    !(updated.buyerProfile !== intent.buyerProfile && /buyer profile/i.test(item)) &&
+    !(updated.geography !== intent.geography && /geography/i.test(item)));
+  return { ...updated, parsedBy: 'llm' };
+}
+
 async function parseRequest(ctx: ToolContext): Promise<StepResult<'parse_request'>> {
   const run = ctx.store.requireRun(ctx.runId);
   const today = run.created_at.slice(0, 10);
@@ -92,18 +117,7 @@ async function parseRequest(ctx: ToolContext): Promise<StepResult<'parse_request
     system: 'Refine an outbound search intent from the request and confirmed offering. Return only buyerProfile, geography, deciderTitles and signalKeywords. Omit any field you cannot infer.',
     user: JSON.stringify({ request: run.request, offering: intent.offering, rules: intent }),
   });
-  if (completion) {
-    const parsed = refinements.safeParse(JSON.parse(completion.text));
-    if (parsed.success && Object.keys(parsed.data).length) {
-      Object.assign(intent, parsed.data, { parsedBy: 'llm' });
-      const covered = Object.keys(parsed.data);
-      intent.assumptions = intent.assumptions.filter(item =>
-        !(covered.includes('buyerProfile') && /buyer profile/i.test(item)) &&
-        !(covered.includes('deciderTitles') && /decision.maker|titles/i.test(item)) &&
-        !(covered.includes('geography') && /geography/i.test(item)) &&
-        !(covered.includes('signalKeywords') && /keywords/i.test(item)));
-    }
-  }
+  if (completion) Object.assign(intent, refineIntent(intent, run.request, JSON.parse(completion.text)));
   return { output: intent, summary: `${intent.runKind === 'replay' ? 'Replay' : 'Run'} for ${intent.offering}` };
 }
 
@@ -112,7 +126,6 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
   const byEvidence = new Map(evidence.map(row => [row.id, row]));
   const replay = intent.runKind === 'replay';
   const ids = (row: { evidenceIds: string[] }) => row.evidenceIds.filter(id => byEvidence.has(id));
-  const cutoff = dateShift(intent.asOf, -intent.windowDays);
   const mentions = batch.mentions.flatMap(mention => {
     const evidenceIds = ids(mention);
     if (replay && !evidenceIds.length) return [];
@@ -127,6 +140,7 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
       industry: supports(/taxonomy|industry|categories/i) ? mention.industry : undefined,
       hq: supports(/locations|headquarters/i) ? mention.hq : undefined,
       foundedYear: supports(/founded/i) ? mention.foundedYear : undefined,
+      acquisitions: mention.acquisitions?.filter(acquisition => acquisition.date && acquisition.date <= intent.asOf),
       ...(supports(/competitor|peer/i) ? {} : { competitorNames: undefined, competitorDomains: undefined }),
     }];
   });
@@ -143,8 +157,8 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
   return {
     evidence, mentions, people, triggers: batch.triggers.flatMap(trigger => {
       const evidenceIds = ids(trigger);
-      if (trigger.date <= cutoff || trigger.date > intent.asOf || !companyKeys.has(trigger.companyId)) return [];
-      if (replay && (!evidenceIds.length || evidenceIds.length !== trigger.evidenceIds.length ||
+      if (!companyKeys.has(trigger.companyId)) return [];
+      if (replay && (trigger.date > intent.asOf || !evidenceIds.length || evidenceIds.length !== trigger.evidenceIds.length ||
         (trigger.relatedCompanyId && !companyKeys.has(trigger.relatedCompanyId)))) return [];
       return [{ ...trigger, evidenceIds }];
     }),
@@ -158,7 +172,7 @@ async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpo
     const batch = await readSource(ctx, spec, { intent: intent! }, intent!);
     const kept = guardBatch(batch, intent!);
     ctx.store.transaction(() => {
-      publishEvidence(ctx, kept.evidence, batch.sources);
+      publishSource(ctx, batch, kept.evidence, kept.triggers.flatMap(trigger => trigger.evidenceIds));
       publishTriggers(ctx, kept.triggers);
     });
     output.mentions.push(...kept.mentions);
@@ -213,7 +227,7 @@ async function enrichCompanies(ctx: ToolContext, c: Checkpoints): Promise<StepRe
   const result = await readSource(ctx, deps.companyEnrich, { companies }, intent);
   const kept = guardBatch(result, intent);
   ctx.store.transaction(() => {
-    publishEvidence(ctx, kept.evidence, result.sources);
+    publishSource(ctx, result, kept.evidence, kept.triggers.flatMap(trigger => trigger.evidenceIds));
     publishTriggers(ctx, kept.triggers);
   });
   if (!kept.mentions.length) return { output: { ...resolved, evidence: byId([...resolved.evidence, ...kept.evidence]) },
@@ -274,7 +288,6 @@ async function findDeciders(ctx: ToolContext, c: Checkpoints): Promise<StepResul
     }
     const result = await readSource(ctx, deps.personSearchDeciders, { intent, company }, intent);
     const kept = guardBatch(result, intent);
-    ctx.store.transaction(() => publishEvidence(ctx, kept.evidence, result.sources));
     const mentions = kept.people.map(person => ({ ...person, companyKey: company.id }));
     const resolved = deps.resolveEntities([{ ...company, key: company.id }], mentions);
     const candidates = resolved.people.map(person => ({
@@ -283,9 +296,11 @@ async function findDeciders(ctx: ToolContext, c: Checkpoints): Promise<StepResul
         ...role, companyId: companies.find(candidate => candidate.aliases.some(alias => alias.toLowerCase() === role.name.toLowerCase()))?.id ?? role.companyId,
       })),
     }));
+    const decider = deps.pickDecider(intent, company, candidates);
+    ctx.store.transaction(() => publishSource(ctx, result, kept.evidence, decider?.evidenceIds ?? []));
     output.people.push(...candidates);
     output.evidence.push(...kept.evidence);
-    output.targets.push({ ...target, decider: deps.pickDecider(intent, company, candidates) });
+    output.targets.push({ ...target, decider });
   }
   output.people = byId(output.people);
   return { output, summary: `${output.targets.filter(row => row.decider).length} decision-makers found`,
@@ -391,19 +406,12 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
   const { companies, evidence, triggers } = c.enrich_companies!;
   const targets = c.rank_targets!.targets;
   const firstOrder = c.rank_targets!.baseline.hiringFilterCompanyIds;
-  const headcount = unique(triggers.filter(trigger => {
-    if (trigger.kind !== 'headcount_jump') return false;
-    const rows = evidence.filter(row => trigger.evidenceIds.includes(row.id) && row.verifiable && typeof row.value === 'number');
-    const growth = rows.find(row => /growth|headcount_jump/i.test(row.source.field ?? ''));
-    if (growth) return Number(growth.value) >= 30;
-    const points = rows.filter(row => /employee_count|headcount\.total/i.test(row.source.field ?? '') && row.observedAt)
-      .sort((a, b) => a.observedAt!.localeCompare(b.observedAt!));
-    const first = points[0];
-    const last = points.at(-1);
-    return !!first && !!last && first.observedAt !== last.observedAt && Number(first.value) > 0 &&
-      Number(last.value) / Number(first.value) >= 1.3;
-  }).map(trigger => trigger.companyId));
-  const predicted = new Set([...targets.map(target => target.companyId), ...firstOrder, ...headcount]);
+  const headcount = unique(triggers.filter(trigger => trigger.kind === 'headcount_jump').map(trigger => trigger.companyId))
+    .filter(id => {
+      const growth = companies.find(company => company.id === id)?.headcountGrowthPct;
+      return growth?.window === '1m' && growth.pct >= 30;
+    });
+  const predicted = new Set([...targets.filter(target => !target.hold).map(target => target.companyId), ...firstOrder, ...headcount]);
   const picked = companies.filter(company => predicted.has(company.id));
   const outcomes: OutcomeFact[] = [];
   const inHorizon = (date: string | null) => Boolean(date && date > intent.asOf && date <= intent.horizonEnd!);
@@ -414,16 +422,21 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
       const result = await readSource(ctx, spec, input, time);
       const dated = result.evidence.filter(row => row.verifiable && inHorizon(row.observedAt));
       const ids = new Set(dated.map(row => row.id));
+      const matchedIds: string[] = [];
       for (const trigger of result.triggers) {
         const mention = result.mentions.find(row => row.key === trigger.companyId);
         const company = mention && picked.find(row => row.id === mention.key ||
           (row.domain && mention.domain && row.domain.toLowerCase() === mention.domain.toLowerCase()));
         const evidenceIds = trigger.evidenceIds.filter(id => ids.has(id));
         if (company && inHorizon(trigger.date) && evidenceIds.length && (trigger.kind === 'job_post' || trigger.kind === 'hire')) {
-          outcomes.push({ companyKey: company.id, date: trigger.date, kind: trigger.kind, evidenceIds, summary: trigger.summary });
+          matchedIds.push(...evidenceIds);
+          const title = dated.find(row => evidenceIds.includes(row.id) &&
+            /title|start_date/i.test(row.source.field ?? '') && typeof row.value === 'string')?.value;
+          outcomes.push({ companyKey: company.id, date: trigger.date, kind: trigger.kind, evidenceIds, summary: trigger.summary,
+            title: typeof title === 'string' ? title : undefined });
         }
       }
-      ctx.store.transaction(() => publishEvidence(ctx, dated, result.sources));
+      ctx.store.transaction(() => publishSource(ctx, result, dated, matchedIds));
     }
   }
   const score = deps.scoreReplay(intent, targets, { firstOrder, headcount }, outcomes);
@@ -432,8 +445,8 @@ async function scoreReplay(ctx: ToolContext, c: Checkpoints): Promise<StepResult
     ...score,
     snapshotLabel: usedForPrediction.length && usedForPrediction.every(row => row.mode === 'fixture')
       ? `Fictional fixtures filtered through ${intent.asOf}`
-      : `Current Crustdata index filtered to facts dated through ${intent.asOf}`,
-    outcomeDefinition: 'A dated infrastructure or inference job post or hire in the replay horizon.',
+      : score.snapshotLabel ?? `Current Crustdata index filtered to facts dated through ${intent.asOf}`,
+    outcomeDefinition: score.outcomeDefinition ?? 'A dated infrastructure or inference job post or hire in the replay horizon.',
     factsAfterAsOfUsed: usedForPrediction.filter(row => row.observedAt && row.observedAt > intent.asOf).length,
   };
   return { output, summary: `${output.domino.hits}/${output.domino.predicted} DOMINO picks showed a dated outcome`,

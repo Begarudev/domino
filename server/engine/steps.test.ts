@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { Store } from '../db.ts';
 import { ToolContext } from '../runtime/tool.ts';
-import { steps } from './steps.ts';
+import { refineIntent, steps } from './steps.ts';
 import type { Target } from '../../shared/types.ts';
 import { parseIntentRules } from './standin.ts';
 
@@ -40,4 +40,18 @@ test('a held target is visible but never drafted or given an approval', async ()
     store.sql.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('model refinements keep rule search terms and discard an unrequested geography', () => {
+  const request = 'We sell managed GPU inference. Find AI companies.';
+  const intent = parseIntentRules(request, '2026-11-22');
+  const result = refineIntent(intent, request, {
+    geography: 'worldwide', signalKeywords: ['inference serving'], deciderTitles: ['Director of ML'],
+  });
+  assert.equal(result.geography, null);
+  assert.equal(result.parsedBy, 'llm');
+  assert(result.signalKeywords.includes('inference'));
+  assert(result.signalKeywords.includes('inference serving'));
+  assert(result.deciderTitles.includes('CTO'));
+  assert(result.deciderTitles.includes('Director of ML'));
 });

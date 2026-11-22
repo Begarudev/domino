@@ -20,6 +20,7 @@ const encode = JSON.stringify;
 export type RunChaos = ChaosConfig & { crashAfterDeliver?: boolean };
 export type ToolLedgerEntry = LedgerEntry & { error?: string };
 type JournalEvent = RunEvent & { error?: string };
+type JournalRecord = Omit<StoredEvent, 'event'> & { event: JournalEvent };
 export function decode<T>(json: string): T {
   return JSON.parse(json) as T;
 }
@@ -30,7 +31,6 @@ export interface RunRow {
   status: RunStatus;
   data_mode: DataMode;
   llm: string;
-  llm_hard_failures: number;
   intent_json: string | null;
   limits_json: string;
   chaos_json: string;
@@ -56,8 +56,7 @@ export class Store {
       PRAGMA journal_mode=WAL;
       CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY, request TEXT, status TEXT, data_mode TEXT, llm TEXT, intent_json TEXT, limits_json TEXT,
-        chaos_json TEXT, created_at TEXT, updated_at TEXT, engine_pid INTEGER, crashes INTEGER DEFAULT 0, resumes INTEGER DEFAULT 0,
-        llm_hard_failures INTEGER NOT NULL DEFAULT 0
+        chaos_json TEXT, created_at TEXT, updated_at TEXT, engine_pid INTEGER, crashes INTEGER DEFAULT 0, resumes INTEGER DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS steps (
         run_id TEXT, step TEXT, status TEXT, attempt INTEGER, started_at TEXT, finished_at TEXT, summary TEXT,
@@ -98,11 +97,10 @@ export class Store {
     `);
     this.ensureColumn('outbox', 'status', "TEXT NOT NULL DEFAULT 'pending'",
       "UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL");
-    this.ensureColumn('runs', 'llm_hard_failures', 'INTEGER NOT NULL DEFAULT 0');
     this.ensureColumn('ledger', 'error', 'TEXT');
   }
 
-  private ensureColumn(table: 'runs' | 'ledger' | 'outbox', name: string, definition: string, backfill?: string) {
+  private ensureColumn(table: 'ledger' | 'outbox', name: string, definition: string, backfill?: string) {
     const exists = () => this.sql.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === name);
     if (exists()) return;
     this.transaction(() => {
@@ -170,12 +168,12 @@ export class Store {
     }
   }
 
-  appendEvent(runId: string, event: JournalEvent): StoredEvent {
+  appendEvent(runId: string, event: JournalEvent): JournalRecord {
     return this.transaction(() => this.recordEvent(runId, event));
   }
 
   // This variant participates in the caller's transaction.
-  recordEvent(runId: string, event: JournalEvent): StoredEvent {
+  recordEvent(runId: string, event: JournalEvent): JournalRecord {
     const ts = now();
     const { lastInsertRowid } = this.sql.prepare('INSERT INTO events (run_id, ts, type, payload_json) VALUES (?, ?, ?, ?)')
       .run(runId, ts, event.type, encode(event));
@@ -224,7 +222,7 @@ export class Store {
     return { seq: Number(lastInsertRowid), runId, ts, event };
   }
 
-  getEvents(runId: string, after: number, limit = 256): StoredEvent[] {
+  getEvents(runId: string, after: number, limit = 256): JournalRecord[] {
     const rows = this.sql.prepare('SELECT seq, run_id, ts, payload_json FROM events WHERE run_id = ? AND seq > ? ORDER BY seq LIMIT ?')
       .all(runId, after, limit) as unknown as EventRow[];
     return rows.map(row => ({ seq: row.seq, runId: row.run_id, ts: row.ts, event: decode(row.payload_json) }));

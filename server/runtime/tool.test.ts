@@ -11,6 +11,7 @@ import { NonsenseError } from '../domain/types.ts';
 
 import { Store } from '../db.ts';
 import { BudgetError, canonicalJson, hash, ToolContext } from './tool.ts';
+import type { CrustReadMeta } from './tool.ts';
 import { cacheStats, exportCache, importCache } from './cache-snapshot.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'domino-tool-test-'));
@@ -110,21 +111,29 @@ test('live charges the reported header and caches a credential-free response', a
   t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
     assert.equal(new Headers(init.headers).get('authorization'), 'Bearer mock-crustdata-credential');
     return Response.json({ rows: ['mock-crustdata-credential', 'write to fixture@example.invalid'],
-      phone: '+14155550100' }, { headers: { 'X-Credits-Used': '3.25' } });
+      phone: '+14155550100', total_count: 10 }, { headers: { 'X-Credits-Used': '3.25' } });
   });
   const ctx = create('charge', 'live');
-  const result = await ctx.crust(spec, { a: 5, b: 8 }, time, fixture, empty);
+  const observed: CrustReadMeta[] = [];
+  const result = await ctx.crust(spec, { a: 5, b: 8 }, time, fixture, empty, read => observed.push(read));
   assert.equal(result.mode, 'live');
+  assert.equal(observed.length, 1);
+  assert.equal(observed[0].mode, 'live');
+  assert.equal(observed[0].totalAvailable, 10);
   assert.equal(store.getLedger(ctx.runId)[0].credits, 3.25);
   const cache = store.readCache(hash(spec.path + canonicalJson({ a: 5, b: 8 })));
-  assert.deepEqual(cache, { rows: ['[redacted]', 'write to [contact redacted]'] });
+  assert.deepEqual(cache, { rows: ['[redacted]', 'write to [contact redacted]'], total_count: 10 });
 });
 
 test('rerunning an exact live request uses cache without an outbound call', async t => {
   const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('unexpected fetch'); });
   const ctx = create('cache-first', 'live');
-  const result = await ctx.crust(spec, { b: 8, a: 5 }, time, noFixture, empty);
+  const observed: CrustReadMeta[] = [];
+  const result = await ctx.crust(spec, { b: 8, a: 5 }, time, noFixture, empty, read => observed.push(read));
   assert.equal(result.mode, 'cache');
+  assert.equal(observed.length, 1);
+  assert.equal(observed[0].mode, 'cache');
+  assert.equal(observed[0].totalAvailable, 10);
   assert.equal(fetch.mock.callCount(), 0);
   assert.deepEqual(store.getLedger(ctx.runId).map(row => [row.status, row.credits]), [['cache_hit', 0]]);
 });

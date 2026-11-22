@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, test } from 'node:test';
 import { STEP_ORDER } from '../shared/types.ts';
-import type { Evidence, RunSnapshot, StoredEvent } from '../shared/types.ts';
+import type { Evidence, RunSnapshot, SourceReadEvent, StoredEvent } from '../shared/types.ts';
 import { waitFor } from '../scripts/smoke.ts';
 import { root } from './env.ts';
 
@@ -84,6 +84,17 @@ test('concurrent approve writes one test-mode message, records the duplicate, an
   const { id } = await create();
   uninterrupted = await state(id, waiting);
   assert(uninterrupted.targets.length > 0);
+  const held = uninterrupted.targets.filter(target => target.hold);
+  assert(held.length > 0);
+  const holdEvents = read(db => db.prepare("SELECT payload_json FROM events WHERE run_id = ? AND type = 'target.held'").all(id));
+  for (const target of held) {
+    assert(!uninterrupted.drafts.some(draft => draft.companyId === target.companyId));
+    assert(!uninterrupted.approvals.some(approval => approval.companyId === target.companyId));
+    assert(holdEvents.some(row => {
+      const event = JSON.parse(row.payload_json as string);
+      return event.companyId === target.companyId && JSON.stringify(event.reasons) === JSON.stringify(target.hold?.reasons);
+    }));
+  }
   const first = uninterrupted.approvals.find(row => row.kind === 'send_message')!;
   const meeting = uninterrupted.approvals.find(row => row.companyId === first.companyId && row.kind === 'book_meeting')!;
   const decisions = await Promise.all([http(`/api/approvals/${first.id}`, { decision: 'approve' }),
@@ -108,6 +119,40 @@ test('concurrent approve writes one test-mode message, records the duplicate, an
   assert.doesNotMatch(ics, /ATTENDEE|ORGANIZER/);
   const count = read(db => db.prepare("SELECT count(*) AS n FROM events WHERE run_id = ? AND type = 'action.duplicate_blocked'").get(id));
   assert.equal(count?.n, 1);
+});
+
+test('data reads publish real theatre items and correlation IDs for every successful parse', httpTimeout, async () => {
+  const rows = read(db => db.prepare('SELECT seq, type, payload_json FROM events WHERE run_id = ? ORDER BY seq').all(uninterrupted.id));
+  const reads = rows.filter(row => row.type === 'source.read');
+  assert.equal(reads.length, uninterrupted.ledger.filter(row => row.provider === 'crustdata' && row.status === 'ok').length);
+  const sources = reads.map(row => JSON.parse(row.payload_json as string) as SourceReadEvent);
+  assert.equal(new Set(sources.map(event => event.callId)).size, sources.length);
+  for (const [index, source] of sources.entries()) {
+    assert.equal(source.mode, 'fixture');
+    assert(source.query.length > 12);
+    assert(source.items.length <= 12);
+    const tool = rows.find(row => row.type === 'tool.call' &&
+      JSON.parse(row.payload_json as string).callId === source.callId);
+    assert(tool && Number(tool.seq) < Number(reads[index].seq));
+  }
+  const jobs = sources.find(source => source.endpoint === 'job_search')!;
+  assert.equal(jobs.step, 'pull_triggers');
+  assert(typeof jobs.totalAvailable === 'number' && jobs.totalAvailable > 0);
+  assert(jobs.items.some(item => item.kind === 'job_post' && item.company && item.title && item.url && item.matched));
+  const moves = sources.find(source => source.endpoint === 'person_recent_moves')!;
+  const moveItems = moves.items.filter(item => item.kind === 'person_move');
+  assert(moveItems.some(item => item.title.includes('→') && item.matched));
+  assert(moveItems.some(item => item.precision === 'month' && item.date?.endsWith('-01')));
+  const movers = uninterrupted.people.filter(person =>
+    uninterrupted.triggers.some(trigger => trigger.kind === 'hire' && trigger.personId === person.id));
+  for (const item of moveItems) for (const person of movers) assert(!item.title.includes(person.name));
+  const deciders = sources.filter(source => source.endpoint === 'person_deciders');
+  assert(deciders.some(source => source.items.some(item => item.kind === 'decider' && item.matched)));
+  for (const source of deciders) for (const item of source.items) {
+    assert(uninterrupted.people.some(person => person.title === item.title));
+  }
+  assert(sources.some(source => source.items.some(item => !item.matched)));
+  assert(reads.every(row => rows.some(fact => fact.type === 'evidence.added' && Number(fact.seq) === Number(row.seq) + 1)));
 });
 
 test('SIGKILL and resume reuse exact completed checkpoints and preserve the final output', httpTimeout, async () => {
@@ -203,6 +248,8 @@ test('replay uses only cutoff evidence for prediction and scores both baselines 
   assert.equal(scored.intent?.runKind, 'replay');
   const replay = scored.replay!;
   assert.equal(replay.factsAfterAsOfUsed, 0);
+  assert(scored.triggers.some(trigger => trigger.kind === 'hire' && trigger.date < '2026-08-02'));
+  assert(scored.graph.edges.some(edge => edge.mechanism === 'TALENT_DRAIN'));
   assert(replay.domino.hits > 0);
   assert.equal(replay.baselineFirstOrder.predicted, scored.baseline.hiringFilterCompanyIds.length);
   assert(replay.baselineHeadcount.predicted > 0);
@@ -225,6 +272,11 @@ test('evidence recheck replays the source and adds a fixture ledger entry', http
   assert.equal(checked.ledger.at(-1)?.step, 'evidence.recheck');
   assert.equal(checked.ledger.at(-1)?.credits, 0);
   assert.equal(checked.status, 'completed');
+  const event = read(db => db.prepare("SELECT payload_json FROM events WHERE run_id = ? AND type = 'source.read' ORDER BY seq DESC LIMIT 1")
+    .get(uninterrupted.id));
+  const source = JSON.parse(event?.payload_json as string) as SourceReadEvent;
+  assert.equal(source.endpoint, 'job_search');
+  assert(source.items.some(item => item.matched));
 });
 
 test('health exposes the cache count and newest fetch time', httpTimeout, async () => {
