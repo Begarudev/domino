@@ -39,6 +39,17 @@ export const STEP_PLAIN: Record<StepName, string> = {
   draft_messages: 'Writing the intro; every fact must cite a dated source',
   approval_gate: 'Waiting for a person to approve before anything is sent',
   score_replay: 'Scoring the replay against what happened next',
+  scope_search: 'Setting the search: role families, companies of 20 to 5,000 staff, the date window',
+  pull_departures: 'Reading dated job moves: who left which company, in which role',
+  resolve_departures: 'Matching company names and checking each company’s size',
+  check_replacements: 'Checking whether anyone was hired or a job was posted to replace them',
+  detect_openings: 'Predicting openings, and holding any that look like an acqui-hire or a restructure',
+  score_openings: 'Checking the 1 Sep predictions against job posts and hires that came later',
+  fetch_profile: 'Reading the candidate’s public profile from Crustdata, with their consent',
+  parse_profile: 'Reading role family, skills and history from the profile',
+  match_openings: 'Matching the candidate against predicted openings; every fit reason cites a source',
+  draft_intro: 'Writing the intro; every fact must cite a dated source',
+  intro_gate: 'Waiting for a person to approve before the intro is sent',
 };
 
 // ---------- reading desk feed ----------
