@@ -33,3 +33,27 @@ test('dossier lists a move once, as role + initial only, and keeps the cross-com
   assert.equal(result.chains[0].side, 'effect');
   assert.equal(dossier(snap, 'co_missing'), null);
 });
+
+test('a company only in the openings scan still gets a file: O1 row from its clauses, other rules marked not evaluated', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { Store } = await import('../db.ts');
+  const { seedOpenings } = await import('./seed-fixture.ts');
+  const { companyDossier } = await import('./dossier.ts');
+  const dir = mkdtempSync(join(tmpdir(), 'domino-scan-dossier-'));
+  const store = new Store(join(dir, 'd.db'));
+  try {
+    seedOpenings(store);
+    const file = companyDossier(store, 'orbitline-fictional') ?? companyDossier(store, 'co_orbit');
+    assert.ok(file, 'scan dossier by slug or id');
+    assert.equal(file!.source, 'openings_scan');
+    assert.deepEqual(file!.rules.map(rule => rule.id), ['O1', 'R1', 'CONTAGION', 'DISPLACEMENT']);
+    assert.equal(file!.rules.find(rule => rule.id === 'CONTAGION')!.state, 'not_evaluated');
+    assert.ok(['met', 'open'].includes(file!.rules[0].state));
+    assert.ok(file!.talentFlows.every(flow => flow.direction === 'out' && !/\s\S+\s/.test(flow.initial ?? '')));
+  } finally {
+    store.sql.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

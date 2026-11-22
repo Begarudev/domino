@@ -154,7 +154,8 @@ export interface OpeningForCandidate extends Opening { fit: FitReason[]; matchSc
 // A per-company view of the latest analysis run (outbound pipeline: triggers, entities, cascade rules, targets,
 // drafts, approvals, outbox). People who moved appear only as role + initial + date.
 
-export interface DossierEvent { id: string; date: IsoDate; kind: TriggerKind; summary: string; evidenceIds: string[] }
+// 'check' = a replacement search and its record count; 'news' = a dated article.
+export interface DossierEvent { id: string; date: IsoDate; kind: TriggerKind | 'check' | 'news'; summary: string; evidenceIds: string[] }
 export interface TalentFlow {
   direction: 'in' | 'out';          // in = joined this company, out = left it
   role: string; initial: string | null; date: IsoDate; precision: 'day' | 'month';
@@ -169,8 +170,19 @@ export interface DossierOutreach {
   decider: Decider | null; draft: Draft; approvals: Approval[]; outbox: OutboxAction[];
   verifier: { verified: boolean; removed: string[]; cantVerify: { claim: string; reason: string }[] };
 }
+// One row per rule for this company: met / not met / held / open (provisional) / not evaluated, with its clauses.
+export interface DossierRule {
+  id: 'O1' | 'R1' | 'CONTAGION' | 'DISPLACEMENT';
+  name: string;
+  state: 'met' | 'not_met' | 'held' | 'open' | 'not_evaluated';
+  summary: string;
+  clauses: RuleClause[];
+}
+
 export interface CompanyDossier {
   runId: string; asOf: IsoDate | null; dataMode: DataMode; company: Company;
+  source: 'analysis_run' | 'openings_scan';  // which run the file was built from (labelled on screen)
+  rules: DossierRule[];
   timeline: DossierEvent[];         // news/posts, funding, headcount jumps, hires, departures; newest first
   jobPosts: DossierEvent[];
   talentFlows: TalentFlow[];
