@@ -107,6 +107,40 @@ not fire as of 1 Sep. With month-precision dates and the 30-day profile lag, onl
 be conclusive, and no company at 20–5,000 staff had two. The replay can't show O1 beating a baseline on this cohort,
 and we say so. Files: `docs/live/replay-2026-09-01-summary.json`, `docs/live/o1-replay-2026-09-01.json`.
 
+## 1 Sep replay in the engine (supersedes the offline replay table above)
+
+Both runs were frozen at 1 Sep 2026. Snapshot label: "Live Crustdata read 2026-11-22, filtered to facts dated on or
+before 2026-09-01; not a point-in-time index". **0 facts dated after 1 Sep** were used for any prediction
+(`factsAfterAsOfUsed: 0`). Raw counts only.
+
+**O1, `run_9b31dc6f-92f1-4b77-a787-e1e173c36bac`** (openings pipeline; 125 credits on top of the cached person pages from `run_f3226752`). Outcome: a dated job post or hire in the predicted role family at the company by 31 Oct.
+
+| Arm | Picks | Picks with the outcome by 31 Oct |
+|---|---|---|
+| O1 | **0** (0 settled, 0 provisional), 6 held | 0 |
+| Any job post in the last 30 days | 57 | 6 (median lead 6 days) |
+| Headcount +30% (monthly) | 0 | 0 |
+| Cohort base rate (20–5,000 staff on 1 Sep, ≥ 1 family departure) | 91 | 6 |
+
+Funnel: 2,457 profiles → 399 direct moves (known by 2 Aug under the 30-day lag) → 234 in or straddling the window →
+195 at 20–5,000 staff or unsized → 6 groups with ≥ 2 → 0 open, 6 held. Holds: Capital One, Clarifai and Control Plane
+AI × 2 on month-only straddles, and Control Plane AI × 2 on unknown size, because Crustdata company enrich returned
+HTTP 500 on 57 calls even after splitting batches down to single IDs. Two other groups passed every guard but
+had replacements (41 family posts or hires between their last departure month and 1 Sep), so they correctly became
+no opening. Run `run_f3226752` is **not reportable**: an enrich 500 left every company unsized, and the batch
+split was added because of it.
+
+**Company analysis (outbound pipeline), `run_1e80e15c-6d5b-4e57-9bd5-d94ee3929ea9`** (53.5 credits). Outcome: the
+frozen 60-day serving/infra post or hire.
+
+| Arm | Picks | Hits |
+|---|---|---|
+| DOMINO cross-company (DISPLACEMENT / CONTAGION / R1) | 2 (Mindrift, Ruby Labs; both DISPLACEMENT: named OpenRouter in a job post before Stripe agreed to acquire it, 19 Aug) | 0 |
+| First-order (hiring filter) | 0 | 0 |
+| Headcount +30% | 0 | 0 |
+
+195 DISPLACEMENT edges came from OpenRouter mentions; CONTAGION produced 0 edges after domino-data's tightening; R1 0.
+
 ## Credits used (live Crustdata, this workstream)
 
 | Read | Credits |
@@ -117,7 +151,9 @@ and we say so. Files: `docs/live/replay-2026-09-01-summary.json`, `docs/live/o1-
 | O1 no-replacement checks, news searches, job and post probes | 44.9 |
 | Two end-to-end live app runs (run_f8a9cf1a, run_b42018fe; pre-pivot DISPLACEMENT run) | 85.5 |
 | News worker probes (branch livedata-news) | ≈ 5 |
-| **Total** | **≈ 1,559** |
+| O1 engine scans: live run_0c071dae (339.3), replay run_f3226752 (996.7, not reportable), replay run_9b31dc6f (125.1) | 1,461.1 |
+| Outbound replay run_1e80e15c | 53.5 |
+| **Total** | **≈ 3,074** |
 
 Figures are summed from the `x-credits-used` header on each response.
 
