@@ -117,11 +117,13 @@ const monthLabel = (day: IsoDate) =>
 const dayLabel = (day: IsoDate) =>
   new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-/** Where an interval sits against the drain window (asOf − 90, asOf]. */
+/** Where an interval sits against the drain window (asOf − 90, asOf]. A move observed by asOf happened by asOf, so a
+ *  month-level date in the asOf month ("Nov 2026" read on 22 Nov) ends at asOf, not on the 30th: only the window's
+ *  start edge can leave a month unsettled. */
 export function drainWindow(left: Interval, asOf: IsoDate): 'inside' | 'straddles' | 'outside' {
   const start = shiftDays(asOf, -DRAIN_DAYS);
   if (left[1] <= start || left[0] > asOf) return 'outside';
-  return left[0] > start && left[1] <= asOf ? 'inside' : 'straddles';
+  return left[0] > start ? 'inside' : 'straddles';
 }
 
 /** Departures that count for O1, grouped by company and family. Departures whose move is not yet known are dropped. */
