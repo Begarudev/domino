@@ -114,44 +114,35 @@ tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
   .rd-ask input { width: 240px; }
 }
 
-/* polish pass: the log reads as one data grid. Sticky muted heads while the page scrolls, one 13px sans size for every
-   cell (dates in tabular figures, only the domain stays mono), 10px/16px cells, a quiet hover, tabular funnel counts. */
-.funnel b { font-variant-numeric: tabular-nums; }
-.rd-table thead th {
-  position: sticky; top: 0; z-index: 1; background: var(--surface); font-size: 12px; font-weight: 500; color: var(--ink-3);
-  text-transform: none; letter-spacing: 0; padding-top: 10px; padding-bottom: 10px; box-shadow: inset 0 -1px 0 var(--rule-2); white-space: nowrap;
-}
-.rd-table { font-size: 13px; }
-.rd-table td { padding-top: 10px; padding-bottom: 10px; vertical-align: top; }
-.rd-date { font-family: var(--sans); font-size: 13px; letter-spacing: 0; color: var(--ink-2); }
+/* polish pass on p5's Attio tokens: the log is one data grid. The shell's table.t supplies the sticky 36px head and
+   hover; rows here are 40px and single-line (full title and domain on hover), one sans size per cell (dates tabular,
+   only the domain mono), decisions as small rounded pills with a state dot (teal = kept, meaning only), 10px cards. */
+.funnel b { font-variant-numeric: tabular-nums; letter-spacing: var(--track-tight); font-weight: var(--w-semi); }
+.rd-panel, .rd-funnel { border-radius: var(--r-lg); }
+.rd-funnel > div:first-child { border-radius: var(--r-lg) 0 0 var(--r-lg); }
+.rd-funnel > div:last-child { border-radius: 0 var(--r-lg) var(--r-lg) 0; }
+.rd-table { font-size: var(--fs-ui); }
+.rd-table td { padding-top: 10px; padding-bottom: 10px; line-height: var(--lh-body); vertical-align: middle; }
+.rd-table td.rd-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.rd-src { font-size: var(--fs-cap); }
+.rd-date { font-family: var(--sans); font-size: var(--fs-ui); letter-spacing: 0; color: var(--ink-2); }
 .rd-table .c-dec { width: 150px; }
 .rd-table .c-date { width: 96px; }
-.rd-table tbody tr { transition: background 150ms var(--ease); }
-.rd-table tbody tr.rd-open:hover { background: var(--row-hover); }
 .rd-open:focus-visible { outline: 2px solid var(--ink-3); outline-offset: -2px; }
 .rd-showing, .rd-seg button span { font-variant-numeric: tabular-nums; }
+.rd-seg { border-radius: var(--r); }
 .rd-seg button { padding: 3px 10px; }
-/* Attio direction: compact single-line rows (full title on hover), decisions and source types as small rounded pills
-   with a state dot, hairline 10px cards. The teal dot is kept for meaning only (kept); discards stay neutral. */
-.rd-panel, .rd-funnel { border-radius: 10px; }
-.rd-funnel > div:first-child { border-radius: 10px 0 0 10px; }
-.rd-funnel > div:last-child { border-radius: 0 10px 10px 0; }
-.rd-table td { padding-top: 9px; padding-bottom: 9px; vertical-align: middle; }
-.rd-table td.rd-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
-.rd-src { font-size: 12px; }
-.rd-pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px;
-  font-size: 12px; font-weight: 500; color: var(--ink); background: var(--surface); white-space: nowrap;
-}
-.rd-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); flex: none; }
-.rd-pill-kept i { background: var(--acc); }
-.rd-pill-provisional { border-style: dashed; border-color: var(--acc); }
-.rd-pill-provisional i { background: var(--acc); }
-.rd-pill-discarded { color: var(--ink-2); }
-.rd-pill-discarded i { background: transparent; border: 1.5px solid var(--ink-3); width: 7px; height: 7px; box-sizing: border-box; }
-.rd-pill-held, .rd-pill-inconclusive { color: var(--ink-2); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 5px); }
-.rd-sub .rd-pill { height: 20px; }
+.rd-sub td { padding-top: 6px; padding-bottom: 6px; }
 @media (min-width: 1800px) {
-  .rd-table { font-size: 14px; }
-  .rd-date { font-size: 14px; }
+  .rd-table, .rd-date { font-size: var(--fs-body); }
 }
+
+/* Attio SPEC + council r1: hairline column dividers, 38-40px rows (a 20px shared .ctag inside 9px cell padding), the
+   domain in sans like every cell. Chip colours come from styles/colors.css (decision tone, source type). */
+.rd-table th + th, .rd-table td + td { border-left: 1px solid var(--rule-2); }
+.rd-table td { padding-top: 9px; padding-bottom: 9px; }
+.rd-table .rd-sub td { padding-top: 6px; padding-bottom: 6px; }
+.rd-table .ctag { height: 20px; }
+.rd-table .c-src { width: 140px; }
+.rd-dom { font-family: var(--sans); font-size: var(--fs-ui); letter-spacing: 0; }
+

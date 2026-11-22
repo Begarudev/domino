@@ -287,7 +287,7 @@ const Row = memo(function Row({ r, settled }: { r: LogRow; settled: boolean }) {
   return (
     <tr ref={ref} data-testid="reading-row" data-decision={r.decision} className={[open && 'rd-open', r.sub && 'rd-sub'].filter(Boolean).join(' ') || undefined}
       onClick={open} tabIndex={open ? 0 : undefined} onKeyDown={open ? (e) => { if (e.key === 'Enter') open(); } : undefined}>
-      <td className="rd-src">{r.source}</td>
+      <td className="rd-src"><span className={`ctag ${srcClass(r.source)}`}>{r.source}</span></td>
       <td className="rd-title" title={r.title}>{r.title}</td>
       <td className="rd-date" title={r.monthLevel ? 'month-level date' : undefined}>{r.date}</td>
       <td className={r.domain ? 'mono rd-dom' : 'faint'} title={r.domain ?? 'no domain on record'}>{r.domain ?? '–'}</td>
@@ -304,7 +304,21 @@ function Clause({ text }: { text: string }) {
   return <span>{text}</span>;
 }
 
+/** Decision and source chips use the shared colour classes (styles/colors.css): one hue per meaning on every screen. */
+const TONE: Record<Decision, string> = {
+  kept: 'tone-met', provisional: 'tone-provisional', discarded: 'tone-not-met', held: 'tone-held', inconclusive: 'tone-not-evaluated',
+};
 function DecisionMark({ d }: { d: Decision }) {
   const label = d === 'kept' ? 'kept at this step' : d === 'inconclusive' ? 'not conclusive' : d;
-  return <span className={`rd-pill rd-pill-${d}`}><i aria-hidden />{label}</span>;
+  return <span className={`ctag ${TONE[d]}`}>{label}</span>;
+}
+
+function srcClass(source: string): string {
+  if (/^person/i.test(source)) return 'src-person';
+  if (/^company/i.test(source)) return 'src-company';
+  if (/^job/i.test(source)) return 'src-job';
+  if (/news/i.test(source)) return 'src-news';
+  if (/^web/i.test(source)) return 'src-web';
+  if (/rule/i.test(source)) return 'rule-o1';
+  return '';
 }

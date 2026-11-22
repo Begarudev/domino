@@ -93,7 +93,7 @@ function DepRow({ r, start }: { r: DepartureRow; start: string | null }) {
       <td className={s}>{r.d.toCompanyName ?? 'not stated'}</td>
       <td className={s} data-num>{r.month ? fmtDate(r.month, true) : 'undated'}</td>
       <td>
-        {r.conclusive === true && <span className="rec-pill"><i aria-hidden />conclusive</span>}
+        {r.conclusive === true && <span className="ctag tone-met">conclusive</span>}
         {r.conclusive === false && <span className="muted">{r.reason}{start ? ` (${start})` : ''}</span>}
         {r.conclusive === null && <span className="faint">not assessed</span>}
       </td>
