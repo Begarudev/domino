@@ -3,8 +3,9 @@
 Every number on this page comes from live Crustdata reads made on 22 Nov 2026 between 13:50 and 14:40 IST. Each
 response was cached with its retrieval time and is labelled **live-cached**. Redacted snapshots are committed under
 `docs/live/`. Raw person pages stay out of git: people appear only as role, first initial and month. No names,
-person IDs or profile URLs are committed. Rules were fixed before counting, and the O1 semantics were fixed at 14:14
-IST, before any replay outcome was read.
+person IDs or profile URLs are committed. R1's threshold was fixed before its count. O1 was fixed at 14:08 IST, after seeing the live departure counts and
+before looking at any replay outcomes, and its month-interval semantics were fixed at 14:14 IST, also before any replay
+outcome was read.
 
 ## Sources and filters (checked against docs.crustdata.com)
 
@@ -32,7 +33,7 @@ IST, before any replay outcome was read.
 
 ## Rule O1, live
 
-O1 (pre-registered): at company A (20–5,000 staff), if there are ≥ 2 conclusive dated departures in role family F
+O1 (rule fixed at 14:08 IST, after seeing the live departure counts and before looking at any replay outcomes): at company A (20–5,000 staff), if there are ≥ 2 conclusive dated departures in role family F
 within 90 days, and no dated replacement hire or job post for F at A within 30 days of the last departure, then
 predict an opening for F at A. False-drain guards (acquisition or acqui-hire, shared parent, > 40% of headcount, an
 ambiguous company ID, month-only dates that can't settle the window, unrecognised titles) send a candidate to Hold.
