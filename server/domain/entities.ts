@@ -2,6 +2,12 @@ import type { Company, KeptApartDecision, MergeDecision, Person } from '../../sh
 import { companyNameKey, normalizeDomain, normalizeLinkedIn, normalizeName, relatedDomains, stableId } from './facts.ts';
 import type { CompanyMention, PersonMention, ResolvedCompany } from './types.ts';
 
+const PLACEHOLDER_NAME = /^(self[- ]?employed|freelanc(e|er|ing)|independent( consultant)?|stealth( mode)?( startup)?|confidential|n\/?a|unknown|various)$/i;
+const SHARED_HOSTS = /^(linkedin\.com|lnkd\.in|links\.[a-z0-9-]+\.[a-z]+|sites\.google\.com|google\.com|github\.io|medium\.com|notion\.site|wixsite\.com|linktr\.ee|bit\.ly|facebook\.com|twitter\.com|x\.com)$/i;
+function usableDomain(domain: string | null): string | null {
+  return domain && !SHARED_HOSTS.test(domain) ? domain : null;
+}
+
 class Groups<T extends { key: string }> {
   parents = new Map<string, string>();
   members = new Map<string, T[]>();
@@ -60,9 +66,14 @@ export function resolveEntities(mentions: CompanyMention[], people: PersonMentio
   const idMap: Record<string, string> = Object.create(null);
   const merges: MergeDecision[] = [];
   const keptApart: KeptApartDecision[] = [];
-  const domainOf = (mention: CompanyMention) => normalizeDomain(mention.domain);
-  const idOf = (mention: CompanyMention) => mention.crustdataId != null && String(mention.crustdataId).trim() ? String(mention.crustdataId) : null;
-  const linkedinOf = (mention: CompanyMention) => normalizeLinkedIn(mention.linkedinUrl);
+  // Placeholder identifiers must never join records: Crustdata uses id 0 for unknown employers, people list
+  // "Self-employed"/"Freelance", and some websites are shared hosts (linkedin.com, links.*, google sites).
+  const domainOf = (mention: CompanyMention) => usableDomain(normalizeDomain(mention.domain));
+  const idOf = (mention: CompanyMention) => {
+    const id = mention.crustdataId != null ? String(mention.crustdataId).trim() : '';
+    return id && !/^0+$/.test(id) && !PLACEHOLDER_NAME.test(mention.name ?? '') ? id : null;
+  };
+  const linkedinOf = (mention: CompanyMention) => PLACEHOLDER_NAME.test(mention.name ?? '') ? null : normalizeLinkedIn(mention.linkedinUrl);
   for (const [name, keyOf] of [
     ['Crustdata id', idOf], ['domain', domainOf], ['LinkedIn company URL', linkedinOf],
   ] as const) {

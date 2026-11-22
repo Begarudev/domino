@@ -1,99 +1,101 @@
-import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { after, before, test } from 'node:test';
+import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import { Store } from '../db.ts';
-import { ToolContext } from '../runtime/tool.ts';
-import { modelClient } from './client.ts';
+// Configure the OpenAI provider before env.ts computes `config` at import time.
+process.env.OPENAI_API_KEY = 'sk-test-not-a-real-key';
+process.env.ANTHROPIC_API_KEY = '';
+delete process.env.OPENAI_MODEL;
+delete process.env.OPENAI_REASONING_EFFORT;
 
-const dir = mkdtempSync(join(tmpdir(), 'domino-llm-test-'));
-const store = new Store(join(dir, 'test.db'));
-const llm = 'openai:configured-openai-model';
-const previousKey = process.env.OPENAI_API_KEY;
-before(() => { process.env.OPENAI_API_KEY = 'mock-openai-credential'; });
-const completion = {
-  purpose: 'parse' as const, system: 'Return JSON', user: 'Testing model calls', maxTokens: 1024, json: true,
-};
+const { Store } = await import('../db.ts');
+const { defaultLimits } = await import('../env.ts');
+const { ToolContext } = await import('../runtime/tool.ts');
+const { modelClient, openaiReasoning } = await import('./client.ts');
 
-function create(id: string) {
-  store.createRun(id, 'Fixture test', 'fixture', llm, { maxCredits: 10, maxModelUsd: 1, maxSeconds: 30 }, {});
-  return modelClient(new ToolContext(store, id, 'parse_request'));
+const realFetch = globalThis.fetch;
+let calls: { url: string; body: Record<string, unknown> }[] = [];
+let store: InstanceType<typeof Store>;
+let run = 0;
+
+function mockFetch(respond: (signal: AbortSignal) => Promise<Response>) {
+  calls = [];
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+    return respond(init!.signal!);
+  }) as typeof fetch;
 }
 
-after(() => {
-  if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
-  else process.env.OPENAI_API_KEY = previousKey;
-  store.sql.close();
-  rmSync(dir, { recursive: true, force: true });
-});
-
-test('OpenAI uses Chat Completions with estimated pricing for a custom model', async t => {
-  const fetch = t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
-    assert.equal(url, 'https://api.openai.com/v1/chat/completions');
-    assert.equal(new Headers(init.headers).get('authorization'), 'Bearer mock-openai-credential');
-    const body = JSON.parse(init.body as string);
-    assert.equal(body.model, 'configured-openai-model');
-    assert.equal(body.max_completion_tokens, 1024);
-    assert.deepEqual(body.response_format, { type: 'json_object' });
-    assert.equal(body.temperature, undefined);
-    assert.equal(body.max_tokens, undefined);
-    return Response.json({
-      choices: [{ finish_reason: 'stop', message: { content: '{"buyerProfile":"AI companies"}' } }],
-      usage: { prompt_tokens: 100, completion_tokens: 40 },
-    });
-  });
-  const client = create('completed');
-  const result = await client.complete(completion);
-  assert.equal(result?.text, '{"buyerProfile":"AI companies"}');
-  assert.equal(fetch.mock.callCount(), 1);
-  const [entry] = store.getLedger('completed');
-  assert.equal(entry.provider, 'openai');
-  assert.equal(entry.endpoint, 'configured-openai-model (estimated)');
-  assert.equal(entry.inputTokens, 100);
-  assert.equal(entry.outputTokens, 40);
-  assert.equal(entry.usd, (100 * 0.25 + 40 * 2.00) / 1_000_000);
-});
-
-for (const status of [400, 404]) {
-  test(`two consecutive OpenAI model_not_found responses at HTTP ${status} disable calls for that run`, async t => {
-    const fetch = t.mock.method(globalThis, 'fetch', async () =>
-      Response.json({ error: { code: 'model_not_found', message: 'Model unavailable for mock-openai-credential' } }, { status }));
-    const id = `missing-${status}`;
-    assert.equal(await create(id).complete(completion), null);
-    assert.equal(store.requireRun(id).llm_hard_failures, 1);
-    assert.equal(store.requireRun(id).llm, llm);
-    const later = modelClient(new ToolContext(store, id, 'draft_messages'));
-    assert.equal(await later.complete({ ...completion, purpose: 'draft' }), null);
-    assert.equal(await later.complete({ ...completion, purpose: 'draft' }), null);
-    assert.equal(fetch.mock.callCount(), 2);
-    assert.equal(store.getLedger(id).length, 2);
-    assert.equal(store.requireRun(id).llm, 'template');
-    const events = store.getEvents(id, 0);
-    const warnings = events.flatMap(row => row.event.type === 'log' && row.event.level === 'warn' ? [row.event.message] : []);
-    assert.equal(warnings.length, 2);
-    assert.match(warnings[1], /two consecutive hard failures/);
-    assert(warnings.every(message => message.includes(`HTTP ${status} Model unavailable for [redacted]`)));
-    assert.equal(store.getLedger(id)[0].error, `HTTP ${status} Model unavailable for [redacted]`);
-    assert(!JSON.stringify(events).includes('mock-openai-credential'));
-  });
+function context() {
+  const id = `run_test_${++run}`;
+  store.createRun(id, 'test request', 'fixture', 'openai:gpt-5-mini', defaultLimits, {});
+  return new ToolContext(store, id, 'draft_messages');
 }
 
+const request = { purpose: 'draft', system: 'Write.', user: 'Draft one line.', maxTokens: 400, json: true } as const;
 
-test('a successful OpenAI response resets the persisted hard failure streak', async t => {
-  let calls = 0;
-  t.mock.method(globalThis, 'fetch', async () => ++calls % 2 ? Response.json({ message: 'Invalid request' }, { status: 400 })
-    : Response.json({
-      choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }],
-      usage: { prompt_tokens: 100, completion_tokens: 40 },
+beforeAll(() => { store = new Store(':memory:'); });
+afterEach(() => {
+  globalThis.fetch = realFetch;
+  delete process.env.OPENAI_TIMEOUT_MS;
+});
+
+describe('openai adapter', () => {
+  test('asks gpt-5 models for minimal reasoning and sends no unsupported sampling params', async () => {
+    mockFetch(async () => Response.json({
+      model: 'gpt-5-mini-2025-08-07',
+      usage: { prompt_tokens: 40, completion_tokens: 20 },
+      choices: [{ finish_reason: 'stop', message: { content: '{"subject":"Hi"}' } }],
     }));
-  const client = create('reset');
-  assert.equal(await client.complete(completion), null);
-  assert.equal(store.requireRun('reset').llm_hard_failures, 1);
-  assert.equal((await client.complete(completion))?.text, '{"ok":true}');
-  assert.equal(store.requireRun('reset').llm_hard_failures, 0);
-  assert.equal(await client.complete(completion), null);
-  assert.equal(store.requireRun('reset').llm_hard_failures, 1);
-  assert.equal(store.requireRun('reset').llm, llm);
+    const ctx = context();
+    const result = await modelClient(ctx).complete(request);
+    expect(result).toEqual({ text: '{"subject":"Hi"}', model: 'openai:gpt-5-mini-2025-08-07' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://api.openai.com/v1/chat/completions');
+    expect(calls[0].body).toMatchObject({ model: 'gpt-5-mini', reasoning_effort: 'minimal', max_completion_tokens: 400 });
+    expect(calls[0].body).not.toHaveProperty('temperature');
+    expect(calls[0].body).not.toHaveProperty('max_tokens');
+    const [entry] = store.getLedger(ctx.runId);
+    expect(entry).toMatchObject({ provider: 'openai', status: 'ok', inputTokens: 40, outputTokens: 20 });
+    expect(entry.usd).toBeCloseTo((40 * 0.25 + 20 * 2) / 1e6, 12);
+  });
+
+  test('picks an effort each model family accepts', () => {
+    expect(openaiReasoning('gpt-5-mini')).toEqual({ reasoning_effort: 'minimal' });
+    expect(openaiReasoning('gpt-5-nano-2025-08-07')).toEqual({ reasoning_effort: 'minimal' });
+    expect(openaiReasoning('gpt-5.4-mini')).toEqual({ reasoning_effort: 'low' });
+    expect(openaiReasoning('gpt-4.1-mini')).toEqual({});
+  });
+
+  test('a 5xx retries once, then falls back to the template with every attempt in the ledger', async () => {
+    mockFetch(async () => new Response('{"error":{"message":"overloaded"}}', { status: 503 }));
+    const ctx = context();
+    expect(await modelClient(ctx).complete(request)).toBeNull();
+    expect(calls).toHaveLength(2);
+    const ledger = store.getLedger(ctx.runId);
+    expect(ledger.map(entry => [entry.status, entry.attempt])).toEqual([['error', 1], ['error', 2]]);
+    const events = store.getEvents(ctx.runId, 0).map(stored => stored.event);
+    expect(events.filter(event => event.type === 'tool.retry')).toHaveLength(1);
+    expect(events.some(event => event.type === 'log' && /deterministic output/.test(event.message))).toBe(true);
+  });
+
+  test('a 400 is not retried', async () => {
+    mockFetch(async () => new Response('{"error":{"code":"unsupported_parameter"}}', { status: 400 }));
+    const ctx = context();
+    expect(await modelClient(ctx).complete(request)).toBeNull();
+    expect(calls).toHaveLength(1);
+    expect(store.getLedger(ctx.runId)).toHaveLength(1);
+  });
+
+  test('a timeout retries once and still charges the ledger for each aborted request', async () => {
+    process.env.OPENAI_TIMEOUT_MS = '40';
+    mockFetch(signal => new Promise<Response>((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }));
+    const ctx = context();
+    expect(await modelClient(ctx).complete(request)).toBeNull();
+    expect(calls).toHaveLength(2);
+    const ledger = store.getLedger(ctx.runId);
+    expect(ledger.map(entry => entry.status)).toEqual(['timeout', 'timeout']);
+    for (const entry of ledger) expect(entry.usd).toBeGreaterThan(0);
+    expect(store.budget(ctx.runId).used.modelUsd).toBeCloseTo(ledger[0].usd * 2, 12);
+  });
 });

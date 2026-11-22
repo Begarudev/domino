@@ -2,10 +2,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { NonsenseError } from '../domain/types.ts';
 import { ANTHROPIC_MODEL, config, redactSecrets } from '../env.ts';
-import { BudgetError, httpError, networkError, providerFetch, responseError, responseJson, sanitize, ToolError } from '../runtime/tool.ts';
+import { BudgetError, httpError, providerFetch, responseJson, sanitize, ToolError } from '../runtime/tool.ts';
 import type { ToolContext } from '../runtime/tool.ts';
 
-// USD per million tokens, cached 2026-11-03. check current pricing before changing models.
+// USD per million tokens, cached 2026-11-03. Check provider rate cards before changing models.
 const prices: Record<string, readonly [number, number]> = {
   'claude-opus-5-5': [4, 20],
   'claude-opus-5': [4, 20],
@@ -14,14 +14,13 @@ const prices: Record<string, readonly [number, number]> = {
   'claude-sonnet-5': [1, 5],
   'claude-haiku-5-5': [0.1, 0.5],
   'gpt-5-mini': [0.25, 2],
+  'gpt-5.4-mini': [0.75, 4.5],
+  'gpt-5.4-nano': [0.2, 1.25],
 };
-
-const baseModel = (model: string) => model.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, '');
-const openaiPrice = (model: string) => baseModel(model) === 'gpt-5-mini' ? prices['gpt-5-mini'] : undefined;
 
 function price(model: string, input: number, output: number) {
   const [inRate, outRate] = model.startsWith('claude-haiku-5-5') && input > 100_000
-    ? [0.5, 2.5] : prices[baseModel(model)] ?? [10, 50];
+    ? [0.5, 2.5] : prices[model] ?? prices[model.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, '')] ?? [10, 50];
   return (input * inRate + output * outRate) / 1_000_000;
 }
 
@@ -48,26 +47,21 @@ interface CompletionRequest {
 }
 
 export interface Completion { text: string; model: string }
-let anthropic: Anthropic | undefined;
-function updateOpenAIHealth(ctx: ToolContext, failure?: ToolError) {
-  ctx.store.transaction(() => {
-    const run = ctx.store.requireRun(ctx.runId);
-    const status = failure?.httpStatus;
-    const hard = status !== undefined && status >= 400 && status < 500 && ![408, 409, 429].includes(status);
-    const streak = hard ? run.llm_hard_failures + 1 : 0;
-    const disabled = streak >= 2;
-    if (streak !== run.llm_hard_failures) {
-      ctx.store.sql.prepare('UPDATE runs SET llm_hard_failures = ?, llm = ? WHERE id = ?')
-        .run(streak, disabled ? 'template' : run.llm, ctx.runId);
-    }
-    if (failure) {
-      const message = disabled
-        ? `OpenAI unavailable for this run after two consecutive hard failures. ${failure.message}`
-        : `OpenAI request failed. ${failure.message}. Using deterministic output for this step.`;
-      ctx.store.recordEvent(ctx.runId, { type: 'log', level: 'warn', message });
-    }
-  });
+
+// gpt-5 models reason before answering, and reasoning tokens count against max_completion_tokens.
+// At the default (medium) effort a short draft spent 448 of 531 tokens reasoning and took 7.4s; the app's
+// drafts ran past the 12s call timeout every time. Parsing and drafting need no deliberation.
+export function openaiReasoning(model: string): { reasoning_effort?: string } {
+  const override = process.env.OPENAI_REASONING_EFFORT?.trim();
+  if (override) return override === 'off' ? {} : { reasoning_effort: override };
+  if (/^gpt-5(?:-|$)/.test(model)) return { reasoning_effort: 'minimal' };
+  if (/^(?:gpt-5\.|o\d)/.test(model)) return { reasoning_effort: 'low' };
+  return {};
 }
+
+// One retry. With minimal effort a parse returns in about 2s; the limits leave room for a slow draft.
+const modelTimeoutMs = { parse: 20_000, draft: 30_000 } as const;
+let anthropic: Anthropic | undefined;
 
 function textResult(text: string, model: string, json?: boolean): Completion {
   const cleaned = redactSecrets(text.trim()).replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, '$1');
@@ -86,24 +80,19 @@ function textResult(text: string, model: string, json?: boolean): Completion {
 export function modelClient(ctx: ToolContext) {
   return {
     async complete({ purpose, system, user, maxTokens, json }: CompletionRequest): Promise<Completion | null> {
-      const { llm } = ctx.store.requireRun(ctx.runId);
-      const [provider, ...modelParts] = llm.split(':');
-      if (provider !== 'openai' && provider !== 'anthropic') return null;
-      const key = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY;
-      if (!key) return null;
-      const model = modelParts.join(':') || (provider === 'anthropic' ? ANTHROPIC_MODEL : config.openaiModel);
-      const estimated = provider === 'openai' && !openaiPrice(model);
-      const billingModel = estimated ? 'gpt-5-mini' : model;
+      const provider = config.llm;
+      if (provider === 'template') return null;
+      const model = provider === 'anthropic' ? ANTHROPIC_MODEL : config.openaiModel;
       system = redactSecrets(json ? system + '\nReply with a single JSON object.' : system);
       user = redactSecrets(user);
       const estimateInput = Buffer.byteLength(system + user) + 128;
-      const estimateUsd = price(billingModel, estimateInput, maxTokens)
+      const estimateUsd = price(model, estimateInput, maxTokens)
         + (provider === 'anthropic' ? price('claude-opus-4-8', estimateInput, maxTokens) : 0);
       try {
-        const completion = await ctx.tool<Completion | null>({
-          provider, endpoint: estimated ? `${model} (estimated)` : model, path: model, body: { purpose, system, user, maxTokens, json },
+        return await ctx.tool<Completion | null>({
+          provider, endpoint: model, body: { purpose, system, user, maxTokens, json },
           attempt: {
-            mode: 'model', estimate: { usd: estimateUsd }, timeoutMs: 60_000,
+            mode: 'model', estimate: { usd: estimateUsd }, timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || modelTimeoutMs[purpose], maxAttempts: 2,
             inject: () => { throw new NonsenseError('Expected a message object'); },
             async run(signal, report) {
               if (provider === 'anthropic') {
@@ -119,10 +108,8 @@ export function modelClient(ctx: ToolContext) {
                 }, { signal }).catch((error: unknown) => {
                   signal.throwIfAborted();
                   if (error instanceof Anthropic.APIConnectionTimeoutError) throw new ToolError('Model request timed out', 'timeout', 'timeout');
-                  if (error instanceof Anthropic.APIConnectionError) throw networkError(error);
-                  if (error instanceof Anthropic.APIError && error.status) {
-                    throw httpError(error.status, error.error, error.headers?.get('Retry-After'));
-                  }
+                  if (error instanceof Anthropic.APIConnectionError) throw new ToolError('Provider network failure', 'network');
+                  if (error instanceof Anthropic.APIError && error.status) throw httpError(error.status);
                   if (error instanceof SyntaxError) throw new NonsenseError('Invalid model response');
                   throw new ToolError('Anthropic request failed');
                 });
@@ -156,20 +143,22 @@ export function modelClient(ctx: ToolContext) {
 
               const response = await providerFetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST', signal, redirect: 'error',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
                 body: JSON.stringify({
                   model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-                  max_completion_tokens: maxTokens,
-                  ...(/^gpt-5(?:[.-]|$)/.test(model) ? { reasoning_effort: 'minimal' } : {}),
+                  max_completion_tokens: maxTokens, ...openaiReasoning(model),
                   ...(json ? { response_format: { type: 'json_object' } } : {}),
                 }),
               });
-              if (!response.ok) throw await responseError(response);
+              if (!response.ok) {
+                void response.body?.cancel().catch(() => {});
+                throw httpError(response.status);
+              }
               const raw = sanitize(await responseJson(response));
               const usage = z.object({ usage: openaiUsage }).safeParse(raw);
               if (!usage.success) throw new NonsenseError('Missing model usage');
               const { prompt_tokens: input, completion_tokens: output } = usage.data.usage;
-              report({ inputTokens: input, outputTokens: output, usd: price(billingModel, input, output) });
+              report({ inputTokens: input, outputTokens: output, usd: price(model, input, output) });
               const message = openaiChoice.safeParse(raw);
               if (!message.success) throw new NonsenseError('Missing model completion');
               const choice = message.data.choices[0];
@@ -178,14 +167,10 @@ export function modelClient(ctx: ToolContext) {
             },
           },
         });
-        if (provider === 'openai') updateOpenAIHealth(ctx);
-        return completion;
       } catch (error) {
         if (error instanceof BudgetError) throw error;
         if (!(error instanceof ToolError)) throw error;
-        if (provider === 'openai') updateOpenAIHealth(ctx, error);
-        else ctx.store.appendEvent(ctx.runId, { type: 'log', level: 'warn',
-          message: `Anthropic request failed. ${error.message}. Using deterministic output for this step.` });
+        ctx.store.appendEvent(ctx.runId, { type: 'log', level: 'warn', message: 'Model unavailable. Using deterministic output.' });
         return null;
       }
     },

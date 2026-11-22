@@ -150,6 +150,7 @@ interface Attempt<T> {
   mode: LedgerEntry['mode'];
   estimate?: AttemptCost;
   timeoutMs?: number;
+  maxAttempts?: number;
   run: (signal: AbortSignal, report: (cost: AttemptCost) => void) => Promise<T>;
   inject: (raw: unknown) => T;
 }
@@ -342,7 +343,7 @@ export class ToolContext {
     const paid = mode === 'live' || mode === 'model';
     const requestHash = hash((call.path ?? call.endpoint) + canonicalJson(call.body));
     const chaos = this.recheck ? {} : decode<ChaosConfig>(this.store.requireRun(this.runId).chaos_json);
-    let maxAttempts = 3;
+    let maxAttempts = call.attempt.maxAttempts ?? 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const matches = (names?: string[]) => names?.some(name => name === call.endpoint || name === call.path);
       const injectTimeout = attempt === 1 && Boolean(matches(chaos.timeoutOnce));
@@ -398,6 +399,7 @@ export class ToolContext {
     let output: T | undefined;
     let failure: ToolError | undefined;
     let budgetFailure: BudgetError | undefined;
+    let startedRequest = false;
     try {
       if (injected && injectTimeout) {
         await this.wait(1200);
@@ -405,13 +407,19 @@ export class ToolContext {
       }
       const wallMs = this.remainingSeconds() * 1000;
       output = injected ? call.attempt.inject(garbage) : await withTimeout(
-        Math.max(1, Math.min(timeoutMs, Math.ceil(wallMs))), this.signal, signal =>
-          call.attempt.run(signal, reported => Object.assign(cost, reported)),
+        Math.max(1, Math.min(timeoutMs, Math.ceil(wallMs))), this.signal, signal => {
+          startedRequest = true;
+          return call.attempt.run(signal, reported => Object.assign(cost, reported));
+        },
         wallMs <= timeoutMs ? new BudgetError('seconds') : timeoutError,
       );
     } catch (error) {
       budgetFailure = error instanceof BudgetError ? error : undefined;
       failure = budgetFailure ? new ToolError(budgetFailure.message, undefined, 'timeout') : classify(error);
+    }
+    // The provider can still bill a request after the client aborts without receiving usage.
+    if (startedRequest && mode === 'model' && failure?.ledgerStatus === 'timeout' && !cost.usd) {
+      cost.usd = call.attempt.estimate?.usd ?? 0;
     }
     const latencyMs = Math.round(performance.now() - start);
     const charge = this.store.transaction(() => {
