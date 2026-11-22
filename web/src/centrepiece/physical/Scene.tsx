@@ -242,7 +242,7 @@ function Cards({ layout, hud, snap }: { layout: TableLayout; hud: Hud; snap: Run
 function RowLabel({ layout, hud }: { layout: TableLayout; hud: Hud }) {
   const phase = useHud(hud, (s) => s.phase);
   const base = layout.tiles.filter((t) => t.role === 'baseline');
-  if (!base.length || phase === 'idle') return null;
+  if (!base.length || (phase !== 'score' && phase !== 'done')) return null;
   const x = Math.max(...base.map((t) => t.pos[0])) + 1.0;
   return (
     <Html position={[x, 0.2, base[0].pos[1]]} center={false} zIndexRange={[10, 0]} style={{ pointerEvents: 'none', transform: 'translate(0, -50%)' }}>
@@ -465,7 +465,7 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
     if (H.phase === 'score' || H.phase === 'done' || reducedMotion) {
       // fit the table into the left ~66% of the frame; the score column owns the rest
       const tanH = Math.tan(THREE.MathUtils.degToRad(17));
-      const usable = 0.64;
+      const usable = 0.6;
       const dist = Math.max((spanZ * 0.5 * 0.94) / (tanH * 0.8), (spanX * 0.5) / (tanH * aspect * usable)) * 1.05;
       const visW = 2 * dist * tanH * aspect;
       const shift = visW * (0.5 - usable / 2) * 0.92;

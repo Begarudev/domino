@@ -231,7 +231,7 @@ export function buildLayout(snap: RunSnapshot): TableLayout {
       else samples[samples.length - 1] = { pos: p3, dir: b.dir };
     }
     const spacers: SpacerSpec[] = samples.map((s, idx) => ({ edgeId: e.id, index: idx, pos: s.pos, dir: s.dir, last: idx === samples.length - 1 }));
-    lanes.push({ edge: e, from: a.key, to: b.key, spacers, mid: bezier(p0, p1, p2, p3, 0.5) });
+    lanes.push({ edge: e, from: a.key, to: b.key, spacers, mid: bezier(p0, p1, p2, p3, 0.62) });
   }
 
   // Baseline lane: the hiring filter's picks, a straight row along the front edge. No chain feeds them.

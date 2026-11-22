@@ -89,7 +89,7 @@
 
 .dp-score {
   position: absolute; right: calc(var(--dp-u) * 1.4); top: 50%; transform: translateY(-46%);
-  width: min(30%, 360px);
+  width: min(29%, 360px); box-sizing: border-box;
   display: grid; grid-template-columns: 1fr; row-gap: calc(var(--dp-u) * 0.9);
   align-items: start; justify-items: start;
   padding: calc(var(--dp-u) * 1.1) calc(var(--dp-u) * 2.2) calc(var(--dp-u) * 1.2);
