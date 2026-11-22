@@ -51,6 +51,16 @@ interface CompletionRequest {
 
 export interface Completion { text: string; model: string }
 
+// Human label for the model behind an output: "openai:gpt-6-luna-2026-09-22" -> "GPT-6 Luna".
+export function modelLabel(model: string): string {
+  const id = model.replace(/^[a-z]+:/, '').replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, '');
+  const named = /^gpt-(\d+(?:\.\d+)?)-(luna|sol|terra|astra)$/i.exec(id);
+  if (named) return `GPT-${named[1]} ${named[2][0].toUpperCase()}${named[2].slice(1)}`;
+  const claude = /^claude-(opus|sonnet|haiku|fable)-(\d+)-(\d+)$/i.exec(id);
+  if (claude) return `Claude ${claude[1][0].toUpperCase()}${claude[1].slice(1)} ${claude[2]}.${claude[3]}`;
+  return id;
+}
+
 // gpt-5 models reason before answering, and reasoning tokens count against max_completion_tokens.
 // At the default (medium) effort a short draft spent 448 of 531 tokens reasoning and took 7.4s; the app's
 // drafts ran past the 12s call timeout every time. Parsing and drafting need no deliberation.

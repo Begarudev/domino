@@ -117,3 +117,10 @@ describe('openai adapter', () => {
     expect(store.budget(ctx.runId).used.modelUsd).toBeCloseTo(ledger[0].usd * 2, 12);
   });
 });
+
+test('model outputs carry a human label', async () => {
+  const { modelLabel } = await import('./client.ts');
+  expect(modelLabel('openai:gpt-6-luna-2026-09-22')).toBe('GPT-6 Luna');
+  expect(modelLabel('openai:gpt-6.2-sol')).toBe('GPT-6.2 Sol');
+  expect(modelLabel('anthropic:claude-opus-5-5')).toBe('Claude Opus 5.5');
+});

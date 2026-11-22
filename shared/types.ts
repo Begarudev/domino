@@ -33,6 +33,8 @@ export interface Intent {
   runKind: 'live' | 'replay';       // replay = freeze the world at asOf, predict, then score against what happened after
   horizonEnd: IsoDate | null;       // replay only: outcomes are checked in (asOf, horizonEnd]
   assumptions: string[];            // defaults the parser filled in, shown to the user
+  // The model's only say in the intent: terms it appended (zod-checked, append-only). Shown under its label.
+  modelAdded?: { label: string; signalKeywords: string[]; deciderTitles: string[]; buyerProfile: string | null; geography: string | null } | null;
 }
 
 // ---------- evidence ----------
@@ -213,6 +215,7 @@ export interface Draft {
   unverifiable: { claim: string; reason: string }[];  // "I can't verify" list, never in the body
   checks: DraftSentenceCheck[];
   generator: string;                // 'llm:claude-haiku-5-5' | 'template'
+  generatorLabel?: string;          // "Drafted by GPT-6 Luna from 2 verified claims · 1 excluded (can't verify)" | "Template from 2 verified claims"
   verified: boolean;                // every factual sentence cites evidence
   meeting: { title: string; durationMin: number; proposedSlots: IsoDateTime[] };
   // 'not_drafted': fewer than 2 verified, dated, cited facts survived, or no named decider role. Never sent or approved;
