@@ -68,6 +68,35 @@ function analystHints(): { title: string; url: string }[] {
   }
 }
 
+
+/** Company enrich in batches; a batch that fails (Crustdata 500s on some ids) is split down to single ids. */
+async function sizeCompanies(ctx: ToolContext, scope: SearchScope, ids: number[], matched: boolean) {
+  const facts = new Map<number, HeadcountFact>();
+  const evidence: Evidence[] = [];
+  const read = async (chunk: number[]): Promise<boolean> => {
+    try {
+      const batch = await readSource(ctx, companyHeadcount, { asOf: scope.asOf, crustdataIds: chunk }, time(scope));
+      if (!batch.parsed.facts) return false;                // the tool wrapper's "unavailable" fallback
+      ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, matched ? batch.evidence.map(row => row.id) : []));
+      evidence.push(...batch.evidence);
+      for (const fact of batch.parsed.facts) facts.set(fact.crustdataId, { ...fact, evidenceId: fact.evidenceId && batch.remap(fact.evidenceId) });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const visit = async (chunk: number[], size: number): Promise<void> => {
+    for (let i = 0; i < chunk.length; i += size) {
+      const part = chunk.slice(i, i + size);
+      if (await read(part) || size === 1) continue;
+      await pace(ctx, 4000);
+      await visit(part, size > 5 ? 5 : 1);
+    }
+  };
+  await visit(ids, 25);
+  return { facts, evidence };
+}
+
 export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
   scope_search: ctx => {
     const run = ctx.store.requireRun(ctx.runId);
@@ -119,14 +148,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     // Live sizes come from the profiles' latest headcount; replay never trusts today's size and enriches as of the cutoff.
     const groups = candidateGroups(scope, facts, id => scope.runKind === 'replay' ? null : byId.get(id)?.headcount ?? null);
     const ids = [...new Set(groups.map(group => byId.get(group.companyId)?.crustdataId).filter((id): id is number => id != null))];
-    const headcounts = new Map<number, HeadcountFact>();
-    const evidence: Evidence[] = [];
-    for (let i = 0; i < ids.length; i += 25) {
-      const batch = await readSource(ctx, companyHeadcount, { asOf: scope.asOf, crustdataIds: ids.slice(i, i + 25) }, time(scope));
-      ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, batch.evidence.map(row => row.id)));
-      evidence.push(...batch.evidence);
-      for (const fact of batch.parsed.facts ?? []) headcounts.set(fact.crustdataId, { ...fact, evidenceId: fact.evidenceId && batch.remap(fact.evidenceId) });
-    }
+    const { facts: headcounts, evidence } = await sizeCompanies(ctx, scope, ids, true);
     const companyFacts: CompanyFacts[] = cohort.map(company => {
       const enriched = headcounts.get(company.crustdataId);
       return { id: company.id, name: company.name, headcount: enriched?.headcount ?? (scope.runKind === 'replay' ? null : company.headcount),
@@ -237,12 +259,7 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     // Universe: every company with a family departure known by the cutoff, sized as of the cutoff (enrich timeseries).
     const groups = groupDepartures({ asOf: scope.asOf, departures: facts, profileLagDays: lag(scope) });
     const ids = [...new Set(groups.map(group => byId.get(group.companyId)?.crustdataId).filter((id): id is number => id != null))];
-    const sized = new Map<number, HeadcountFact>();
-    for (let i = 0; i < ids.length; i += 25) {
-      const batch = await readSource(ctx, companyHeadcount, { asOf: scope.asOf, crustdataIds: ids.slice(i, i + 25) }, time(scope));
-      ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, []));
-      for (const fact of batch.parsed.facts ?? []) sized.set(fact.crustdataId, fact);
-    }
+    const { facts: sized } = await sizeCompanies(ctx, scope, ids, false);
     const universe = cohort.filter(company => {
       const size = sized.get(company.crustdataId)?.headcount;
       return ids.includes(company.crustdataId) && size != null && size >= MIN_STAFF && size <= MAX_STAFF;
