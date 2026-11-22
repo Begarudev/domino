@@ -305,7 +305,7 @@ function Clause({ text }: { text: string }) {
 }
 
 function DecisionMark({ d }: { d: Decision }) {
-  if (d === 'kept') return <><span className="tick">✓</span> kept</>;
+  if (d === 'kept') return <><span className="tick">✓</span> kept at this step</>;
   if (d === 'provisional') return <span className="st prov">provisional</span>;
   if (d === 'discarded') return <><span className="rd-x" aria-hidden>✕</span> discarded</>;
   if (d === 'held') return <span className="st held">held</span>;
