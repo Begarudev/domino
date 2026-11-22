@@ -1,5 +1,5 @@
 // Domain-internal types shared by the data layer (server/crustdata, server/domain) and the engine (server/engine).
-import type { Company, DataMode, Evidence, IsoDate, IsoDateTime, Person, Trigger } from '../../shared/types.ts';
+import type { Company, DataMode, Evidence, GraphNode, IsoDate, IsoDateTime, Person, Trigger } from '../../shared/types.ts';
 
 // A company as seen in ONE response, before entity resolution. `key` is unique per mention.
 export interface CompanyMention {
@@ -14,10 +14,43 @@ export interface CompanyMention {
   hq?: string | null;
   foundedYear?: number | null;
   lastFunding?: Company['lastFunding'];
+  acquisitions?: AcquisitionEvent[];
+  ambiguousIdentity?: boolean;
   competitorDomains?: string[];         // detected competitor domains, matched against resolved entities
   firmographicsAsOf?: IsoDate | null;   // dated snapshot preferred over undated firmographics
   competitorNames?: string[];           // peers/competitors as named by the source
   evidenceIds: string[];
+}
+
+export interface AcquisitionEvent {
+  acquirer: string;
+  acquired: string;
+  acquirerId?: number | string | null;
+  acquiredId?: number | string | null;
+  date: IsoDate | null;
+  sourceUrl?: string;
+  fixtureOnly?: boolean;
+}
+
+export interface ResolvedCompany extends Company {
+  acquisitions?: AcquisitionEvent[];
+  ambiguousIdentity?: boolean;
+}
+
+export interface MoveTrigger extends Trigger {
+  move?: {
+    currentTitle: string;
+    previousTitle?: string | null;
+    datePrecision: 'day' | 'month';
+    startInterval?: [IsoDate, IsoDate];
+    previousEndInterval?: [IsoDate, IsoDate];
+  };
+}
+
+export interface ReasonedNode extends GraphNode {
+  whyNow?: string;
+  whyNowDate?: IsoDate | null;
+  hold?: { reasons: string[] };
 }
 
 // A person as seen in ONE response. Minimal personal data only.
@@ -61,6 +94,8 @@ export interface SellerProfile {
   team: { name: string; pastEmployers: { name: string; from?: IsoDate | null; to?: IsoDate | null }[] }[];
   customers: string[];                  // existing accounts (warm-path signal)
   meeting: { title: string; durationMin: number; slots: IsoDateTime[] };
+  acquisitionEvents?: AcquisitionEvent[];
+  companyFamilies?: { parent: string; members: string[] }[];
   displacementEvents: { provider: string; product: string; kind: 'acquired' | 'shutdown' | 'repriced'; date: IsoDate; sourceUrl: string; note: string; fixtureOnly?: boolean }[];
 }
 
@@ -69,6 +104,7 @@ export interface OutcomeFact {
   companyKey: string;                   // mention key or canonical id (engine maps to canonical)
   date: IsoDate;
   kind: 'job_post' | 'hire';
+  title?: string;
   summary: string;
   evidenceIds: string[];
 }
