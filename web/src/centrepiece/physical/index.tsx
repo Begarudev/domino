@@ -64,7 +64,6 @@ export function PhysicalCentrepiece(props: CentrepieceProps): JSX.Element {
     <div className={`dp-root${fullscreen ? ' dp-full' : ''}`} style={{ width, height }} data-centrepiece="physical">
       {!empty && fontsReady && (
         <Canvas
-          key={runKey + ':' + key}
           shadows
           dpr={[1, 2]}
           gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
@@ -73,6 +72,7 @@ export function PhysicalCentrepiece(props: CentrepieceProps): JSX.Element {
           style={{ position: 'absolute', inset: 0, zIndex: 0 }}
         >
           <TableScene
+            key={runKey + ':' + key}
             layout={layout} hud={hud} snap={snapshot} reducedMotion={reducedMotion} hiringFilterView={hiringFilterView}
             selectedCompany={selectedCompany} onSelect={onSelect} autoplay={autoplayRef.current} paused={false}
           />
@@ -118,11 +118,16 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
         : phase === 'replay' ? 'Now the real record: a tile falls only on a dated event.'
           : `Scored on what happened by ${fmtDay(layout.horizonEnd)}.`;
 
+  const offering = snapshot.intent?.offering;
+  const question = offering ? `Who will need ${offering}?` : null;
   const hint = !layout.isReplay
     ? (phase === 'idle' ? 'Each tile is a company. Each chain is a dated reason one company\'s change creates another\'s need.' : '')
     : phase === 'idle' ? 'Each tile is a company. Each chain is a dated reason one company\'s change creates another\'s need.'
       : phase === 'replay' ? 'Green: it happened, with the date and the source. Grey: nothing dated yet.'
-        : phase === 'score' || phase === 'done' ? 'Front: DOMINO\'s chains. Back row: what a plain hiring filter picked.' : '';
+        : '';
+
+  const baseIds = new Set(snapshot.baseline.hiringFilterCompanyIds);
+  const netNewHits = (replay?.outcomes ?? []).filter((o) => o.hit && (o.predictedBy === 'domino') && !baseIds.has(o.companyId)).length;
 
   const ticks = layout.tiles.filter((t) => t.outcomeDay != null && (t.role === 'target' || t.role === 'baseline'));
 
@@ -130,6 +135,7 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
     <div className="dp-hud" aria-live="polite">
       <div className="dp-clock">
         <div className="dp-clock-date">{fmtFull(dateNow)}</div>
+        {question && <div className="dp-question">{question}</div>}
         <div className="dp-clock-cap">{caption}</div>
         {hint && <div className="dp-clock-hint">{hint}</div>}
       </div>
@@ -153,11 +159,12 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
             <>
               <div className="dp-score-col dp-score-domino">
                 <div className="dp-score-num">{replay.domino.hits}<small> of {replay.domino.predicted}</small></div>
-                <div className="dp-score-lab">DOMINO predictions fell</div>
+                <div className="dp-score-lab">DOMINO picks with a dated signal by {fmtDay(layout.horizonEnd)}</div>
+                {netNewHits > 0 && <div className="dp-score-new">{netNewHits} of them a hiring filter never returned</div>}
               </div>
               <div className="dp-score-col dp-score-base">
                 <div className="dp-score-num">{replay.baselineFirstOrder.hits}<small> of {replay.baselineFirstOrder.predicted}</small></div>
-                <div className="dp-score-lab">hiring-filter picks fell</div>
+                <div className="dp-score-lab">hiring-filter picks with a dated signal</div>
               </div>
               <div className="dp-score-note">{replay.note}</div>
             </>

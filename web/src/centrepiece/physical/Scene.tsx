@@ -167,6 +167,22 @@ function Table({ layout }: { layout: TableLayout }) {
 
 // ---------------------------------------------------------------- cards
 
+// Keep slips inside the visible frame (clear of the clock at the top and the timeline at the bottom).
+const clampTmp = new THREE.Vector3();
+function clampedPosition(halfW: number, halfH: number) {
+  return (el: THREE.Object3D, camera: THREE.Camera, size: { width: number; height: number }): number[] => {
+    clampTmp.setFromMatrixPosition(el.matrixWorld).project(camera);
+    let x = (clampTmp.x * 0.5 + 0.5) * size.width;
+    let y = (-clampTmp.y * 0.5 + 0.5) * size.height;
+    const m = 12;
+    x = Math.min(Math.max(x, halfW + m), size.width - halfW - m);
+    y = Math.min(Math.max(y, halfH + size.height * 0.25), size.height - halfH - size.height * 0.12);
+    return [x, y];
+  };
+}
+const clampCard = clampedPosition(150, 46);
+const clampChip = clampedPosition(80, 22);
+
 // A tile that has not fallen yet may only show what was knowable on the as-of date: never its outcome.
 function cardEvidence(spec: TileSpec, snap: RunSnapshot, ev: Map<string, Evidence>, fallen: boolean, asOf: string | null): Evidence | null {
   if (fallen && spec.outcome && spec.outcome.evidenceIds.length) return ev.get(spec.outcome.evidenceIds[0]) ?? null;
@@ -184,31 +200,33 @@ function EvidenceCard({ spec, status, snap, ev, compact, selected }: {
   const fallen = status === 'hit' || status === 'falling-hit' || status === 'fallen' || status === 'hypothesis';
   const e = cardEvidence(spec, snap, ev, status === 'hit' || status === 'falling-hit', snap.replay?.asOf ?? null);
   // where the tile ends up: one tile-height along its fall direction
+  const stagger = spec.role === 'baseline' ? (Math.round((spec.pos[0] + 20) / 1.85) % 2) * 1.3 : 0;
   const land: [number, number, number] = fallen && spec.role !== 'baseline'
     ? [spec.pos[0] + spec.dir[0] * TILE.h * 0.55, 0.9, spec.pos[1] + spec.dir[1] * TILE.h * 0.55]
-    : [spec.pos[0], TILE.h + 0.5, spec.pos[1]];
+    : [spec.pos[0], TILE.h + 0.5 + stagger, spec.pos[1]];
   let tone: 'jade' | 'amber' | 'ash' = 'amber';
   let head = '';
   let body = '';
   if (status === 'hit' || status === 'falling-hit') {
     tone = 'jade';
-    head = spec.outcome?.outcomeDate ? fmtFull(spec.outcome.outcomeDate) : 'Happened';
+    head = spec.outcome?.outcomeDate ? `Outcome ${fmtFull(spec.outcome.outcomeDate)}` : 'Outcome';
     body = e?.claim ?? spec.outcome?.outcome ?? '';
   } else if (status === 'miss') {
     tone = 'ash';
     head = 'Still standing';
     body = spec.outcome?.outcome ?? 'no dated sign yet';
   } else if (spec.role === 'trigger') {
-    head = e?.observedAt ? fmtFull(e.observedAt) : 'Trigger';
+    head = e?.observedAt ? `Trigger ${fmtFull(e.observedAt)}` : 'Trigger';
     body = e?.claim ?? spec.name;
   } else {
-    head = e?.observedAt ? `Known ${fmtFull(e.observedAt)}` : "I can't verify";
+    head = e?.observedAt ? `Trigger known ${fmtFull(e.observedAt)}` : "I can't verify";
     body = e?.claim ?? 'No dated evidence before the freeze';
   }
   return (
-    <Html position={land} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
+    <Html position={land} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }} calculatePosition={compact ? clampChip : clampCard}>
       <div className={`dp-card dp-${tone}${compact ? ' dp-compact' : ''}${selected ? ' dp-selected' : ''}`}>
-        <div className="dp-card-head">{head}</div>
+        {compact && <div className="dp-card-name">{spec.name}</div>}
+        <div className="dp-card-head">{compact ? head.replace(/^Outcome /, '') : head}</div>
         {!compact && <div className="dp-card-body">{body}</div>}
         {!compact && e && (
           <div className="dp-card-src">
@@ -241,10 +259,36 @@ function Cards({ layout, hud, snap }: { layout: TableLayout; hud: Hud; snap: Run
   );
 }
 
+// Names the three zones of the table for a first-time viewer (idle only; the HUD carries the story after that).
+function ZoneLabels({ layout, hud }: { layout: TableLayout; hud: Hud }) {
+  const phase = useHud(hud, (s) => s.phase);
+  if (phase !== 'idle') return null;
+  const trig = layout.tiles.filter((t) => t.role === 'trigger');
+  const tgt = layout.tiles.filter((t) => t.role === 'target');
+  const zones: { key: string; pos: [number, number, number]; title: string; sub: string }[] = [];
+  if (trig.length) {
+    const top = trig.reduce((a, b) => (b.pos[1] < a.pos[1] ? b : a));
+    zones.push({ key: 'z-trig', pos: [top.pos[0], TILE.h + 1.1, top.pos[1]], title: 'The change', sub: 'a dated move at one company' });
+  }
+  if (tgt.length) {
+    const mid = tgt[Math.floor(tgt.length / 2)];
+    zones.push({ key: 'z-tgt', pos: [mid.pos[0] + 1.6, TILE.h + 1.1, mid.pos[1]], title: 'Who DOMINO expects to buy', sub: 'percent is its confidence' });
+  }
+  return (
+    <>
+      {zones.map((zn) => (
+        <Html key={zn.key} position={zn.pos} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="dp-zone">{zn.title}<span>{zn.sub}</span></div>
+        </Html>
+      ))}
+    </>
+  );
+}
+
 function RowLabel({ layout, hud }: { layout: TableLayout; hud: Hud }) {
   const phase = useHud(hud, (s) => s.phase);
   const base = layout.tiles.filter((t) => t.role === 'baseline');
-  if (!base.length || (phase !== 'score' && phase !== 'done')) return null;
+  if (!base.length || (phase !== 'score' && phase !== 'done' && phase !== 'idle')) return null;
   const x = Math.max(...base.map((t) => t.pos[0])) + 1.0;
   return (
     <Html position={[x, 0.2, base[0].pos[1]]} center={false} zIndexRange={[10, 0]} style={{ pointerEvents: 'none', transform: 'translate(0, -50%)' }}>
@@ -461,7 +505,7 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
       // fit the table into the left ~66% of the frame; the score column owns the rest
       const tanH = Math.tan(THREE.MathUtils.degToRad(17));
       const usable = aspect > 1.65 ? 0.62 : 0.58;
-      const dist = Math.max((spanZ * 0.5 * 0.94) / (tanH * 0.8), (spanX * 0.5 + 0.8) / (tanH * aspect * usable)) * 1.06;
+      const dist = Math.max((spanZ * 0.5 * 0.94) / (tanH * 0.74), (spanX * 0.5 + 1.2) / (tanH * aspect * usable)) * 1.08;
       const visW = 2 * dist * tanH * aspect;
       const shift = visW * (0.5 - usable / 2) * 0.92;
       const elev = THREE.MathUtils.degToRad(64);
@@ -473,9 +517,14 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
       const trig = tileList.filter((x) => x.role === 'trigger');
       const tx = trig.reduce((a, b) => a + b.pos[0], 0) / Math.max(1, trig.length);
       const tz = trig.reduce((a, b) => a + b.pos[1], 0) / Math.max(1, trig.length);
-      wantLook.set(tx + 4.2, 0.4, tz + 0.5);
-      wantPos.set(tx - 6.0, 6.8, tz + 10.5);
-      focusTarget.set(tx, 1.1, tz);
+      // establishing shot: the whole table at a low 3/4 angle, so a newcomer sees every zone first
+      void tz;
+      const tanH = Math.tan(THREE.MathUtils.degToRad(17));
+      const dist = Math.max((spanX * 0.5) / (tanH * aspect * 0.9), (spanZ * 0.5 * 0.7) / (tanH * 0.78));
+      const elev = THREE.MathUtils.degToRad(36);
+      wantLook.set(cx + 0.3, 0.2, cz + 0.4);
+      wantPos.set(cx + 0.3 - dist * Math.cos(elev) * 0.72, dist * Math.sin(elev), cz + 0.4 + dist * Math.cos(elev) * 0.7);
+      focusTarget.set(tx + 3, 1.0, cz);
     } else if (H.phase === 'predict') {
       // follow the falling front across all lanes
       let fx = 0, fz = 0, n = 0;
@@ -582,6 +631,7 @@ export function TableScene({ layout, hud, snap, reducedMotion, hiringFilterView,
       <Cards layout={layout} hud={hud} snap={snap} />
       <LaneLabels layout={layout} hud={hud} />
       <RowLabel layout={layout} hud={hud} />
+      <ZoneLabels layout={layout} hud={hud} />
 
       <EffectComposer multisampling={4}>
         <DepthOfField target={focusTarget} worldFocusRange={dofRange} bokehScale={reducedMotion ? 0 : 2.6} />
