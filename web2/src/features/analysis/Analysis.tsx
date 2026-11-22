@@ -12,7 +12,8 @@ import { openEvidence } from '../../shell/ui.ts';
 import { sourceName } from '../../shell/EvidenceDrawer.tsx';
 import './analysis.css';
 import { DominoGraph } from '../network/DominoGraph.tsx';
-import { FlowsBar, HeadcountArea, type FlowPoint } from './charts.tsx';
+import { FlowsBar, type FlowPoint } from "./charts.tsx";
+import { CompanyCharts, type ChartsDossier } from "../charts/CompanyCharts.tsx";
 
 type EvMap = Map<string, Evidence>;
 const isMonth = (e: Evidence | undefined) => !!e && (e.precision === 'month' || /month precision/i.test(e.claim));
@@ -80,6 +81,8 @@ export function Analysis({ desk }: { desk: CompanyDesk }) {
         <Rules rules={rules} fromDesk={!d} name={desk.company.name} open={openRule} onToggle={(id) => setOpenRule(openRule === id ? null : id)} family={family} ev={ev} />
       </div>
 
+      {d && <section className="panel cf-p cf-charts" data-testid="file-charts"><CompanyCharts dossier={d as unknown as ChartsDossier} /></section>}
+
       <div className={`cf-x ${openRule && shown ? 'on' : ''}`}><div className="cf-x-in">
         {shown && <RuleDetail r={shown} ev={ev} onClose={() => setOpenRule(null)} />}
       </div></div>
@@ -129,7 +132,6 @@ function Headcount({ d, desk }: { d?: CompanyDossier | null; desk: CompanyDesk }
           </div>
           {series.length >= 2
             ? <>
-                <HeadcountArea series={series} mark={base?.date ?? null} markLabel={change != null ? pct1(change) : undefined} onOpen={evId ? () => openEvidence(evId) : undefined} />
                 <span className="cf-spark-ax"><span>{fmtDate(series[0].date, true)}</span><span>{plural(series.length, 'dated point')}</span><span>{fmtDate(last!.date, true)}</span></span>
               </>
             : <p className="cf-empty sm">Headcount series not read in this scan, so no curve is drawn.</p>}
