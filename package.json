@@ -18,6 +18,7 @@
     "test": "bun test server",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "bun scripts/smoke.ts",
+    "proof:send-once": "bun scripts/send-once-proof.ts",
     "snapshot": "bun scripts/snapshot.ts",
     "test:e2e": "bun test tests/e2e --timeout 180000",
     "mission": "bun --bun vite --config web/mission/vite.config.ts",

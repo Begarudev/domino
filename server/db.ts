@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ALL_STEPS, PIPELINES } from '../shared/types.ts';
 import type { Pipeline } from '../shared/types.ts';
 import type {
-  Approval, Ask, BudgetState, ChaosConfig, DataMode, Evidence, Intent, LedgerEntry, OutboxAction, RunEvent,
+  Approval, Ask, BudgetState, ChaosConfig, DataMode, Evidence, InboxReceipt, Intent, LedgerEntry, OutboxAction, RunEvent,
   RunLimits, RunStatus, StepName, StepState, StoredEvent,
 } from '../shared/types.ts';
 import { config } from './env.ts';
@@ -105,9 +105,10 @@ export class Store {
       "UPDATE outbox SET status = 'delivered' WHERE executed_at IS NOT NULL");
     this.ensureColumn('ledger', 'error', 'TEXT');
     this.ensureColumn('runs', 'pipeline', "TEXT NOT NULL DEFAULT 'outbound'");
+    this.ensureColumn('inbox_received', 'attempts', 'INTEGER NOT NULL DEFAULT 1');
   }
 
-  private ensureColumn(table: 'ledger' | 'outbox' | 'runs', name: string, definition: string, backfill?: string) {
+  private ensureColumn(table: 'ledger' | 'outbox' | 'runs' | 'inbox_received', name: string, definition: string, backfill?: string) {
     const exists = () => this.sql.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === name);
     if (exists()) return;
     this.transaction(() => {
@@ -270,6 +271,14 @@ export class Store {
 
   getApprovals(runId: string): Approval[] {
     return this.sql.prepare('SELECT json FROM approvals WHERE run_id = ? ORDER BY rowid').all(runId).map(row => decode(row.json as string));
+  }
+
+  // Receiver-side view, independent of the sender's outbox status: one stored row (delivery) per key,
+  // however many times the sender tried.
+  getReceipts(runId: string): InboxReceipt[] {
+    return this.sql.prepare(`SELECT i.idempotency_key AS key, i.received_at, i.attempts
+      FROM inbox_received i JOIN outbox o ON o.idempotency_key = i.idempotency_key WHERE o.run_id = ? ORDER BY o.rowid`).all(runId)
+      .map(row => ({ idempotencyKey: row.key as string, receivedAt: row.received_at as string, attempts: Number(row.attempts), deliveries: 1 }));
   }
 
   getOutbox(runId: string): OutboxAction[] {

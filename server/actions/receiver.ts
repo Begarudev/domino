@@ -16,6 +16,7 @@ export function receiveMessage(store: Store, idempotencyKey: string, payload: In
     const previous = store.sql.prepare('SELECT received_at, payload_json FROM inbox_received WHERE idempotency_key = ?')
       .get(idempotencyKey);
     if (!previous || previous.payload_json !== serialized) throw new Error('Inbox key belongs to another message');
+    store.sql.prepare('UPDATE inbox_received SET attempts = attempts + 1 WHERE idempotency_key = ?').run(idempotencyKey);
     return { idempotencyKey, status: 'already_delivered', receivedAt: previous.received_at as string };
   });
 }

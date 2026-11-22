@@ -250,6 +250,15 @@ export interface DeliveryReceipt {
   receivedAt: IsoDateTime;
 }
 
+// What the test-inbox receiver holds for one send key: every attempt is counted, but it stores (delivers) the
+// message once, so a retried send shows attempts 2 and deliveries 1. The visible proof of send-once.
+export interface InboxReceipt {
+  idempotencyKey: string;           // the receipt id
+  receivedAt: IsoDateTime;          // first (only) delivery
+  attempts: number;
+  deliveries: number;
+}
+
 export interface OutboxAction {
   idempotencyKey: string;
   runId: string;
@@ -380,6 +389,7 @@ export interface RunSnapshot {
   evidence: Evidence[];
   approvals: Approval[];
   outbox: OutboxAction[];
+  receipts: InboxReceipt[];         // receiver-side, one per send key the test inbox accepted
   ledger: LedgerEntry[];
   asks: Ask[];
   baseline: { hiringFilterCompanyIds: string[] };   // what a plain "is hiring" filter returns
