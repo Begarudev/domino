@@ -1,7 +1,7 @@
 // Company › Act › Recruitment (design mock screen 4): who left, what rule O1 decided from it, and who you can hire.
 // Every decision is shown as its clauses (met ✓ / open ○ / failed ✗ / I can't verify), never as a score. Every count
 // opens its records; every record opens its dated source.
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import type { Evidence } from '../../../../shared/types.ts';
 import type { CompanyDesk, Opening } from '../../data/desk.ts';
 import { useRoute } from '../../data/router.ts';
@@ -41,12 +41,10 @@ export function Openings({ desk }: { desk: CompanyDesk }) {
           ))}
         </div>
       )}
+      {opening ? <OpeningPanel key={opening.id} o={opening} ev={ev} rows={rows} /> : <NoOpening desk={desk} />}
       <div className="rec-top">
-        <div className="rec-col">
-          <Departures rows={rows} opening={opening} />
-          <FunnelStrip runId={desk.runId} />
-        </div>
-        {opening ? <OpeningPanel key={opening.id} o={opening} ev={ev} rows={rows} /> : <NoOpening desk={desk} />}
+        <Departures rows={rows} opening={opening} />
+        <FunnelStrip runId={desk.runId} />
       </div>
       <HireTable desk={desk} opening={opening} routeId={routeId} source={source} ev={ev} />
     </div>
@@ -59,18 +57,40 @@ function Departures({ rows, opening }: { rows: DepartureRow[]; opening: Opening 
   const yes = rows.filter((r) => r.conclusive === true).length;
   const no = rows.filter((r) => r.conclusive === false).length;
   const win = windowText(opening);
+  const [q, setQ] = useState('');
+  const [f, setF] = useState<'all' | 'yes' | 'no' | 'none'>('all');
+  const none = rows.length - yes - no;
+  const shown = rows.filter((r) => (f === 'all' || (f === 'yes' ? r.conclusive === true : f === 'no' ? r.conclusive === false : r.conclusive === null))
+    && (!q || `${r.d.role} ${r.d.toCompanyName ?? ''}`.toLowerCase().includes(q.toLowerCase())));
+  const chips: [typeof f, string, number][] = [['all', 'All', rows.length], ['yes', 'Conclusive', yes], ['no', 'Struck', no], ['none', 'Not cited', none]];
   return (
     <div className="panel rec-dep" data-testid="departures">
       <header>
         <h2>Departures, {familyLabel(opening?.roleFamily)}</h2>
         <span className="faint" data-num>{yes + no > 0 ? `${plural(yes, 'conclusive departure')}${no ? ` · ${fmtInt(no)} struck` : ''}` : `${plural(rows.length, 'departure')} in 90 days`}</span>
+        <HowComputed>
+          <b>GET /api/openings</b>: the desk's openings, departures and clauses. Departures are Crustdata person-search job moves out
+          of this company. <i>Conclusive</i>: the dated record is cited by Rule O1's departure clause (2 or more conclusive dated
+          departures in one role family within 90 days). <i>Struck</i>: the engine ruled it out, with the reason shown.
+          <i> Not cited</i>: a dated move that O1's clause did not use, so it does not count toward the opening.
+        </HowComputed>
       </header>
+      {rows.length > 0 && (
+        <div className="rec-tool">
+          <input type="search" className="rec-search" placeholder="Search role or destination" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search departures" />
+          {chips.filter(([k, , n]) => k === 'all' || n > 0).map(([k, label, n]) => (
+            <button key={k} type="button" className={`rec-chip c-${k} ${f === k ? 'on' : ''}`} onClick={() => setF(k)} aria-pressed={f === k}>
+              {k !== 'all' && <i aria-hidden />}{label} <span data-num>{fmtInt(n)}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {!rows.length ? (
         <p className="rec-empty"><span className="muted">No dated departure in this role family in the last 90 days.</span></p>
       ) : (
         <table className="t">
           <thead><tr><th>Person, role</th><th>Went to</th><th>Left</th><th>Status</th></tr></thead>
-          <tbody>{rows.map((r) => <DepRow key={r.d.id} r={r} start={win?.split("–")[0].replace(/ \d{4}$/, "") ?? null} />)}</tbody>
+          <tbody>{!shown.length && <tr><td colSpan={4} className="muted">No departure matches this search or filter.</td></tr>}{shown.map((r) => <DepRow key={r.d.id} r={r} start={win?.split("–")[0].replace(/ \d{4}$/, "") ?? null} />)}</tbody>
         </table>
       )}
       {rows.some((r) => r.month?.length === 7) && (
@@ -93,9 +113,9 @@ function DepRow({ r, start }: { r: DepartureRow; start: string | null }) {
       <td className={s}>{r.d.toCompanyName ?? 'not stated'}</td>
       <td className={s} data-num>{r.month ? fmtDate(r.month, true) : 'undated'}</td>
       <td>
-        {r.conclusive === true && <span className="ctag tone-met">conclusive</span>}
-        {r.conclusive === false && <span className="muted">{r.reason}{start ? ` (${start})` : ''}</span>}
-        {r.conclusive === null && <span className="faint">not assessed</span>}
+        {r.conclusive === true && <span className="rec-chip c-yes static"><i aria-hidden />Conclusive</span>}
+        {r.conclusive === false && <span className="rec-chip c-no static" title={`${r.reason ?? ''}${start ? ` (${start})` : ''}`}><i aria-hidden />Struck · {r.reason}</span>}
+        {r.conclusive === null && <span className="rec-chip c-none static" title="A dated move that Rule O1's departure clause did not cite, so it does not count toward the opening"><i aria-hidden />Not cited by O1</span>}
       </td>
     </tr>
   );
@@ -113,8 +133,15 @@ function OpeningPanel({ o, ev, rows }: { o: OpeningWithWhy; ev: Map<string, Evid
       <header>
         <h2>{o.status === 'held' ? 'Rule decision' : 'Predicted opening'}</h2>
         <span className={`st ${chip.cls}`} data-testid="opening-state">{chip.text}</span>
+        <HowComputed>
+          <b>GET /api/openings</b> returns this decision with its clauses. Rule O1: 2 or more conclusive dated departures in one
+          role family within 90 days, at a 20–5,000 staff company, and no replacement post (Crustdata job search) or acquihire
+          news (Crustdata news) matching a false-drain guard. Departures come from Crustdata person search, headcount from company
+          enrich. Each clause opens its dated sources. No score is computed.
+        </HowComputed>
       </header>
-      <div className="pad">
+      <div className="pad rec-op-grid">
+        <div className="rec-op-l">
         <p className="rec-role">{sentenceCase(o.roleTitle)}</p>
         <p className="faint rec-role-sub">O1 · evaluated {fmtDate(o.predictedAt, true)}{o.provisional && o.windowClosesBy ? ` · provisional, window closes ${fmtDate(o.windowClosesBy)}` : ''} · {familyLabel(o.roleFamily)} role family</p>
         <ol className="rec-proof" aria-label="The decision, dated" data-testid="proof">
@@ -127,6 +154,8 @@ function OpeningPanel({ o, ev, rows }: { o: OpeningWithWhy; ev: Map<string, Evid
           ))}
         </ol>
         {o.status === 'held' && <HeldCard o={o} />}
+        </div>
+        <div className="rec-op-r">
         <ul className="clauses rec-clauses">
           {rule.map((c) => <ClauseRow key={c.id} c={c} o={o} ev={ev} open={open === c.id} onToggle={() => toggle(c.id)} />)}
           {guards.filter((c) => c.state !== 'met').map((c) => <ClauseRow key={c.id} c={c} o={o} ev={ev} open={open === c.id} onToggle={() => toggle(c.id)} />)}
@@ -136,6 +165,7 @@ function OpeningPanel({ o, ev, rows }: { o: OpeningWithWhy; ev: Map<string, Evid
           {o.why && <WhyRow why={o.why} open={open === '__why'} onToggle={() => toggle('__why')} />}
         </ul>
         {!rule.length && !guards.length && <p className="muted">The engine returned this decision without its clauses.</p>}
+        </div>
       </div>
     </div>
   );
@@ -273,5 +303,15 @@ function NoOpening({ desk }: { desk: CompanyDesk }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/** "How this is computed": a small info popover naming the endpoint, the rule clause and the data source. */
+export function HowComputed({ children }: { children: React.ReactNode }) {
+  return (
+    <details className="rec-how">
+      <summary aria-label="How this is computed">i</summary>
+      <div className="rec-how-pop" role="note"><p className="rec-how-t">How this is computed</p><p>{children}</p></div>
+    </details>
   );
 }

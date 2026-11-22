@@ -8,6 +8,7 @@ import { runStore } from '../../data/store.ts';
 import { fmtInt } from '../../lib/format.ts';
 import { openEvidence } from '../../shell/ui.ts';
 import { prettyDates } from './derive.ts';
+import { HowComputed } from './Openings.tsx';
 
 async function loadFunnel(): Promise<Sourced<OpeningsFunnel | null>> {
   const none = { data: null, source: 'live' as const, evidence: [] };
@@ -56,12 +57,13 @@ export function FunnelStrip({ runId }: { runId: string | null }) {
       <header>
         <h2>How today’s scan got here</h2>
         <span className="faint" title={f.lockedAt}>O1 · {lockText(f.lockedAt)}</span>
+        <HowComputed><b>GET /api/openings/funnel</b>: the counts today's O1 scan kept at each step. Job moves read from Crustdata person search, filtered to a tracked role family, to a leave date inside the 90-day window, to a 20–5,000 staff company (Crustdata company enrich), then grouped by company and family; groups with 2 or more become O1 decisions. Click a step to list its rows.</HowComputed>
       </header>
       <ol className="rec-fun">
         {steps.map((s) => (
           <li key={s.id}>
             <button type="button" className={open === s.id ? 'on' : undefined} onClick={() => toggle(s.id)}
-              aria-expanded={open === s.id} title={s.label} data-testid={`funnel-stage-${s.id}`}>
+              aria-expanded={open === s.id} title={`${s.label}: ${fmtInt(s.count)} (${Math.round((s.count / top) * 1000) / 10}% of job moves read)`} data-testid={`funnel-stage-${s.id}`}>
               <b data-num>{fmtInt(s.count)}</b>
               <span className="rec-fun-l">{SHORT[s.id] ?? s.label}</span>
               <span className="rec-fun-bar"><i style={{ width: `${Math.max(0.6, (s.count / top) * 100)}%` }} /></span>
@@ -73,7 +75,7 @@ export function FunnelStrip({ runId }: { runId: string | null }) {
             <span key={s.id} className="rec-fun-o">
               {i > 0 && <span className="rec-plus" aria-hidden>+</span>}
               <button type="button" className={open === s.id ? 'on' : undefined} onClick={() => toggle(s.id)} aria-expanded={open === s.id}
-                title={s.label} data-testid={`funnel-stage-${s.id}`}>
+                title={`${s.label}: ${fmtInt(s.count)} (${Math.round((s.count / top) * 1000) / 10}% of job moves read)`} data-testid={`funnel-stage-${s.id}`}>
                 <b data-num>{fmtInt(s.count)}</b><span>{OUTCOME_WORD[s.id]}</span>
               </button>
             </span>
