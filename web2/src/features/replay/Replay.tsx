@@ -43,7 +43,7 @@ function ReplayEmpty({ locked }: { locked: string | null }) {
         <header><h2>Awaiting a scored replay</h2><span className="st plain">O1 · not replayed</span></header>
         <div className="pad">
           <p>A replay freezes the data at 1 Sep, runs rule O1 as it was locked{locked ? ` at ${locked}` : ''}, then checks each company for a dated job post or hire in the role family afterwards. Until a replay run is scored, there are no counts to show.</p>
-          <p className="rp-subline">Integrity check: facts dated after 1 Sep used by O1 must be 0.</p>
+          <p className="rp-subline">O1 reads only moves, posts and hires dated on or before 1 Sep. Size band and industry use today’s company profile.</p>
         </div>
       </section>
     </div>
@@ -97,7 +97,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
       <motion.section className="panel rp-hero" data-testid="replay-summary" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
         <header>
           <h2>{fmtDate(score.asOf, true)} replay · outcomes through {fmtDate(score.horizonEnd, true)}</h2>
-          <span className={`ctag ${score.factsAfterAsOfUsed === 0 ? 'tone-verified' : 'tone-held'}`}>{fmtInt(score.factsAfterAsOfUsed)} facts dated after {fmtDate(score.asOf)} used</span>
+          <span className="ctag tone-plain">Moves, posts and hires dated on or before {fmtDate(score.asOf)} · size band and industry use today’s company profile</span>
         </header>
         <p className="rp-q pad">If DOMINO had run on {fmtDate(score.asOf, true)} using only facts dated on or before then, which companies would rule O1 have picked, and which actually posted or hired in the role family by {fmtDate(score.horizonEnd, true)}, compared with simple baselines?</p>
         <div className="rp-kpis">
