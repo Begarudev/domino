@@ -1,0 +1,116 @@
+/* The domino table. Tokens come from :root in styles.css. */
+.table-wrap { position: relative; }
+.table-svg { display: block; overflow: visible; }
+
+/* ---------- tiles ---------- */
+.tile-mech {
+  font-size: 16px; font-variation-settings: 'wdth' 78; font-weight: 600; fill: var(--text-2);
+}
+.tile-body { cursor: pointer; outline: none; transform: rotate(0deg); }
+.tile-shadow { fill: #0B0806; filter: url(#tile-shadow); }
+.tile-face { fill: url(#bone); }
+.tile-bevel { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.2; }
+.tile-ring { fill: none; stroke: transparent; stroke-width: 3; }
+.tile-body:focus-visible .tile-ring { stroke: var(--cobalt-text); stroke-dasharray: 6 4; }
+.tile.is-selected .tile-ring { stroke: var(--cobalt); }
+.tile-divider { fill: var(--ink); }
+.tile-spinner { fill: #A8987C; stroke: var(--ink); stroke-width: 1; }
+.pip { fill: var(--ink); }
+
+.tile-top, .tile-bottom {
+  height: 100%; display: flex; flex-direction: column; color: var(--ink);
+  font-variation-settings: 'wdth' 75; line-height: 1.12;
+}
+.tile-name { font-size: 22px; font-weight: 740; letter-spacing: -0.005em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile-change { font-size: 16px; font-weight: 480; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile-date { font-size: 16.5px; font-weight: 650; margin-top: auto; font-variant-numeric: tabular-nums; }
+.tile-need { font-size: 16px; font-weight: 520; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tile-blank { color: #6E6253; }
+.tile-conf { margin-top: auto; display: flex; align-items: baseline; gap: 1px; }
+.tile-conf .num {
+  font-size: 54px; font-weight: 860; font-variation-settings: 'wdth' 118; line-height: 0.9;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.03em;
+}
+.tile-conf .unit { font-size: 18px; font-weight: 700; font-variation-settings: 'wdth' 100; }
+.tile-cant { margin-top: auto; font-size: 19px; font-weight: 760; color: var(--amber); display: flex; flex-direction: column; }
+.tile-cant span { font-size: 13px; font-weight: 500; color: var(--text-2); }
+
+/* hollow tile: a rule fired on fewer than two dated rows */
+.tile.is-hollow .tile-face { fill: rgba(237, 229, 211, 0.04); stroke: rgba(237, 229, 211, 0.55); stroke-width: 1.6; stroke-dasharray: 7 5; }
+.tile.is-hollow .tile-shadow, .tile.is-hollow .tile-bevel { display: none; }
+.tile.is-hollow .tile-top, .tile.is-hollow .tile-bottom { color: var(--bone); }
+.tile.is-hollow .tile-blank { color: var(--text-2); }
+.tile.is-hollow .pip, .tile.is-hollow .tile-divider { fill: rgba(237, 229, 211, 0.6); }
+.tile.is-hollow .tile-spinner { fill: none; stroke: rgba(237, 229, 211, 0.6); }
+
+/* standing (cascade still building): upright and dim */
+.tile.is-standing .tile-body { opacity: 0.42; transition: opacity 300ms ease; }
+.tile.is-standing .tile-mech { opacity: 0.6; }
+
+/* fired: tips about the bottom-right corner, with a small settle */
+.tile.is-fired .tile-body {
+  opacity: 0.42;
+  animation: tile-tip 620ms cubic-bezier(0.3, 0.05, 0.4, 1) var(--fire-delay) forwards;
+}
+.tile.is-fired.is-hollow .tile-body { animation-name: tile-light; }
+@keyframes tile-tip {
+  0% { transform: rotate(0deg); opacity: 0.42; }
+  18% { opacity: 1; }
+  68% { transform: rotate(calc(var(--tip) * 1.12)); }
+  84% { transform: rotate(calc(var(--tip) * 0.94)); }
+  100% { transform: rotate(var(--tip)); opacity: 1; }
+}
+@keyframes tile-light { to { opacity: 1; } }
+
+.tile.is-dimmed .tile-body { filter: saturate(0.4); }
+.hf-view .tile.is-dimmed .tile-body { opacity: 0.26 !important; animation: none; transform: rotate(0deg); }
+.hf-view .tile.is-dimmed .tile-mech { opacity: 0.45; }
+.tile-stamp rect { fill: rgba(35, 28, 23, 0.82); stroke: var(--miss); stroke-width: 2.2; }
+.tile-stamp text { fill: var(--miss-text); font-size: 15px; font-weight: 760; font-variation-settings: 'wdth' 80; }
+.hf-view .edge { opacity: 0.25; }
+
+/* ---------- edges ---------- */
+.edge-track { fill: none; stroke: var(--hair); stroke-width: 1.4; stroke-dasharray: 3 6; }
+.edge-line { fill: none; stroke: var(--cobalt); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.edge-head { fill: var(--cobalt); opacity: 0; }
+.edge.is-weak .edge-line { stroke: var(--amber); stroke-width: 2; }
+.edge.is-weak .edge-head { fill: var(--amber); }
+.edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: pointer; outline: none; }
+.edge-hit:focus-visible + .edge-fo .edge-label, .edge.is-selected .edge-label { outline: 2px solid var(--cobalt-text); outline-offset: 2px; }
+.edge.is-selected .edge-line { stroke-width: 4.5; }
+
+.edge-fo { overflow: visible; }
+.edge-label {
+  height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; cursor: pointer;
+  font-size: 17px; line-height: 1.16; font-variation-settings: 'wdth' 78; font-weight: 540; color: var(--text-2);
+  padding: 0 2px 4px; border-radius: 3px; opacity: 0.5;
+}
+.edge-meta { font-size: 14px; font-weight: 620; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+.is-playing .edge-line { animation: edge-draw 520ms cubic-bezier(0.5, 0, 0.3, 1) var(--draw-delay) forwards; }
+.is-playing .edge-head { animation: edge-on 120ms linear calc(var(--draw-delay) + 480ms) forwards; }
+.is-playing .edge-label { animation: label-on 300ms ease calc(var(--draw-delay) + 200ms) forwards; }
+.is-playing .edge-label .edge-meta { color: var(--cobalt-text); }
+.is-playing .edge.is-weak .edge-label .edge-meta { color: var(--amber); }
+@keyframes edge-draw { to { stroke-dashoffset: 0; } }
+@keyframes edge-on { to { opacity: 1; } }
+@keyframes label-on { to { opacity: 1; color: var(--bone); } }
+
+/* reduced motion: no tipping, just light up */
+.tile.no-motion.is-fired .tile-body { animation: tile-light 1ms linear var(--fire-delay) forwards; transform: none; }
+.no-motion.edge .edge-line { animation-duration: 1ms !important; }
+@media (prefers-reduced-motion: reduce) {
+  .tile.is-fired .tile-body { animation: tile-light 1ms linear forwards; transform: none; }
+  .is-playing .edge-line, .is-playing .edge-head, .is-playing .edge-label { animation-duration: 1ms; animation-delay: 0ms; }
+}
+
+/* ---------- empty state ---------- */
+.table-empty { display: grid; place-items: center; }
+.table-empty-inner { display: grid; justify-items: center; gap: 14px; max-width: 440px; text-align: center; color: var(--text-2); }
+.table-empty-inner p { margin: 0; font-size: 15px; line-height: 1.45; }
+.ghost-tile { fill: none; stroke: var(--hair); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ghost-tile.is-waiting { animation: ghost 1.6s ease-in-out infinite; }
+@keyframes ghost { 50% { stroke: var(--text-2); } }
+@media (prefers-reduced-motion: reduce) { .ghost-tile.is-waiting { animation: none; } }
+
+.table-foot { position: absolute; top: 0; left: 16px; margin: 0; font-size: 12.5px; color: var(--text-3); }
