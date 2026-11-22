@@ -93,7 +93,7 @@ function RuleCardView({ rule, desk, mine, example }: { rule: RuleCard; desk: Com
         <span className="rc-k">Today</span>
         <span className="rc-counts">
           {rule.counts.map((c) => <span key={c.label}><b data-num>{fmtInt(c.value)}</b> {c.label}</span>)}
-          {rule.sourceRunId && <span className="rc-run">in run <span className="mono" title={rule.sourceRunId}>{rule.sourceRunId.slice(0, 12)}</span></span>}
+          {rule.sourceRunId && <span className="rc-run">counted in run <span className="mono" title={rule.sourceRunId}>{rule.sourceRunId.replace(/^run_/, '').slice(0, 8)}</span>, all companies</span>}
         </span>
       </div>
       {mine && chip && (
@@ -195,7 +195,7 @@ function WatchCard({ desk, dossier, loading }: { desk: CompanyDesk; dossier: Com
   const ev = evidenceMap(desk.evidence, dossier?.evidence);
   const rows = w.clause.evidenceIds.map((id) => ev.get(id)).filter((e) => !!e);
   const next = w.need - w.have;
-  const fires = next === 1 ? `${w.have} of ${w.need}: fires on the ${ordinal(w.need)}` : `${w.have} of ${w.need}`;
+  const fires = next === 1 ? `${w.have} of ${w.need} · needs 1 more qualifying departure` : `${w.have} of ${w.need}`;
   return (
     <article className="rule-card watch" data-testid="rule-watchlist">
       <div className="id">

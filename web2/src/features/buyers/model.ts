@@ -60,6 +60,8 @@ export function accounts(snap: RunSnapshot): Account[] {
     else if (t.watch) status = { kind: 'watch', label: 'Watch', cls: 'plain', why: t.watch.reason };
     else if (t.notDrafted) status = { kind: 'not_drafted', label: `Not drafted (${t.notDrafted.have} of ${t.notDrafted.need} verified facts)`, cls: 'held', why: t.notDrafted.reason };
     else if (!draft) status = { kind: 'not_drafted', label: 'Not drafted', cls: 'held', why: stop ?? 'No draft was written for this account' };
+    // The current evidence gate: a draft needs 2+ verified, dated facts. Older runs drafted below it are held, not sendable.
+    else if (draft.citations.length < 2) status = { kind: 'held', label: `Held: drafted before the evidence gate (${draft.citations.length} of 2 verified facts)`, cls: 'held', why: 'Runs before the 2-fact gate could draft from one fact. This draft cannot be sent.' };
     else if (send?.status === 'approved') status = { kind: 'approved', label: 'Approved, not yet delivered', cls: 'prov' };
     else if (send?.status === 'rejected') status = { kind: 'held', label: 'Rejected by you', cls: 'held' };
     else status = { kind: 'ready', label: 'Draft ready', cls: 'prov' };
