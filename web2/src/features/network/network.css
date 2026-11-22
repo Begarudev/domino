@@ -1,87 +1,45 @@
 .dg { margin-bottom: 16px; grid-column: 1 / -1; }
-.dg-svg { display: block; width: 100%; height: auto; overflow: visible; font-family: inherit; }
+.dg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.dg-head h2 { margin: 0 0 4px; }
+.dg-sum { margin: 0; font-size: 14px; color: var(--ink); max-width: 72ch; }
 .dg-none { margin: 0; padding: 12px 16px; font-size: 14px; color: var(--ink-2); }
+.dg-kpis { display: flex; gap: 20px; }
+.dg-kpis .kpi { display: flex; flex-direction: column; font-size: 12px; color: var(--ink-3); }
+.dg-kpis .kpi b { font-size: 22px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.dg-kpis .kpi.counted b { color: var(--h-green-fg); }
+.dg-kpis .kpi.held b { color: var(--h-amber-fg); }
 
-.dg-n rect { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
-.dg-n text { fill: var(--ink); font-size: 14px; font-weight: 600; }
-.dg-n.focal rect { fill: var(--ink); stroke: var(--ink); }
-.dg-n.focal text { fill: var(--surface); font-size: 15px; }
-.dg-n.held rect { stroke: var(--ink-2); stroke-dasharray: 3 3; }
-
-.dg-e .hit { fill: none; stroke: transparent; stroke-width: 18; }
-.dg-e .ln {
-  fill: none; stroke: var(--acc); stroke-width: 2;
-  stroke-dasharray: 1; stroke-dashoffset: 1;
-  animation: dg-draw 200ms ease-out forwards; animation-delay: calc(var(--i) * 120ms);
-}
-.dg-e.in .ln { stroke: var(--ink-3); }
-.dg-e.held .ln { stroke: var(--ink-2); }
-.dg-e.struck .ln { stroke: var(--ink-3); }
-.dg-e .lbl { fill: var(--ink); font-size: 13px; font-weight: 500; }
-.dg-e .note { fill: var(--acc); font-size: 13px; font-weight: 600; }
-.dg-e.link { cursor: pointer; outline: none; }
-.dg-e.link:hover .ln, .dg-e.link:focus-visible .ln { stroke-width: 3; }
-.dg-e.link:focus-visible .lbl { text-decoration: underline; }
-
-/* dashed styles apply after the draw-in so the dash animation isn't overridden mid-stroke */
-.dg-e.struck .ln, .dg-e.held .ln { animation-name: dg-draw-dashed; }
-
-.dg-m path { fill: var(--acc); }
-.dg-m.in path, .dg-m.struck path { fill: var(--ink-3); }
-.dg-m.held path { fill: var(--ink-2); }
-
-.dg-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0 0; padding: 0 16px 12px; font-size: 13px; color: var(--ink-2); }
-.dg-legend .sw { display: inline-block; width: 18px; height: 0; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--acc); }
-.dg-legend .sw.held { border-top: 2px dashed var(--ink-2); }
-.dg-legend .sw.struck { border-top: 2px dashed var(--ink-3); }
-.dg-legend .sw.in { border-top-color: var(--ink-3); }
-
-@keyframes dg-draw { to { stroke-dashoffset: 0; } }
-@keyframes dg-draw-dashed {
-  0% { stroke-dasharray: 1; stroke-dashoffset: 1; }
-  99% { stroke-dasharray: 1; stroke-dashoffset: 0; }
-  100% { stroke-dasharray: 0.012 0.012; stroke-dashoffset: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dg-e .ln { animation: none; stroke-dashoffset: 0; }
-  .dg-e.struck .ln, .dg-e.held .ln { stroke-dasharray: 0.012 0.012; }
-}
-
-/* p6 polish: header with a one-line purpose, state named on every edge, company names never struck */
-.dg > header { align-items: flex-start; }
-.dg-h { display: grid; gap: 2px; min-width: 0; }
-.dg > header h2 { font-size: var(--fs-lead); line-height: var(--lh-body); font-weight: var(--w-semi); letter-spacing: var(--track-snug); }
-.dg-h p { margin: 0; font-size: var(--fs-ui); line-height: var(--lh-ui); color: var(--ink-2); }
-.dg-sum { font-size: var(--fs-ui); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 1px; }
-.dg-svg { max-width: 1240px; margin: 4px auto 0; }
-.dg-e .sep { fill: var(--ink-3); }
-.dg-e.struck .lbl { fill: var(--ink-2); }
-.dg-e.struck .note { fill: var(--ink-2); font-weight: 500; }
-.dg-e.held .note { fill: var(--ink); }
-.dg-e.in .note { fill: var(--ink-2); font-weight: 500; }
-.dg-e .note.src { text-decoration: underline; text-decoration-color: var(--ink-3); cursor: pointer; }
-.dg-n.struck rect { stroke: var(--ink-3); stroke-dasharray: 3 3; }
-.dg-n.struck text { fill: var(--ink-2); }
-.dg-legend { margin: 4px 0 0; padding: 10px 16px 12px; border-top: 1px solid var(--rule-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.dg-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 8px; font-size: 12px; color: var(--ink-2); }
+.dg-legend .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.sw.counted, .seg.counted, .chip.counted i { background: var(--h-green-dot); }
+.sw.held, .seg.held, .chip.held i { background: var(--h-amber-dot); }
+.sw.not, .seg.not, .chip.not i { background: var(--h-grey-dot); }
 .dg-hint { margin-left: auto; color: var(--ink-3); }
-.dg .struck, .dg .struck text, .dg .struck tspan { text-decoration: none; }
-.dg-e text { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
-/* Attio pass: shared radius on the panel, softer node chips */
-.dg { border-radius: var(--r-lg); }
-.dg-n rect { rx: 8px; }
-.dg-legend { color: var(--ink-2); }
 
-/* p7 meaning palette: counted edges carry rule O1's hue, held edges the guard (amber) hue, the rest grey */
-.dg-e.counted { --c-dot: var(--h-blue-dot); --c-fg: var(--h-blue-fg); }
-.dg-e.held { --c-dot: var(--h-amber-dot); --c-fg: var(--h-amber-fg); }
-.dg-e.struck, .dg-e.in { --c-dot: var(--h-grey-dot); --c-fg: var(--h-grey-fg); }
-.dg-e .ln { stroke: var(--c-dot) !important; }
-.dg-e .note { fill: var(--c-fg) !important; }
-.dg-m.counted path { fill: var(--h-blue-dot); }
-.dg-m.held path { fill: var(--h-amber-dot); }
-.dg-m.struck path, .dg-m.in path { fill: var(--h-grey-dot); }
-.dg-n.held rect { stroke: var(--h-amber-dot); }
-.dg-legend .sw { border-top-color: var(--h-blue-dot); }
-.dg-legend .sw.held { border-top: 2px dashed var(--h-amber-dot); }
-.dg-legend .sw.struck { border-top: 2px dashed var(--h-grey-dot); }
-.dg-legend .sw.in { border-top: 2px solid var(--h-grey-dot); }
+.dg-table { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.dg-row { display: grid; grid-template-columns: minmax(140px, 200px) minmax(120px, 220px) 1fr; gap: 16px; padding: 10px 14px;
+  border-top: 1px solid var(--rule); align-items: start; animation: dg-in 320ms ease-out both; animation-delay: calc(var(--i, 0) * 40ms); }
+.dg-th { border-top: 0; padding: 8px 14px; font-size: 12px; color: var(--ink-3); animation: none; }
+.dg-to { font-weight: 600; font-size: 14px; color: var(--ink); padding-top: 4px; }
+.dg-bar { display: flex; align-items: center; gap: 8px; padding-top: 6px; }
+.dg-bar .track { display: flex; height: 8px; border-radius: 4px; overflow: hidden; min-width: 8px; gap: 1px; }
+.dg-bar .seg { display: block; height: 100%; }
+.dg-bar b { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.dg-moves { display: flex; flex-direction: column; gap: 2px; }
+.dg-mv { display: grid; grid-template-columns: minmax(160px, 1.2fr) 96px auto 2fr; gap: 12px; align-items: center; text-align: left;
+  background: none; border: 0; border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
+.dg-mv:hover, .dg-mv:focus-visible { background: var(--h-grey-bg); outline: none; }
+.dg-mv .when { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.dg-mv .why { color: var(--ink-2); font-size: 12px; }
+.dg .chip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid; white-space: nowrap; }
+.dg .chip i { width: 6px; height: 6px; border-radius: 50%; }
+.dg .chip.counted { color: var(--h-green-fg); background: var(--h-green-bg); border-color: var(--h-green-bd); }
+.dg .chip.held { color: var(--h-amber-fg); background: var(--h-amber-bg); border-color: var(--h-amber-bd); }
+.dg .chip.not { color: var(--h-grey-fg); background: var(--h-grey-bg); border-color: var(--h-grey-bd); }
+.dg-in { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
+.dg-how { margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.dg-how summary { cursor: pointer; color: var(--ink-3); }
+.dg-how p { margin: 6px 0 0; max-width: 90ch; line-height: 1.5; }
+
+@keyframes dg-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dg-row { animation: none; } }

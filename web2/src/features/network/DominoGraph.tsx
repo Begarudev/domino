@@ -1,165 +1,141 @@
-// Domino graph: the companies around one focal company and the dated moves between them. Hand-built SVG, no library.
-// Departures go out (right), arrivals come in (left). An edge is struck ("not counted") when the O1 departures clause
-// names it as not conclusive, and held when the company's O1 opening is held. Every edge opens its evidence.
-import type { CompanyDesk, CompanyDossier, Departure } from '../../data/desk.ts';
-import type { TalentFlow } from '../../../../shared/desk.ts';
+// Domino graph: where one company's people went in the 90-day window, and whether rule O1 counts each move toward a
+// predicted opening (server/domain/openings.ts detectOpenings). A move is judged per role family, never per company:
+//   - company headcount outside 20–5,000 → O1 skips the company, so nothing is counted (MIN_STAFF / MAX_STAFF);
+//   - no O1 opening for the move's role family → not counted;
+//   - named "not conclusive" in that opening's o1.departures clause (month straddles the window start) → not counted;
+//   - the family's opening is held by a guard → held; otherwise counted.
+// Rendered as a destination table with flow bars: labels never sit on lines. Each row opens its dated source.
+import type { CompanyDesk, CompanyDossier, Departure, Opening } from '../../data/desk.ts';
+import { ROLE_FAMILY_LABELS } from '../../data/desk.ts';
 import { fmtDate } from '../../lib/format.ts';
 import { openEvidence } from '../../shell/ui.ts';
 import './network.css';
 
-type Kind = 'counted' | 'struck' | 'held' | 'in';
-interface Edge { key: string; other: string; side: 'out' | 'in'; kind: Kind; n: number; label: string; note: string | null; evidenceId: string | null; noteEvidenceId?: string | null }
+type Kind = 'counted' | 'held' | 'not';
+interface Move { d: Departure; kind: Kind; reason: string; left: string; reasonEvidenceId: string | null }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const month = (iso: string | null) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}` : 'undated');
-const when = (iso: string | null, precision: 'day' | 'month') => (precision === 'month' ? month(iso) : iso ? fmtDate(iso, true) : 'undated');
+const MIN_STAFF = 20, MAX_STAFF = 5_000;
+const KIND_LABEL: Record<Kind, string> = { counted: 'Counted by O1', held: 'Held by a guard', not: 'Not counted' };
 
-function people(rows: { role: string; initial: string | null }[]): string {
-  const roles = new Set(rows.map((r) => r.role));
-  if (rows.length > 1 && roles.size === 1) return /[a-z]$/i.test(rows[0].role) ? `${rows.length} ${rows[0].role}s` : `${rows.length} people, ${rows[0].role}`;
-  if (rows.length === 1) return `${rows[0].initial ? `${rows[0].initial}, ` : ''}${rows[0].role}`;
-  return `${rows.length} people`;
-}
-
-function buildEdges(desk: CompanyDesk, dossier: CompanyDossier | null): Edge[] {
-  const clauses = desk.openings.flatMap((o) => o.clauses ?? []);
-  const depDetail = clauses.find((c) => c.id === 'o1.departures')?.detail ?? '';
-  const held = desk.openings.find((o) => o.status === 'held') ?? null;
-  const heldReason = held?.holdReasons?.[0]?.split(/[:(]/)[0].trim().toLowerCase() || null;
-  const heldClause = held?.clauses?.find((c) => c.state === 'failed' && c.id.startsWith('guard.')) ?? null;
+function judge(desk: CompanyDesk, dossier: CompanyDossier | null): { moves: Move[]; band: string | null } {
+  const headcount = (desk.company as { headcount?: number | null }).headcount ?? null;
+  const outOfBand = headcount != null && (headcount < MIN_STAFF || headcount > MAX_STAFF);
+  const band = outOfBand ? `${headcount!.toLocaleString('en-US')} staff is outside O1's 20–5,000 band` : null;
   const evAll = [...desk.evidence, ...(dossier?.evidence ?? [])];
-  const report = heldClause?.evidenceIds.map((id) => evAll.find((e) => e.id === id)).find((e) => e?.observedAt) ?? null;
+  const byFamily = new Map<string, Opening>();
+  for (const o of desk.openings) if (o.rule === 'O1' && o.roleFamily) byFamily.set(o.roleFamily, o);
 
-  // a departure is dated by the month the person LEFT (evidence end date), as in the O1 clause and Talent flows
-  const leftWhen = (d: Departure) => { const e = evAll.find((x) => x.id === d.evidenceId); return e?.observedAt ? when(e.observedAt, e.precision ?? d.precision) : when(d.date, d.precision); };
-  const groups = new Map<string, Departure[]>();
-  for (const d of desk.departures) {
-    if (!d.toCompanyName) continue;
-    const k = `${d.toCompanyName}|${leftWhen(d)}`;
-    groups.set(k, [...(groups.get(k) ?? []), d]);
-  }
-  const out: Edge[] = [...groups.entries()].map(([k, ds]) => {
-    const to = ds[0].toCompanyName as string;
-    const struck = depDetail.includes(`→ ${to}: not conclusive`);
-    const isHeld = !struck && !!held && ds.every((d) => d.roleFamily === held.roleFamily);
-    const kind: Kind = struck ? 'struck' : isHeld ? 'held' : 'counted';
-    const note = struck ? 'not counted: not conclusive' : isHeld
-      ? `held: ${heldReason ?? 'guard matched'}${report?.observedAt ? `, guard report ${fmtDate(report.observedAt, true)}` : ''}`
-      : 'counted by O1';
-    return { key: `o:${k}`, other: to, side: "out", kind, n: ds.length, label: `${people(ds)}, left ${leftWhen(ds[0])}`, note, evidenceId: ds[0].evidenceId, noteEvidenceId: isHeld ? report?.id ?? null : null };
+  const moves = desk.departures.filter((d) => d.toCompanyName).map((d): Move => {
+    const ev = evAll.find((x) => x.id === d.evidenceId);
+    const left = month(ev?.observedAt ?? d.date);
+    if (band) return { d, kind: 'not', reason: band, left, reasonEvidenceId: null };
+    const op = d.roleFamily ? byFamily.get(d.roleFamily) : undefined;
+    const fam = d.roleFamily ? ROLE_FAMILY_LABELS[d.roleFamily] : 'unclassified';
+    if (!op) return { d, kind: 'not', reason: `no O1 opening for ${fam} (needs 2 conclusive departures)`, left, reasonEvidenceId: null };
+    const dep = op.clauses?.find((c) => c.id === 'o1.departures');
+    if (dep?.detail?.includes(`${d.role}, `) && dep.detail.includes(`→ ${d.toCompanyName}: not conclusive`))
+      return { d, kind: 'not', reason: 'month straddles the 90-day window start', left, reasonEvidenceId: null };
+    if (op.status === 'held') {
+      const guard = op.clauses?.find((c) => c.state === 'failed' && c.id.startsWith('guard.'));
+      return { d, kind: 'held', reason: op.holdReasons?.[0] ?? guard?.text ?? 'a guard matched', left, reasonEvidenceId: guard?.evidenceIds[0] ?? null };
+    }
+    return { d, kind: 'counted', reason: `toward the ${fam} opening`, left, reasonEvidenceId: null };
   });
-
-  const seen = new Set(out.map((e) => e.other));
-  const ins = new Map<string, TalentFlow[]>();
-  for (const f of dossier?.talentFlows ?? []) {
-    if (f.direction !== 'in' || !f.otherCompanyName || seen.has(f.otherCompanyName)) continue;
-    ins.set(f.otherCompanyName, [...(ins.get(f.otherCompanyName) ?? []), f]);
-  }
-  const inEdges: Edge[] = [...ins.entries()].slice(0, 4).map(([from, fs]) => ({
-    key: `i:${from}`, other: from, side: 'in', kind: 'in', n: fs.length, label: `${people(fs)}, ${when(fs[0].date, fs[0].precision)}`, note: 'joined', evidenceId: fs[0].evidenceIds[0] ?? null,
-  }));
-  return [...out, ...inEdges];
+  return { moves, band };
 }
-
-const W = 1160, NODE_H = 34, ROW = 72;
 
 export function DominoGraph({ desk, dossier, checkedAt }: { desk: CompanyDesk; dossier: CompanyDossier | null; checkedAt?: string | null }) {
-  const edges = buildEdges(desk, dossier);
   const name = desk.company.name;
   const asOf = checkedAt ?? dossier?.asOf ?? desk.checkedAt ?? null;
+  const { moves, band } = judge(desk, dossier);
+  const joined = (dossier?.talentFlows ?? []).filter((f) => f.direction === 'in' && f.otherCompanyName);
 
-  if (!edges.length) {
+  const how = (
+    <details className="dg-how">
+      <summary>How this is computed</summary>
+      <p>Reads <code>GET /api/companies/:id</code> (departures, O1 openings and their clauses) and <code>GET /api/companies/:id/dossier</code> (talent flows).
+        Moves come from Crustdata person search, dated by the month the person left. Rule O1 runs per role family: it skips companies outside 20–5,000 staff,
+        needs 2 conclusive departures inside the 90-day window (a month-only date counts only when the whole month is inside), then guards can hold the opening.
+        {asOf ? ` Checked ${fmtDate(asOf, true)}.` : ''}</p>
+    </details>
+  );
+
+  if (!moves.length) {
     return (
       <section className="panel dg" data-testid="domino-graph">
-        <header><h2>Domino graph</h2></header>
-        <p className="dg-none">No dated move from {name} to another company in the 90-day window{asOf ? ` · checked ${fmtDate(asOf, true)}` : ''}.</p>
+        <header className="dg-head"><h2>Domino graph</h2></header>
+        <p className="dg-none">No dated move from {name} to another company in the 90-day window{asOf ? `, checked ${fmtDate(asOf, true)}` : ''}.
+          {joined.length ? ` ${joined.length} ${joined.length === 1 ? 'person' : 'people'} joined ${name}.` : ''}</p>
+        {how}
       </section>
     );
   }
 
-  const outs = edges.filter((e) => e.side === 'out');
-  const ins = edges.filter((e) => e.side === 'in');
-  const rows = Math.max(outs.length, ins.length, 1);
-  const H = rows * ROW + 24;
-  const cy = H / 2, cx = ins.length ? W / 2 : 200;
-  const fw = Math.max(120, name.length * 9 + 32);
-  const yAt = (i: number, n: number) => cy + (i - (n - 1) / 2) * ROW;
-  const counted = outs.filter((e) => e.kind === 'counted').reduce((s, e) => s + e.n, 0);
-  const heldN = outs.filter((e) => e.kind === 'held').length;
-  const depN = outs.reduce((s, e) => s + e.n, 0);
-  const struckN = outs.filter((e) => e.kind === 'struck').length;
+  const count = (k: Kind) => moves.filter((m) => m.kind === k).length;
+  const counted = count('counted'), held = count('held'), not = count('not');
+  const dests = new Map<string, Move[]>();
+  for (const m of moves) dests.set(m.d.toCompanyName!, [...(dests.get(m.d.toCompanyName!) ?? []), m]);
+  const rows = [...dests.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  const max = rows[0][1].length;
+
+  const summary = band
+    ? `${moves.length} of ${name}'s people moved to ${rows.length} ${rows.length === 1 ? 'company' : 'companies'}, but none count toward a predicted opening: ${band}.`
+    : counted
+      ? `${counted} of ${moves.length} moves from ${name} count toward a predicted O1 opening${held ? `, ${held} held by a guard` : ''}${not ? `, ${not} not counted` : ''}.`
+      : `${moves.length} moves from ${name}; none count toward a predicted opening yet${held ? ` (${held} held by a guard)` : ''}.`;
 
   return (
     <section className="panel dg" data-testid="domino-graph">
-      <header>
-        <div className="dg-h">
+      <header className="dg-head">
+        <div>
           <h2>Domino graph</h2>
-          <p>Where {name}'s people went in the 90-day window, and whether rule O1 counts each move.</p>
+          <p className="dg-sum">{summary}</p>
         </div>
-        <span className="dg-sum">
-          {depN} {depN === 1 ? 'departure' : 'departures'} to {outs.length} {outs.length === 1 ? 'company' : 'companies'} · {counted} counted by O1
-          {ins.length > 0 ? ` · ${ins.reduce((s, e) => s + e.n, 0)} joined` : ''}{asOf ? ` · checked ${fmtDate(asOf, true)}` : ''}
-        </span>
+        <div className="dg-kpis">
+          <span className="kpi counted"><b>{counted}</b>counted</span>
+          <span className="kpi held"><b>{held}</b>held</span>
+          <span className="kpi not"><b>{not}</b>not counted</span>
+          {joined.length > 0 && <span className="kpi in"><b>{joined.length}</b>joined</span>}
+        </div>
       </header>
-      <svg className="dg-svg" viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`Moves between ${name} and other companies`}>
-        {[...outs.map((e, i) => ({ e, y: yAt(i, outs.length) })), ...ins.map((e, i) => ({ e, y: yAt(i, ins.length) }))].map(({ e, y }, i) => {
-          const x0 = e.side === 'out' ? cx + fw / 2 : 150;
-          const x1 = e.side === 'out' ? W - 150 : cx - fw / 2;
-          const y0 = e.side === 'out' ? cy : y, y1 = e.side === 'out' ? y : cy;
-          const span = x1 - x0, ca = e.side === 'out' ? x0 + span * 0.12 : x0 + span * 0.6, cb = e.side === "out" ? x0 + span * 0.26 : x0 + span * 0.78;
-          const d = `M${x0},${y0} C${ca},${y0} ${cb},${y1} ${x1},${y1}`; // fan out early, run flat under the label
-          const lx = e.side === 'out' ? x1 - 14 : x0 + 14;
-          const anchor = e.side === 'out' ? 'end' : 'start';
-          const open = () => e.evidenceId && openEvidence(e.evidenceId);
-          return (
-            <g key={e.key} className={`dg-e ${e.kind}${e.evidenceId ? ' link' : ''}`} style={{ ['--i' as string]: i }}
-              role={e.evidenceId ? 'button' : undefined} tabIndex={e.evidenceId ? 0 : undefined}
-              aria-label={`${e.side === 'out' ? `${name} to ${e.other}` : `${e.other} to ${name}`}: ${e.label}${e.note ? `, ${e.note}` : ''}`}
-              onClick={open} onKeyDown={(k) => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); open(); } }}>
-              <path className="hit" d={d} />
-              <path className="ln" d={d} pathLength={1} markerEnd={`url(#dg-arrow-${e.kind})`} />
-              <text x={lx} y={y - 12} textAnchor={anchor}>
-                <tspan className="lbl">{e.label}</tspan>
-                {e.note && <tspan className="sep">{'  ·  '}</tspan>}
-                {e.note && (e.noteEvidenceId
-                  ? <tspan className="note st-t src" onClick={(ev) => { ev.stopPropagation(); openEvidence(e.noteEvidenceId as string); }}>{e.note}</tspan>
-                  : <tspan className="note st-t">{e.note}</tspan>)}
-              </text>
-            </g>
-          );
-        })}
-        <defs>
-          {(['counted', 'struck', 'held', 'in'] as Kind[]).map((k) => (
-            <marker key={k} id={`dg-arrow-${k}`} className={`dg-m ${k}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
-              <path d="M0,0 L8,4 L0,8 z" />
-            </marker>
-          ))}
-        </defs>
-        {outs.map((e, i) => <Node key={e.key} x={W - 150} y={yAt(i, outs.length)} label={e.other} side="out" kind={e.kind} />)}
-        {ins.map((e, i) => <Node key={e.key} x={150} y={yAt(i, ins.length)} label={e.other} side="in" kind={e.kind} />)}
-        <g className="dg-n focal">
-          <rect x={cx - fw / 2} y={cy - NODE_H / 2} width={fw} height={NODE_H} rx={6} />
-          <text x={cx} y={cy + 5} textAnchor="middle">{name}</text>
-        </g>
-      </svg>
       <p className="dg-legend">
-        <span><i className="sw counted" />Counted by O1 · {counted}</span>
-        {heldN > 0 && <span><i className="sw held" />Held by a guard · {heldN}</span>}
-        {struckN > 0 && <span><i className="sw struck" />Not counted · {struckN}</span>}
-        {ins.length > 0 && <span><i className="sw in" />Joined {name} · {ins.length}</span>}
-        <span className="dg-hint">Click an edge for its dated source.</span>
+        {(['counted', 'held', 'not'] as Kind[]).map((k) => <span key={k}><i className={`sw ${k}`} />{KIND_LABEL[k]}</span>)}
+        <span className="dg-hint">Hover a move for its reason; click to open the dated source.</span>
       </p>
+      <div className="dg-table" role="table" aria-label={`Where ${name}'s people went`}>
+        <div className="dg-row dg-th" role="row">
+          <span role="columnheader">Destination</span><span role="columnheader">Moves</span><span role="columnheader">Who and when, with the O1 verdict</span>
+        </div>
+        {rows.map(([to, ms], i) => (
+          <div className="dg-row" role="row" key={to} style={{ ['--i' as string]: i }}>
+            <span className="dg-to" role="cell">{to}</span>
+            <span className="dg-bar" role="cell" aria-label={`${ms.length} moves`}>
+              <span className="track" style={{ width: `${(ms.length / max) * 100}%` }}>
+                {(['counted', 'held', 'not'] as Kind[]).map((k) => {
+                  const n = ms.filter((m) => m.kind === k).length;
+                  return n ? <i key={k} className={`seg ${k}`} style={{ flex: n }} /> : null;
+                })}
+              </span>
+              <b>{ms.length}</b>
+            </span>
+            <span className="dg-moves" role="cell">
+              {ms.map((m) => (
+                <button key={m.d.id} type="button" className={`dg-mv ${m.kind}`} title={`${KIND_LABEL[m.kind]}: ${m.reason}`}
+                  onClick={() => m.d.evidenceId && openEvidence(m.reasonEvidenceId ?? m.d.evidenceId)}>
+                  <span className="who">{m.d.initial ? `${m.d.initial}, ` : ''}{m.d.role}</span>
+                  <span className="when">left {m.left}</span>
+                  <span className={`chip ${m.kind}`}><i />{m.kind === 'counted' ? 'Counted' : m.kind === 'held' ? 'Held' : 'Not counted'}</span>
+                  <span className="why">{m.reason}</span>
+                </button>
+              ))}
+            </span>
+          </div>
+        ))}
+      </div>
+      {joined.length > 0 && <p className="dg-in">Joined {name} in the window: {[...new Set(joined.map((f) => f.otherCompanyName))].join(', ')}.</p>}
+      {how}
     </section>
-  );
-}
-
-function Node({ x, y, label, side, kind }: { x: number; y: number; label: string; side: 'out' | 'in'; kind: Kind }) {
-  const w = Math.max(96, label.length * 8 + 28);
-  const left = side === 'out' ? x : x - w;
-  return (
-    <g className={`dg-n ${kind}`}>
-      <rect x={left} y={y - NODE_H / 2} width={w} height={NODE_H} rx={6} />
-      <text x={left + w / 2} y={y + 5} textAnchor="middle">{label}</text>
-    </g>
   );
 }
