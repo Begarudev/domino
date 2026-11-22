@@ -1,0 +1,33 @@
+/* Verifier colour (p7-color): every claim result gets its meaning hue from styles/colors.css. The glyph (✓ ○ ×  –)
+   stays beside the colour, and each result is labelled in text, so colour is never the only cue. */
+
+/* tally marks and row marks */
+.vt-mark.m-verified { color: var(--h-green-dot); }
+.vt-mark.m-open { color: var(--h-sky-dot); }
+.vt-mark.m-not_met, .vt-mark.m-cant, .vt-mark.m-removed { color: var(--h-red-dot); }
+.vt-mark.m-guard { color: var(--h-amber-dot); }
+.vt-mark.m-not_evaluated { color: var(--h-grey-dot); }
+
+/* result column: p3's dot pill (.ver-stp > i) gets its meaning tint; "I can't verify" becomes the same pill in red */
+.ver-t .ver-stp, .ver-t .cant {
+  --c-dot: var(--h-grey-dot); --c-fg: var(--h-grey-fg); --c-bg: var(--h-grey-bg); --c-bd: var(--h-grey-bd);
+  display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 22px; padding: 0 8px;
+  border-radius: 6px; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap;
+  background: var(--c-bg); color: var(--c-fg); border: 1px solid var(--c-bd);
+}
+.ver-t .ver-stp i { background: var(--c-dot); border: 0; width: 6px; height: 6px; }
+.ver-t .cant::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--c-dot); }
+.ver-t .ver-stp.s-verified { --c-dot: var(--h-green-dot); --c-fg: var(--h-green-fg); --c-bg: var(--h-green-bg); --c-bd: var(--h-green-bd); }
+.ver-t .ver-stp.s-open { --c-dot: var(--h-sky-dot); --c-fg: var(--h-sky-fg); --c-bg: var(--h-sky-bg); --c-bd: var(--h-sky-bd); }
+.ver-t .ver-stp.s-not_met, .ver-t .ver-stp.s-removed, .ver-t .cant { --c-dot: var(--h-red-dot); --c-fg: var(--h-red-fg); --c-bg: var(--h-red-bg); --c-bd: var(--h-red-bd); }
+.ver-t .ver-stp.s-guard { --c-dot: var(--h-amber-dot); --c-fg: var(--h-amber-fg); --c-bg: var(--h-amber-bg); --c-bd: var(--h-amber-bd); }
+
+/* group header: the rule id carries its rule hue (O1 = blue) */
+.ver-t tr.vg .rid { color: var(--h-blue-fg); font-weight: 600; }
+
+/* guard steps: met steps tick green, the decision cell is held (amber), not teal (teal = DOMINO delivered) */
+.steps .done b::before { color: var(--h-green-dot); }
+.steps .cur { background: var(--h-amber-bg); }
+.steps .cur span { color: var(--h-amber-fg); }
+.steps .cur b { color: var(--h-amber-fg); }
+.guard-quote { border-left-color: var(--h-pink-dot); }

@@ -36,6 +36,8 @@ test('month-only dates are intervals checked against the whole 90-day window', (
   assert.equal(drainWindow(monthInterval('2026-10-01'), asOf), 'inside');
   assert.equal(drainWindow(monthInterval('2026-08-01'), asOf), 'straddles');  // window opens 24 Aug
   assert.equal(drainWindow(monthInterval('2026-07-01'), asOf), 'outside');
+  // Read on the as-of day, a move dated in that same month has already happened: inside, not straddling.
+  assert.equal(drainWindow(monthInterval(asOf.slice(0, 7) + '-01'), asOf), 'inside');
 });
 
 test('Abacus.AI: two settled October departures and no replacement yet -> open, provisional until the window closes', () => {

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, describe, test } from 'node:test';
 import type { Draft, Evidence } from '../../shared/types.ts';
+import { API_ERROR } from '../../shared/types.ts';
 import type { Candidate, CompanySummary, CompanyView, IntroPreview, IntroRequest, OpeningForCandidate } from '../../shared/desk.ts';
 import { waitFor } from '../../scripts/smoke.ts';
 import { displayName, enrichFixture, linkedinProfileUrl, parseEnrich, personEnrich } from '../crustdata/person-enrich.ts';
@@ -198,9 +199,10 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.ok(expect.includes(res.status), `${path} returned HTTP ${res.status}: ${await res.clone().text()}`);
     return res.json() as Promise<T>;
   };
-  const onboard = async (consent: Candidate['consent'], samples?: string[]) => {
+  // Each test onboards its own person (one profile URL is one candidate).
+  const onboard = async (consent: Candidate['consent'], samples?: string[], handle = 'fictional-asha') => {
     const { candidateId, runId } = await call<{ candidateId: string; runId: string }>('/api/candidates',
-      { linkedinUrl: 'https://www.linkedin.com/in/fictional-asha', consent, samples });
+      { linkedinUrl: `https://www.linkedin.com/in/${handle}`, consent, samples }, [200, 201]);
     assert.match(runId, /^run_/);
     return waitFor(async () => {
       const candidate = await call<Candidate & { evidence: Evidence[] }>(`/api/candidates/${candidateId}`);
@@ -210,8 +212,24 @@ describe('search desk over HTTP (fixture mode)', () => {
   };
   const all = { shareHistory: true, shareSkills: true, shareSamples: true, discoverable: true };
 
+  test('a live openings scan needs an explicit confirmLive (never started by accident)', async () => {
+    const refused = await call<{ error: string }>('/api/openings/scan', { dataMode: 'live' }, [409]);
+    assert.match(refused.error, /confirmLive: true/);
+  });
+
+  test('404s carry a code only when the route is missing or has no data, never for an unknown id', async () => {
+    const missing = await call<{ code?: string }>('/api/no-such-route', undefined, [404]);
+    assert.equal(missing.code, API_ERROR.routeMissing);
+    const unknown = await call<{ error: string; code?: string }>('/api/companies/co_no_such', undefined, [404]);
+    assert.equal(unknown.code, undefined);
+    assert.match(unknown.error, /not found/);
+  });
+
   test('rejects anything but a LinkedIn profile URL', async () => {
-    await call('/api/candidates', { linkedinUrl: 'https://example.com/in/x', consent: all }, [400]);
+    const { error } = await call<{ error: string }>('/api/candidates', { linkedinUrl: 'https://example.com/in/x', consent: all }, [400]);
+    // The hint survives the people-redaction boundary (a URL-shaped example would come out as linkedin.com/in/[redacted]).
+    assert.match(error, /linkedin\.com\/in\//);
+    assert.doesNotMatch(error, /redacted/);
     await call('/api/candidates', { linkedinUrl: 'https://www.linkedin.com/in/x1', consent: { shareHistory: true } }, [400]);
   });
 
@@ -285,8 +303,20 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.deepEqual(await call(`/api/candidates/${candidate.id}/inbox`), [], 'candidate-requested intros are not inbox items');
   });
 
+  test('re-creating the same profile returns the existing candidate, with the consent just given', async () => {
+    const first = await call<{ candidateId: string; runId: string }>('/api/candidates',
+      { linkedinUrl: 'https://www.linkedin.com/in/fictional-repeat/', consent: all }, [201]);
+    const again = await call<{ candidateId: string; runId: string; existing?: boolean }>('/api/candidates',
+      { linkedinUrl: 'https://www.linkedin.com/in/fictional-repeat', consent: { ...all, discoverable: false, shareSamples: false } }, [200]);
+    assert.equal(again.candidateId, first.candidateId);
+    assert.equal(again.runId, first.runId, 'no second profile read');
+    assert.equal(again.existing, true);
+    const row = await call<Candidate>(`/api/candidates/${first.candidateId}`);
+    assert.equal(row.consent.discoverable, false, 'the newer consent wins: a re-create can only narrow or widen it explicitly');
+  });
+
   test('confirm stores the candidate\'s edits with provenance and re-runs matching on them', async () => {
-    const parsed = await onboard({ shareHistory: true, shareSkills: true, shareSamples: false, discoverable: false });
+    const parsed = await onboard({ shareHistory: true, shareSkills: true, shareSamples: false, discoverable: false }, undefined, 'fictional-asha-2');
     assert.deepEqual(parsed.provenance, { roleFamily: 'Parsed by rules', skills: 'Parsed by rules' });
     // Unchanged values sent back are not edits.
     const same = await call<Candidate>(`/api/candidates/${parsed.id}/confirm`, { roleFamily: parsed.roleFamily, skills: parsed.skills });
@@ -314,8 +344,24 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.equal(preview.shared.find(field => field.field === 'skills')?.value, 'Kubernetes');
   });
 
+  test('read-only clarity views: every opening incl. watch, what the scan covered, and a run summary', async () => {
+    const all = await call<{ runId: string; scannedFamilies: string[]; openings: { status: string; roleFamily: string }[] }>('/api/openings');
+    assert.ok(all.openings.length > 0);
+    assert.deepEqual(all.scannedFamilies, ['inference', 'ml_platform', 'mlops', 'gpu_llm_infra']);
+    const open = await call<{ openings: { status: string }[] }>('/api/openings?status=open');
+    assert.ok(open.openings.every(row => row.status === 'open'));
+    const coverage = await call<{ notScanned: { id: string }[]; counts: { companiesChecked: number }; rule: string }>('/api/openings/coverage');
+    assert.deepEqual(coverage.notScanned.map(row => row.id), ['backend_payments']);
+    assert.ok(coverage.counts.companiesChecked > 0);
+    const summary = await call<{ runId: string; steps: { step: string }[]; credits: number }>(`/api/runs/${all.runId}/summary`);
+    assert.equal(summary.runId, all.runId);
+    assert.ok(summary.steps.length > 0);
+    assert.equal(summary.credits, 0, 'the fixture scan spends nothing');
+    await call('/api/runs/run_missing/summary', undefined, [404]);
+  });
+
   test('company view: drain as role + initial, discoverable matches only, company-to-candidate intro reaches the inbox', async () => {
-    const hidden = await onboard({ shareHistory: false, shareSkills: true, shareSamples: false, discoverable: false }, ['secret sample']);
+    const hidden = await onboard({ shareHistory: false, shareSkills: true, shareSamples: false, discoverable: false }, ['secret sample'], 'fictional-asha-3');
     assert.deepEqual(hidden.history, []);
     assert.deepEqual(hidden.samples, []);
     assert.ok(hidden.evidence.every(row => !row.source.field?.startsWith('experience.')), 'no history evidence without consent');

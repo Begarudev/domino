@@ -29,8 +29,8 @@ All shared types live in `shared/types.ts`. Do not change a type there without t
 - One root `package.json` (no workspaces). Server: `hono`, `@hono/node-server`, `zod`. Web: `vite`, `react`,
   `react-dom`, `@vitejs/plugin-react`, `typescript`, `motion`. Add others only if they clearly pay for themselves.
 - SQLite via built-in `node:sqlite` (`DatabaseSync`), file `data/domino.db`, WAL mode, `busy_timeout=5000`.
-- Web UI: Vite + React. `web2/` is the Search Desk app (candidate + company), `web/` the original run view; the server
-  serves `web2/dist` when `DOMINO_UI=web2`, else `web/dist`.
+- Web UI: Vite + React. `web2/` is the DOMINO app (sign-in with role, candidate side, company side), served at `/`;
+  `web/` is the original run view, served at `/classic` (built with base `/classic/`). `DOMINO_UI=web` puts it at `/`.
 - Port: `DOMINO_PORT` default `4321`.
 - Scripts: `bun start` (install if needed, build the UI if stale, start the server), `bun run dev` (server + vite dev
   with `/api` proxy), `bun run test` (`bun test server`), `bun run test:e2e`, `bun run smoke`, `bun run proof:send-once`.
@@ -292,5 +292,21 @@ Start an analysis run with the existing `POST /api/runs {request}` and approve w
 ### Rules registry
 
 `GET /api/rules` → `RuleCard[]` (`shared/desk.ts`): O1, R1, CONTAGION, DISPLACEMENT, DIRECT, each with its statement,
-thresholds, guards, lock time and live fire counts (O1 from the latest openings scan: open / provisional / held /
-watch; R1/CONTAGION/DISPLACEMENT/DIRECT from the latest analysis run).
+thresholds, guards, lock time and live fire counts. O1's counts and R1's watchlist (2 of 3, guard-held companies
+excluded) come from the latest openings scan. R1's fired and held counts, CONTAGION, DISPLACEMENT and DIRECT come
+from the latest analysis run.
+
+### Read-only views for first-time viewers (`server/desk/clarity.ts`; stored data only, 0 credits)
+
+- `GET /api/openings?status=all|open|watch|held&family=<RoleFamily>` → `{ runId, scannedFamilies, openings }`: every
+  opening in the latest scan, watch and held included.
+- `GET /api/openings/coverage` → `{ runId, scanAt, scannedFamilies, notScanned, counts { jobMovesRead,
+  companiesChecked, open, watch, held }, rule, served }`. The scan reads inference, ML platform, MLOps and GPU / LLM
+  infra titles; backend / payments is not scanned, and screens say so.
+- `GET /api/runs/:id/summary` → reads by type (live / cache / blocked / failed / credits), rules (accounts and held
+  per mechanism), verified and "can't verify" claims, drafted / not drafted / held before the gate, approvals,
+  deliveries and step timings from the run journal.
+
+Served drafts are re-checked against today's evidence gate. A draft that fails it comes back as
+`status: 'held_pre_gate'`, and `POST /api/approvals/:id` refuses it with 409 `held_pre_gate`. A live run whose drafts
+cite fixture rows carries `integrity.note`.

@@ -55,3 +55,37 @@ test('employer names inside cached work history are never treated as people', ()
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a past employer in a run snapshot stays a company: only the person becomes an initial', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'domino-redact-emp-'));
+  const store = new Store(join(dir, 'r.db'));
+  try {
+    const snapshot = {
+      people: [{ id: 'pe_1', name: 'Priya Ramaswamy', title: 'Inference Engineer', companyId: 'co_b', linkedinUrl: null, startedAt: '2026-10-27',
+        pastEmployers: [{ name: 'Orbital Compute', companyId: 'co_a', title: 'Inference Engineer', from: '2024-08-08', to: '2026-10-23' }] }],
+      drafts: [{ subject: 'Keeping inference capacity covered at Orbital Compute', body: 'Orbital Compute had 140 employees on 2026-11-15.' }],
+    };
+    const out = store.redactor.value(snapshot);
+    assert.equal(out.people[0].name, 'P.');
+    assert.equal(out.people[0].pastEmployers[0].name, 'Orbital Compute');
+    assert.equal(out.drafts[0].subject, 'Keeping inference capacity covered at Orbital Compute');
+    assert.equal(out.drafts[0].body, 'Orbital Compute had 140 employees on 2026-11-15.');
+    // A known person's first name is masked in a greeting, and only there.
+    assert.equal(store.redactor.text('Hi Priya,\n\nPriya Street Capital posted a role.'), 'Hi P.,\n\nPriya Street Capital posted a role.');
+    // A third party is an initial only, however the source shortened the name ("Ravi S." from the profile cache); the
+    // candidate's consented "Asha K." stays.
+    store.sql.prepare('INSERT INTO tool_cache (key, provider, endpoint, request_json, response_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('c'.repeat(64), 'crustdata', '/person/search', '{}', JSON.stringify({ profiles: [{ basic_profile: { name: 'Ravi S.' } }] }), new Date().toISOString());
+    const initials = store.redactor.value({ people: [
+      { id: 'pe_2', name: 'Kavya Menon R.', title: 'Senior AI Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_3', name: 'Ravi S.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_4', name: 'Kiran Q', title: 'Head of Platform', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_5', name: 'Asha K.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+    ] });
+    assert.deepEqual(initials.people.map(person => person.name), ['K.', 'R.', 'K.', 'Asha K.']);
+    assert.equal(store.redactor.text('Hi Kiran, Ravi S. left Hugging Face.'), 'Hi K., R. left Hugging Face.');
+  } finally {
+    store.sql.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

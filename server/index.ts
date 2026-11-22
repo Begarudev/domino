@@ -8,7 +8,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { MAX_REQUEST_CHARS } from '../shared/types.ts';
+import { API_ERROR, MAX_REQUEST_CHARS } from '../shared/types.ts';
 import type { Pipeline, RunEvent, RunLimits, RunStatus } from '../shared/types.ts';
 import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts';
 import { decode, Store } from './db.ts';
@@ -40,7 +40,7 @@ const runSchema = z.object({
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
   pipeline: z.enum(['outbound', 'openings', 'candidate', 'intro']).optional(),
 });
-const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>run bun run build:web</p></html>';
+const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>The UI is not built yet: run <code>bun start</code> (it builds the UI), or <code>bun run build:web2</code>.</p></html>';
 
 export function createApp(store: Store) {
   const app = new Hono();
@@ -275,6 +275,11 @@ export function createApp(store: Store) {
   app.post('/api/approvals/:id', async c => {
     const body = z.object({ decision: z.enum(['approve', 'reject']) }).safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: 'Expected decision approve or reject' }, 400);
+    // A draft that fails today's evidence gate is never sent, whenever it was drafted.
+    const asked = body.data.decision === 'approve' ? store.getApproval(c.req.param('id')) : undefined;
+    const held = asked?.status === 'pending'
+      ? store.transaction(() => snapshot(store, asked.runId).drafts.find(draft => draft.id === asked.draftId), 'read') : undefined;
+    if (held?.status === 'held_pre_gate') return c.json({ error: held.blockedReason, code: 'held_pre_gate' }, 409);
     const result = reserveApproval(store, c.req.param('id'), body.data.decision);
     if (!result) return c.json({ error: 'Approval not found' }, 404);
     const { approval, status } = result;
@@ -305,7 +310,7 @@ export function createApp(store: Store) {
     return updated ? c.json(updated) : c.json({ error: 'Evidence record was absent in the latest source response' }, 404);
   });
 
-  app.all('/api/*', c => c.json({ error: 'API route not found' }, 404));
+  app.all('/api/*', c => c.json({ error: 'API route not found', code: API_ERROR.routeMissing }, 404));
   // The original run view, built with base /classic/ (bun run build:classic), stays reachable at /classic.
   const classic = resolve(root, 'web/dist-classic');
   if (existsSync(resolve(classic, 'index.html'))) {
@@ -313,20 +318,27 @@ export function createApp(store: Store) {
     app.get('/classic/*', serveStatic({ root: classic, rewriteRequestPath: path => path.replace(/^\/classic/, '') }),
       serveStatic({ path: resolve(classic, 'index.html') }));
   }
-  // DOMINO_UI=web2 serves the Search Desk app (web2/); the default stays the original app (web/) until the UI freeze.
-  const dist = resolve(root, process.env.DOMINO_UI === 'web2' ? 'web2/dist' : 'web/dist');
+  // The DOMINO app (web2/: sign-in, candidate and company sides) is the main UI. DOMINO_UI=web serves the original run
+  // view at / instead; it is also always at /classic once built.
+  const dist = resolve(root, process.env.DOMINO_UI === 'web' ? 'web/dist' : 'web2/dist');
   if (existsSync(resolve(dist, 'index.html'))) {
     app.get('*', serveStatic({ root: dist }), serveStatic({ path: resolve(dist, 'index.html') }));
   }
   app.get('*', c => c.html(missingWeb));
-  return { app, reapMissingWorkers };
+  return { app, reapMissingWorkers, launch };
 }
 
 export function startServer() {
   const store = new Store();
   importCache(store);
-  const { app, reapMissingWorkers } = createApp(store);
+  const { app, reapMissingWorkers, launch } = createApp(store);
   reapMissingWorkers();
+  // A keyless first start has nothing to show: one scan of the labelled fixture world (0 credits, a few seconds) fills
+  // both the candidate and the company side. Live and cache servers never scan on their own.
+  const scanned = store.sql.prepare("SELECT 1 FROM runs WHERE pipeline = 'openings' LIMIT 1").get();
+  if (config.dataMode === 'fixture' && !scanned) {
+    launch('openings', 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles', { dataMode: 'fixture' });
+  }
   const timer = setInterval(reapMissingWorkers, 1000).unref();
   const server = serve({ fetch: app.fetch, port: config.port, hostname: '127.0.0.1' }, ({ port }) => {
     console.log(`DOMINO http://127.0.0.1:${port} · data ${config.dataMode} · LLM ${config.llm}`);

@@ -3,6 +3,7 @@
 // parser keeps only a display name (first name + last initial), headline, title, skills and dated roles. The tool
 // wrapper already strips email/phone keys from every live response before it is parsed or cached.
 import { z } from 'zod';
+import { LINKEDIN_URL_MAX } from '../../shared/desk.ts';
 import type { Evidence, IsoDate } from '../../shared/types.ts';
 import { isoDay, stableId } from '../domain/facts.ts';
 import type { ParseMeta, PersonMention } from '../domain/types.ts';
@@ -26,7 +27,7 @@ const MAX_ROLES = 12;
 
 // Accepts https://www.linkedin.com/in/<slug>[/] (any linkedin.com subdomain), nothing else.
 export function linkedinProfileUrl(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 300) return null;
+  if (typeof value !== 'string' || value.length > LINKEDIN_URL_MAX) return null;
   let url: URL;
   try { url = new URL(value.trim()); } catch { return null; }
   const host = url.hostname.toLowerCase();

@@ -7,8 +7,6 @@ import { useQuery } from '../data/query.ts';
 import { runStore, useRunSel } from '../data/store.ts';
 import { fmtDate, fmtTime } from '../lib/format.ts';
 import { getShell, signOut, useShell } from './ui.ts';
-import { setTheme, useTheme } from './theme.ts';
-import type { ThemeChoice } from './theme.ts';
 
 export function Mark() {
   return (
@@ -84,7 +82,7 @@ function RunChip() {
     return <span className="runchip" title="No run behind this page" data-testid="run-chip"><span className="dot idle" />{page === 'fixture' ? 'snapshot of today’s scan' : 'Loading the latest scan…'}</span>;
   }
   return (
-    <a className="runchip" data-testid="run-chip" title={`Run ${runId}. Open its reading log.`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
+    <a className="runchip" data-testid="run-chip" title={`Run ${runId}${served ? ` · ${served}` : ''}. Open its reading log.`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
       onClick={(e) => { e.preventDefault(); if (companyId) navigate({ page: 'company', id: companyId, tab: 'reading' }); }}>
       <span className={`dot${running ? ' run' : ''}`} />
       {served && !running ? `Snapshot · ${kind} · ${served}` : `${kind} · `}{served && !running ? '' : running ? 'running' : how === 'recorded' ? 'recorded' : how === 'mock' ? 'mock' : how === 'fixture' ? 'fixture' : how === 'cached live' ? 'cached live' : 'live'}
@@ -93,10 +91,9 @@ function RunChip() {
   );
 }
 
-/** Signed-in identity, theme, and the only way to change role: sign out. */
+/** Signed-in identity and the only way to change role: sign out. */
 function Account() {
   const s = useShell((x) => x);
-  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -110,7 +107,6 @@ function Account() {
   if (!s.role) return null;
   const who = s.role === 'company' ? s.companyName ?? 'Company' : s.candidateLabel ?? 'Candidate';
   const initial = who.trim()[0]?.toUpperCase() ?? '?';
-  const themes: ThemeChoice[] = ['auto', 'light', 'dark'];
   return (
     <div className="acct" ref={ref}>
       <button className="acct-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" data-testid="account">
@@ -125,12 +121,6 @@ function Account() {
           )}
           <button role="menuitem" className="acct-item" data-testid="sign-out"
             onClick={() => { setOpen(false); signOut(); runStore.clear(); navigate({ page: 'login' }); }}>Sign out</button>
-          <div className="thm">
-            <span>Theme</span>
-            <span className="seg" role="group" aria-label="Theme">
-              {themes.map((t) => <button key={t} aria-pressed={theme === t} onClick={() => setTheme(t)} data-testid={`theme-${t}`}>{t[0].toUpperCase() + t.slice(1)}</button>)}
-            </span>
-          </div>
         </div>
       )}
     </div>

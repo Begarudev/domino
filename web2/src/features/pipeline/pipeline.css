@@ -1,0 +1,39 @@
+/* "What's happening": six connected steps, ~56px, persistent under the company page title. */
+.pipe { display: flex; align-items: center; gap: 12px; min-height: 56px; margin: 0 0 16px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.pipe-h { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); width: 60px; line-height: 15px; }
+.pipe ol { list-style: none; margin: 0; padding: 0; display: flex; flex: 1; min-width: 0; }
+.pipe-n { flex: 1; min-width: 0; position: relative; opacity: 0; animation: pipe-in 200ms var(--ease) forwards; }
+/* connector: a hairline from this node's dot to the next */
+.pipe-n + .pipe-n::before { content: ''; position: absolute; left: -12px; right: calc(100% - 4px); top: 50%; height: 1px; background: var(--rule); }
+.pipe-n.is-done + .pipe-n::before { background: var(--acc-line); }
+.pipe-n a { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 8px; border-radius: 4px; color: inherit; text-decoration: none; transition: background 150ms var(--ease); }
+.pipe-n a:hover { background: var(--hover); }
+.pipe-n[aria-current='step'] a { background: var(--hover); }
+.pipe-dot { flex: none; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--ink-3); background: var(--surface); }
+.pipe-dot svg { width: 10px; height: 10px; fill: none; stroke: var(--on-acc); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.is-done .pipe-dot { border-color: var(--acc); background: var(--acc); }
+.is-waiting .pipe-dot { border-color: var(--acc); border-style: dashed; }
+.is-empty .pipe-dot { border-color: var(--rule); }
+.pipe-txt { display: flex; flex-direction: column; min-width: 0; }
+.pipe-l { font-size: 13px; font-weight: 600; line-height: 16px; display: flex; gap: 6px; align-items: baseline; }
+.pipe-t { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--ink-3); }
+.pipe-c { font-size: 13px; line-height: 17px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pipe-c b { font-weight: 600; font-size: 14px; color: var(--ink); }
+.is-empty .pipe-c, .is-empty .pipe-c b, .is-empty .pipe-l { color: var(--ink-3); }
+.is-waiting .pipe-c b { color: var(--acc); }
+@keyframes pipe-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pipe-n { animation: none; opacity: 1; } }
+@media (max-width: 1100px) { .pipe-h { display: none; } }
+
+/* one quiet "what this shows" line above tabs that draw their own header */
+.co-hint { margin: 0 0 12px; font-size: 13px; line-height: 18px; color: var(--ink-2); }
+
+/* p7-color: each step wears its state tone (colors.css). Done = green (met); the last step, Sent once, is teal
+   because teal means DOMINO acted / delivered; waiting on you = amber; not reached = grey. The count text names the state. */
+.is-done .pipe-dot { border-color: var(--h-green-dot); background: var(--h-green-dot); }
+.pipe-sent.is-done .pipe-dot { border-color: var(--h-teal-dot); background: var(--h-teal-dot); }
+.pipe-dot svg { stroke: var(--canvas); }
+.pipe-n.is-done + .pipe-n::before { background: var(--h-green-bd); }
+.is-waiting .pipe-dot { border-color: var(--h-amber-dot); background: var(--h-amber-bg); }
+.is-waiting .pipe-c b { color: var(--h-amber-fg); }
+.is-empty .pipe-dot { border-color: var(--h-grey-bd); background: var(--h-grey-bg); }

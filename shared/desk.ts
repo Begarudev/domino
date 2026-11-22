@@ -5,6 +5,10 @@ import type {
 } from './types.ts';
 
 export type RoleFamily = 'inference' | 'ml_platform' | 'mlops' | 'gpu_llm_infra' | 'backend_payments';
+/** Onboarding input limits, enforced by the server's schema and mirrored as maxLength on the form. */
+export const LINKEDIN_URL_MAX = 300;
+export const SAMPLE_MAX_CHARS = 2000;
+
 export const ROLE_FAMILY_LABELS: Record<RoleFamily, string> = {
   inference: 'Inference / model serving', ml_platform: 'ML platform / ML infrastructure', mlops: 'MLOps',
   gpu_llm_infra: 'GPU / LLM infrastructure', backend_payments: 'Backend / payments',
@@ -54,7 +58,15 @@ export interface RuleClause {
 
 // Funnel with drill-down: every count opens its rows (role + initial + month for people).
 export interface FunnelStage { id: string; label: string; count: number; rows?: { label: string; detail?: string; evidenceId?: string }[] }
-export interface OpeningsFunnel { runId: string; rule: 'O1'; lockedAt: string; snapshot: string; stages: FunnelStage[] }
+export interface OpeningsFunnel { runId: string; rule: 'O1'; lockedAt: string; snapshot: string; stages: FunnelStage[]; served?: ServedFrom }
+
+// How a run's Crustdata reads were served: live calls vs the recorded cache, and when the data was actually read.
+// e.g. "Live Crustdata read 22 Nov, 14:08–14:17 IST · replayed from the recorded cache (0 credits)"
+export interface ServedFrom {
+  liveCalls: number; cacheHits: number; credits: number;
+  readFrom: string | null; readTo: string | null;   // ISO times of the underlying live reads
+  label: string;
+}
 
 // Rules registry: id, thresholds, lock time and today's live fire counts.
 export interface RuleCard {
@@ -131,6 +143,10 @@ export interface IntroRequest {
   runId: string | null;             // intro pipeline run: draft, approval, outbox (send once)
   approvalId?: string | null;       // POST /api/approvals/:id with this id to approve or reject the send
   evidenceIds?: string[];           // rows the message cites
+  citations?: { marker: number; evidenceId: string }[];  // which row each footnote [n] in `message` points to
+  unverifiable?: { claim: string; reason: string }[];  // claims the verifier couldn't tie to a dated source ("I can't verify")
+  generatorLabel?: string | null;   // e.g. "Drafted by GPT-6 Luna from 4 verified claims" or the template label
+  subject?: string | null;
   receipt?: { idempotencyKey: string; receivedAt: IsoDateTime } | null; // from the test-inbox receiver (inbox_received); set once delivered
   receivedAt: IsoDateTime;
 }

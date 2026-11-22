@@ -4,24 +4,28 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
+import { API_ERROR } from '../../shared/types.ts';
 import type {
   Candidate, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
 } from '../../shared/desk.ts';
-import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
+import { LINKEDIN_URL_MAX, ROLE_FAMILY_LABELS, SAMPLE_MAX_CHARS } from '../../shared/desk.ts';
 import type { RoleFamily } from '../../shared/desk.ts';
 import type { Store } from '../db.ts';
+import { config } from '../env.ts';
 import { linkedinProfileUrl } from '../crustdata/person-enrich.ts';
 import { introSharedFields } from '../engine/candidate-steps.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
 import { compareOpenings, whyThisTarget } from './why.ts';
+import { servedFrom } from './rules.ts';
+import { runSummary, scanCoverage, SCANNED_FAMILIES } from './clarity.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
-  listCandidateRows, listIntroRows, openingsSnapshot, setCandidateRun, setIntroRun,
+  listCandidateRows, listIntroRows, openingsSnapshot, reconsentCandidate, setCandidateRun, setIntroRun,
   companiesOf, companySummaries,
 } from './store.ts';
-import type { CandidateEdits, IntroRow, OpeningsSnapshot } from './store.ts';
+import type { CandidateEdits, CandidateRow, IntroRow, OpeningsSnapshot } from './store.ts';
 
 // The send-once proof's fault injection (scripts/send-once-proof.ts); /api/runs accepts the same flag.
 type InjectedChaos = { crashAfterDeliver?: boolean };
@@ -43,8 +47,8 @@ const confirmSchema = z.object({
   skills: z.array(z.string().max(60)).max(40).optional(),
 });
 const candidateSchema = z.object({
-  linkedinUrl: z.string().max(300),
-  samples: z.array(z.string().max(2000)).max(5).optional(),
+  linkedinUrl: z.string().max(LINKEDIN_URL_MAX),
+  samples: z.array(z.string().max(SAMPLE_MAX_CHARS)).max(5).optional(),
   consent: consentSchema,
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
 });
@@ -85,6 +89,9 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       companyName: opening?.companyName ?? drafted?.company.name ?? row.companyId, openingId: row.openingId,
       roleTitle: opening?.roleTitle ?? drafted?.roleTitle ?? '', message: drafted?.draft?.body ?? '', status, runId: row.runId,
       approvalId: approval?.id ?? null, evidenceIds: drafted?.draft?.citations.map(item => item.evidenceId) ?? [],
+      citations: drafted?.draft?.citations.map(({ marker, evidenceId }) => ({ marker, evidenceId })) ?? [],
+      unverifiable: drafted?.draft?.unverifiable ?? [], generatorLabel: drafted?.draft?.generatorLabel ?? null,
+      subject: drafted?.draft?.subject ?? null,
       receipt, ...(blocked && { blockedReason: blocked }), receivedAt: receipt?.receivedAt ?? row.createdAt,
     };
   };
@@ -110,9 +117,18 @@ export function deskRoutes({ store, launch }: DeskDeps) {
   // ---------- openings ----------
 
   api.post('/openings/scan', async c => {
-    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string };
+    const body = await c.req.json().catch(() => ({})) as { request?: string; replay?: { asOf?: string }; dataMode?: string; confirmLive?: boolean };
     // dataMode 'cache' replays a previous live scan from the tool cache (0 credits); 'fixture' uses fictional companies.
-    const dataMode = body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
+    let dataMode: 'live' | 'cache' | 'fixture' | undefined =
+      body.dataMode === 'cache' || body.dataMode === 'fixture' || body.dataMode === 'live' ? body.dataMode : undefined;
+    // A fresh clone without a key has no recorded read to replay: a cache scan there runs on the labelled fixture world.
+    const emptyCache = (store.sql.prepare("SELECT count(*) AS n FROM tool_cache WHERE provider = 'crustdata'").get() as { n: number }).n === 0;
+    if (dataMode === 'cache' && config.dataMode === 'fixture' && emptyCache) dataMode = 'fixture';
+    // A live scan can spend hundreds of credits on cache misses, so it never starts by accident (a script, a page load).
+    if ((dataMode ?? config.dataMode) === 'live' && body.confirmLive !== true) {
+      return c.json({ error: 'A live scan reads Crustdata and can spend 300–600 credits. Send dataMode "cache" to replay the ' +
+        'recorded read for 0 credits, or confirmLive: true to read live.' }, 409);
+    }
     const asOf = /^\d{4}-\d{2}-\d{2}$/.test(body.replay?.asOf ?? '') ? body.replay!.asOf : null;
     const request = (body.request?.trim() || 'Predict openings in inference, ML platform, MLOps and GPU/LLM infrastructure roles') +
       (asOf ? `, replay as of ${asOf}` : '');
@@ -125,7 +141,30 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const runId = latestOpeningsRunId(store);
     const funnel = runId ? store.getOutput<{ funnel?: OpeningsFunnel }>(runId, 'detect_openings')?.funnel : undefined;
     if (!funnel) return c.json({ error: 'No completed openings scan with a funnel yet' }, 404);
-    return c.json(funnel);
+    return c.json({ ...funnel, served: servedFrom(store, runId!) });
+  });
+
+  // Every opening in the latest scan, watch and held included (read-only, 0 credits). ?status=open|watch|held|all
+  // (default all) and ?family=<role family> filter. Each opening's reasons give its dated departures as role + initial + month.
+  api.get('/openings', c => {
+    const scan = store.transaction(() => openingsSnapshot(store), 'read');
+    if (!scan) return c.json({ error: 'No completed openings scan yet', code: 'no_data' }, 404);
+    const status = c.req.query('status') ?? 'all';
+    const family = c.req.query('family');
+    const openings = scan.openings.filter(row => (status === 'all' || row.status === status) && (!family || row.roleFamily === family));
+    return c.json({ runId: scan.runId, scannedFamilies: SCANNED_FAMILIES, openings: openings.map(publicOpening) });
+  });
+
+  // What today's scan covered: role families read (and not), job moves read, companies checked, rule applied, scan time.
+  api.get('/openings/coverage', c => {
+    const coverage = store.transaction(() => scanCoverage(store), 'read');
+    return coverage ? c.json(coverage) : c.json({ error: 'No completed openings scan yet', code: 'no_data' }, 404);
+  });
+
+  // One run, step by step: reads by type, rules fired or held, claims verified, drafted or not, approvals, sends, timings.
+  api.get('/runs/:id/summary', c => {
+    const summary = store.transaction(() => runSummary(store, c.req.param('id')), 'read');
+    return summary ? c.json(summary) : c.json({ error: 'Run not found' }, 404);
   });
 
   // ---------- candidates ----------
@@ -136,10 +175,20 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       return c.json({ error: 'Expected linkedinUrl, consent {shareHistory, shareSkills, shareSamples, discoverable} and optional samples' }, 400);
     }
     const linkedinUrl = linkedinProfileUrl(body.data.linkedinUrl);
-    if (!linkedinUrl) return c.json({ error: 'Expected a LinkedIn profile URL like https://www.linkedin.com/in/your-name/' }, 400);
-    const candidateId = shortId('cand');
+    if (!linkedinUrl) return c.json({ error: 'Expected a LinkedIn profile link: linkedin.com/in/ followed by the profile name' }, 400);
     const consent = { ...body.data.consent, recordedAt: new Date().toISOString() };
     const samples = (body.data.samples ?? []).map(sample => String(sanitize(sample.trim(), true))).filter(Boolean);
+    // One profile per data mode is one candidate: re-creating it returns the existing record (no copy, no second enrich)
+    // with the consent just given, unless that record's profile read failed.
+    const mode = body.data.dataMode ?? config.dataMode;
+    const existing = listCandidateRows(store).filter(row => row.linkedinUrl === linkedinUrl && row.runId
+      && store.getRun(row.runId)?.data_mode === mode && !['failed', 'crashed', 'budget_exhausted'].includes(store.getRun(row.runId)?.status ?? ''))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (existing) {
+      reconsentCandidate(store, existing.id, consent, samples.length ? samples : existing.samples);
+      return c.json({ candidateId: existing.id, runId: existing.runId, existing: true }, 200);
+    }
+    const candidateId = shortId('cand');
     insertCandidate(store, { id: candidateId, linkedinUrl, consent, samples });
     // The run request names only the candidate id; the profile URL stays in the candidate row.
     const runId = launch('candidate', `candidate:${candidateId}`, { limits: CANDIDATE_LIMITS, dataMode: body.data.dataMode });
@@ -249,12 +298,23 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     // Accept the canonical id or a name slug ("abacus-ai" for Abacus.AI).
     const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const company = snapshot && companiesOf(snapshot).find(item => item.id === id || slug(item.name) === slug(id));
-    if (!snapshot || !company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
+    if (!snapshot) return c.json({ error: 'No openings scan yet', code: API_ERROR.noData }, 404);
+    if (!company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
     if (company.id !== id) return c.redirect(`/api/companies/${company.id}`, 302);
     const openings = snapshot.openings.filter(opening => opening.companyId === id).sort(compareOpenings);
     const summaries = companySummaries(snapshot);
     const departures = snapshot.departures.filter(departure => departure.companyId === id);
-    const candidates = listCandidateRows(store).map(row => candidateView(store, row))
+    // Earlier copies of the same profile (created before re-creates were deduplicated) show once: the copy with an intro
+    // at this company, else the newest.
+    const introFor = new Set(listIntroRows(store, { companyId: id }).map(row => row.candidateId));
+    const byProfile = new Map<string, CandidateRow>();
+    for (const row of listCandidateRows(store)) {
+      const kept = byProfile.get(row.linkedinUrl);
+      const better = !kept || (introFor.has(row.id) && !introFor.has(kept.id))
+        || (introFor.has(row.id) === introFor.has(kept.id) && row.createdAt > kept.createdAt);
+      if (better) byProfile.set(row.linkedinUrl, row);
+    }
+    const candidates = [...byProfile.values()].map(row => candidateView(store, row))
       .filter(candidate => candidate.status === 'ready' && candidate.consent.discoverable);
     const matches = candidates.flatMap(candidate => matchesFor(candidate, openings, snapshot.evidence)).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     const intros = listIntroRows(store, { companyId: id }).map(introView);

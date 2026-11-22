@@ -14,6 +14,7 @@ import {
 import type { ClaimRow, ClaimState } from '../chains/model.ts';
 import '../chains/chains.css';
 import './verifier.css';
+import './verifier-color.css';
 
 const ORDER: ClaimState[] = ['verified', 'open', 'not_met', 'guard', 'cant', 'removed', 'not_evaluated'];
 const MARK: Record<ClaimState, string> = { verified: '✓', open: '○', not_met: '×', guard: '×', cant: '×', removed: '×', not_evaluated: '–' };
@@ -55,7 +56,7 @@ export function Needs({ desk }: { desk: CompanyDesk }) {
         {dq.error && !dq.data && <p className="src-note ver-note">No company file for {desk.company.name} ({dq.error}); showing the openings’ clauses only.</p>}
         {!all.length && !dq.loading && <p className="ver-empty">No rule has evaluated {desk.company.name} yet, so there is nothing to verify.</p>}
         <table className="t ver-t">
-          <colgroup><col style={{ width: 32 }} /><col /><col style={{ width: 132 }} /><col style={{ width: 116 }} /><col style={{ width: 230 }} /></colgroup>
+          <colgroup><col style={{ width: 32 }} /><col /><col style={{ width: 132 }} /><col style={{ width: 128 }} /><col style={{ width: 230 }} /></colgroup>
           <thead><tr><th /><th>Claim</th><th>Result</th><th>Date</th><th>Source</th></tr></thead>
           {groups.map((g) => {
             const rows = filter ? g.rows.filter((r) => r.state === filter) : g.rows;
@@ -91,9 +92,9 @@ function ClaimTr({ r, ev }: { r: ClaimRow; ev: Map<string, Evidence> }) {
         <span className={struck ? 'struck' : undefined}>{r.text}</span>
         {r.reason && <span className="ver-reason">{r.reason}</span>}
       </td>
-      <td>{r.state === 'cant' ? <span className="cant">I can’t verify</span> : <span className={`ver-st s-${r.state}`}>{CLAIM_LABEL[r.state]}</span>}</td>
-      <td className="mono ver-date">{date}</td>
-      <td className="ver-src"><span>{source}</span>{more > 0 && <span className="faint"> +{more}</span>}</td>
+      <td>{r.state === 'cant' ? <span className="cant">I can’t verify</span> : <span className={`ver-st ver-stp s-${r.state}`}><i aria-hidden />{CLAIM_LABEL[r.state]}</span>}</td>
+      <td className="ver-date">{date}{/^[A-Z][a-z]{2} \d{4}$/.test(date) && <span className="ver-month">month-level</span>}</td>
+      <td className="ver-src" title={source}><span>{source}</span>{more > 0 && <span className="faint"> +{more}</span>}</td>
     </tr>
   );
 }

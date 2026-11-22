@@ -1,15 +1,15 @@
 // The Search Desk API that v2 consumes. Types are the shared contract (shared/desk.ts, docs/CONTRACT.md
 // "Search Desk" and "Company dossier"). Each call tries the live endpoint and falls back to the labelled fixture
 // below only when the endpoint doesn't exist yet; every response says which one it came from.
+import { API_ERROR } from '../../../shared/types.ts';
 import type { Evidence } from '../../../shared/types.ts';
 import type {
   Candidate, CompanyDossier, CompanySummary as SharedCompanySummary, CompanyView, Consent, Departure, FitReason,
   IntroRequest, Match, Opening as SharedOpening, OpeningForCandidate, OpeningReason, RoleFamily,
 } from '../../../shared/desk.ts';
-import { ROLE_FAMILY_LABELS } from '../../../shared/desk.ts';
 
 export type { Candidate, CompanyDossier, Consent, Departure, FitReason, IntroRequest, Match, OpeningReason, RoleFamily };
-export { ROLE_FAMILY_LABELS };
+export { LINKEDIN_URL_MAX, ROLE_FAMILY_LABELS, SAMPLE_MAX_CHARS } from '../../../shared/desk.ts';
 
 export type Provenance = 'live' | 'cache' | 'fixture' | 'sample';
 
@@ -153,9 +153,11 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new NotLive(url);
   }
   if (res.status === 404 || res.status === 405 || res.status === 501) {
-    // A 404 with a JSON error body for a real route (unknown company) is a real answer, not a missing endpoint.
-    const body = res.headers.get('content-type')?.includes('json') ? await res.clone().json().catch(() => null) as { error?: string } | null : null;
-    if (body?.error && !/not found|no route|cannot/i.test(body.error)) throw new Error(body.error);
+    // The server's codes decide (shared API_ERROR): a non-JSON 404 or the catch-all means the endpoint isn't built;
+    // "no data yet" falls back without hiding the route; any other error is a real answer about this id.
+    const body = await res.json().catch(() => null) as { error?: string; code?: string } | null;
+    if (body?.code === API_ERROR.noData) throw new NotLive(url);
+    if (body?.error && body.code !== API_ERROR.routeMissing) throw new Error(body.error);
     missing.add(key);
     throw new NotLive(url);
   }
@@ -172,15 +174,23 @@ const postJson = <T>(url: string, body: unknown) =>
 
 const fx = <T>(data: T): Sourced<T> => ({ data: structuredClone(data), source: 'fixture', evidence: FIXTURE_EVIDENCE });
 
-async function liveOr<T>(live: () => Promise<Sourced<T>>, fallback: () => Sourced<T>, forceFixture: boolean): Promise<Sourced<T>> {
-  if (forceFixture) return fallback();
+/** The live answer, or null when the server can't give one (endpoint not built, no data yet, offline). */
+async function orNull<T>(live: () => Promise<T>): Promise<T | null> {
   try {
     return await live();
   } catch (e) {
-    if (e instanceof NotLive) return fallback();
+    if (e instanceof NotLive) return null;
     throw e;
   }
 }
+export const tryJson = <T>(url: string, init?: RequestInit) => orNull(() => getJson<T>(url, init));
+
+async function liveOr<T>(live: () => Promise<Sourced<T>>, fallback: () => Sourced<T>, forceFixture: boolean): Promise<Sourced<T>> {
+  return (forceFixture ? null : await orNull(live)) ?? fallback();
+}
+
+/** Fixture rows (the demo candidate, the fictional companies and openings) carry `_fx_` ids the live server never saw. */
+export const isFixtureId = (id: string) => id.includes('_fx_');
 
 /** Live responses either are the value or wrap it ({openings: [...]}); evidence rows ride along when present. */
 function unwrap<T>(r: unknown, key?: string): Sourced<T> {
@@ -193,6 +203,7 @@ function unwrap<T>(r: unknown, key?: string): Sourced<T> {
 
 export function createDeskApi(opts: { fixtureOnly: boolean }): DeskApi {
   const f = opts.fixtureOnly;
+  const fixtureFor = (...ids: string[]) => f || ids.some(isFixtureId);
   let candidate = structuredClone(FIXTURE_CANDIDATE);
   const inbox: IntroRequest[] = [];
   return {
@@ -202,16 +213,16 @@ export function createDeskApi(opts: { fixtureOnly: boolean }): DeskApi {
         candidate = { ...structuredClone(FIXTURE_CANDIDATE), linkedinUrl: input.linkedinUrl || FIXTURE_CANDIDATE.linkedinUrl, consent: input.consent, samples: input.samples };
         return fx({ candidateId: candidate.id, runId: null });
       }, f),
-    candidate: (id) => liveOr(async () => unwrap(await getJson(`/api/candidates/${id}`), 'candidate'), () => fx(candidate), f),
+    candidate: (id) => liveOr(async () => unwrap(await getJson(`/api/candidates/${id}`), 'candidate'), () => fx(candidate), fixtureFor(id)),
     confirmCandidate: (id, consent) => liveOr(
       async () => unwrap(await postJson(`/api/candidates/${id}/confirm`, { consent }), 'candidate'),
-      () => { candidate = { ...candidate, consent, confirmedAt: new Date().toISOString() }; return fx(candidate); }, f),
+      () => { candidate = { ...candidate, consent, confirmedAt: new Date().toISOString() }; return fx(candidate); }, fixtureFor(id)),
     candidateOpenings: (id) => liveOr<Opening[]>(
       async () => unwrap<OpeningForCandidate[]>(await getJson(`/api/candidates/${id}/openings`), 'openings'),
-      () => fx<Opening[]>([{ ...OPENING_ABACUS, fit: MATCH_ABACUS.fit, matchScore: MATCH_ABACUS.score }, OPENING_POOLSIDE]), f),
+      () => fx<Opening[]>([{ ...OPENING_ABACUS, fit: MATCH_ABACUS.fit, matchScore: MATCH_ABACUS.score }, OPENING_POOLSIDE]), fixtureFor(id)),
     candidateInbox: (id) => liveOr(
       async () => unwrap<IntroRequest[]>(await getJson(`/api/candidates/${id}/inbox`), 'requests'),
-      () => fx(inbox), f),
+      () => fx(inbox), fixtureFor(id)),
     requestIntro: (candidateId, openingId) => liveOr(
       async () => unwrap(await postJson(`/api/candidates/${candidateId}/intros`, { openingId }), 'intro'),
       () => {
@@ -225,7 +236,7 @@ export function createDeskApi(opts: { fixtureOnly: boolean }): DeskApi {
         };
         inbox.push(req);
         return fx(req);
-      }, f),
+      }, fixtureFor(candidateId, openingId)),
     companies: () => liveOr(
       async () => {
         const r = unwrap<CompanySummary[]>(await getJson('/api/companies'), 'companies');
@@ -259,10 +270,10 @@ export function createDeskApi(opts: { fixtureOnly: boolean }): DeskApi {
             ],
           };
         return fx(desk);
-      }, f),
+      }, fixtureFor(id)),
     dossier: (id, runId) => liveOr(
       async () => { const r = unwrap<CompanyDossier>(await getJson(`/api/companies/${encodeURIComponent(id)}/dossier${runId ? `?run=${runId}` : ''}`)); return { ...r, source: r.data.dataMode === 'fixture' ? 'fixture' : r.data.dataMode === 'cache' ? 'cache' : 'live', evidence: r.data.evidence }; },
-      () => { throw new Error('No analysis run contains this company yet. Run a company analysis first.'); }, f),
+      () => { throw new Error('No analysis run contains this company yet. Run a company analysis first.'); }, fixtureFor(id)),
     async scanOpenings(dataMode: 'cache' | 'live' = 'cache') {
       if (f) return null;
       try { return await postJson<{ runId: string }>('/api/openings/scan', { dataMode }); } catch { return null; }

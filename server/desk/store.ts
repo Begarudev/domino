@@ -25,6 +25,9 @@ export function deskTables(store: Store) {
   `);
   const columns = store.sql.prepare('PRAGMA table_info(desk_candidates)').all().map(column => column.name);
   if (!columns.includes('edits_json')) store.sql.exec('ALTER TABLE desk_candidates ADD COLUMN edits_json TEXT');
+  // Archived intros (demo reset) stay in the database with their runs, outbox and receipts, but are no longer listed.
+  const introColumns = store.sql.prepare('PRAGMA table_info(desk_intros)').all().map(column => column.name);
+  if (!introColumns.includes('archived_at')) store.sql.exec('ALTER TABLE desk_intros ADD COLUMN archived_at TEXT');
   ready.add(store);
 }
 
@@ -75,6 +78,12 @@ export function confirmCandidate(store: Store, id: string, consent: Consent | un
   store.sql.prepare('UPDATE desk_candidates SET confirmed_at = ?, consent_json = ?, samples_json = ? WHERE id = ?')
     .run(now(), JSON.stringify(next), JSON.stringify(next.shareSamples ? row.samples : []), id);
 }
+// Re-onboarding the same profile: the consent just given replaces the old one (withdrawn sample consent deletes samples).
+export function reconsentCandidate(store: Store, id: string, consent: Consent, samples: string[]) {
+  deskTables(store);
+  store.sql.prepare('UPDATE desk_candidates SET consent_json = ?, samples_json = ? WHERE id = ?')
+    .run(JSON.stringify(consent), JSON.stringify(consent.shareSamples ? samples : []), id);
+}
 export function listCandidateRows(store: Store): CandidateRow[] {
   deskTables(store);
   return store.sql.prepare('SELECT * FROM desk_candidates ORDER BY created_at').all().map(candidateRow);
@@ -97,7 +106,18 @@ export function getIntroRow(store: Store, id: string): IntroRow | undefined {
 export function listIntroRows(store: Store, by: { candidateId?: string; companyId?: string }): IntroRow[] {
   deskTables(store);
   const [column, value] = by.candidateId ? ['candidate_id', by.candidateId] : ['company_id', by.companyId ?? ''];
-  return store.sql.prepare(`SELECT * FROM desk_intros WHERE ${column} = ? ORDER BY created_at DESC`).all(value).map(introRow);
+  return store.sql.prepare(`SELECT * FROM desk_intros WHERE ${column} = ? AND archived_at IS NULL ORDER BY created_at DESC`)
+    .all(value).map(introRow);
+}
+/** Demo reset: archive (never delete) every intro of a fictional fixture candidate, so the next "Request intro" drafts a
+ *  fresh one awaiting approval. Runs, approvals, outbox rows and receipts are kept. Returns the number archived. */
+export function archiveFixtureIntros(store: Store): number {
+  deskTables(store);
+  const fixtureIds = listCandidateRows(store).filter(row => candidateView(store, row).fixture).map(row => row.id);
+  if (!fixtureIds.length) return 0;
+  const result = store.sql.prepare(`UPDATE desk_intros SET archived_at = ? WHERE archived_at IS NULL
+    AND candidate_id IN (${fixtureIds.map(() => '?').join(', ')})`).run(now(), ...fixtureIds);
+  return Number(result.changes);
 }
 
 // ---------- openings (owned by the openings pipeline; read-only here) ----------

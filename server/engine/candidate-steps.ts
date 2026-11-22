@@ -13,6 +13,7 @@ import type { EnrichInput } from '../crustdata/person-enrich.ts';
 import { candidateView, getCandidateRow, getIntroRow, openingsSnapshot } from '../desk/store.ts';
 import { classifyProfile, matchesFor, ROLE_FAMILIES } from '../desk/match.ts';
 import type { Claim, PersonMention } from '../domain/types.ts';
+import { article, drainWindow, monthInterval } from '../domain/openings.ts';
 import { modelClient } from '../llm/client.ts';
 import { BudgetError, hash, ToolContext } from '../runtime/tool.ts';
 import type { CrustReadMeta } from '../runtime/tool.ts';
@@ -172,7 +173,6 @@ const familyNoun: Record<RoleFamily, string> = {
   gpu_llm_infra: 'GPU / LLM infrastructure engineer', backend_payments: 'Backend / payments engineer',
 };
 // "an ML Platform Engineer", "an Inference engineer", "a GPU engineer": acronyms take the article of their spoken letter.
-const article = (word: string) => /^[A-Z]{2,}/.test(word) ? ('AEFHILMNORSX'.includes(word[0]) ? 'an' : 'a') : /^[aeiou]/i.test(word) ? 'an' : 'a';
 const monthOf = (date: string | null) => date
   ? new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
 
@@ -209,8 +209,11 @@ export function introClaims(opening: Opening, candidate: Candidate, candidateEvi
     verifiable: evidenceIds.length > 0 && evidenceIds.every(id => Boolean(evidence.get(id)?.verifiable && evidence.get(id)?.observedAt)),
     ...(reason && { reason }),
   });
-  const drainReasons = opening.reasons.filter(reason => reason.kind === 'talent_drain');
-  const drainIds = drainReasons.flatMap(reason => reason.evidenceId ?? []);
+  // Only conclusive departures are cited: a month that straddles the 90-day window start (an August move read on
+  // 22 Nov) is shown on the opening but never offered as a fact in an intro.
+  const drainReasons = opening.reasons.filter(reason => reason.kind === 'talent_drain'
+    && (!reason.date || drainWindow(monthInterval(reason.date), opening.predictedAt) === 'inside'));
+  const drainIds = [...new Set(drainReasons.flatMap(reason => reason.evidenceId ?? []))];
   const drainMonth = monthOf(drainReasons[0]?.date ?? null);
   const family = ROLE_FAMILY_LABELS[opening.roleFamily];
   const after = drainMonth ? ` after ${family} team changes in ${drainMonth}` : '';
@@ -219,9 +222,18 @@ export function introClaims(opening: Opening, candidate: Candidate, candidateEvi
     ? `DOMINO is watching ${opening.companyName} for a possible ${opening.roleTitle} opening${after}`
     : `DOMINO predicts ${article(opening.roleTitle)} ${opening.roleTitle} opening at ${opening.companyName}${after}`,
   drainIds.length ? drainIds : opening.evidenceIds);
+  // The no-replacement claim names exactly the checks it cites: the job search, the person (hire) search, or both.
   const gap = opening.reasons.find(reason => reason.kind === 'no_replacement');
-  if (gap) add(`No ${family} job post or hire at ${opening.companyName} has been found since then`,
-    gap.evidenceId ? [gap.evidenceId] : [], gap.evidenceId ? undefined : 'The no-replacement check has no dated source record.');
+  const checkIds = (id: string) => (opening.clauses ?? []).find(clause => clause.id === id)?.evidenceIds ?? [];
+  const jobIds = checkIds('o1.no_replacement.jobs');
+  const hireIds = checkIds('o1.no_replacement.people');
+  if (gap) {
+    const cited = [...new Set([...jobIds, ...hireIds])];
+    const what = jobIds.length && hireIds.length ? 'job post or hire' : hireIds.length ? 'hire' : jobIds.length ? 'job post' : 'job post or hire';
+    const ids = cited.length ? cited : gap.evidenceId ? [gap.evidenceId] : [];
+    add(`No ${family} ${what} at ${opening.companyName} has been found since then`, ids,
+      ids.length ? undefined : 'The no-replacement check has no dated source record.');
+  }
   for (const shared of introSharedFields(candidate, candidateEvidence)) add(shared.claim, [shared.evidenceId]);
   return claims;
 }
@@ -277,7 +289,7 @@ async function draftIntro(ctx: ToolContext) {
   const greeting = toCompany ? `Hello ${opening.companyName} hiring team,` : `Hello ${candidate.displayName},`;
   const cta = toCompany ? `${candidate.displayName} opted in and asked for this introduction. Reply to accept and we will connect you.`
     : `${opening.companyName} would like an introduction. Reply to accept; your contact details stay private until you do.`;
-  const signoff = 'DOMINO Search Desk (test mode)';
+  const signoff = 'DOMINO (test mode)';
   const frame = (sentence: string) => ({ sentence, status: 'no_claim' as const, evidenceIds: [] });
   const draft: Draft = {
     id: `dr_${hash([ctx.runId, intro.id, checked.body].join('|')).slice(0, 16)}`, companyId: opening.companyId, personId: null, subject,

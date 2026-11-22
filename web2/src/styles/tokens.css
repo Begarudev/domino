@@ -1,34 +1,23 @@
 /*
   DOMINO v2 tokens: the approved design mock (~/Documents/domino-design/index.html, Garud 14:50). This is the one
-  source of truth for web2. Light is the default; dark applies by system preference unless data-theme="light", or
-  always with data-theme="dark". The accent is used ONLY for state (provisional, verified, delivered).
+  source of truth for web2. Light is the only active theme (Garud 17:17); dark tokens stay, scoped to
+  data-theme="dark", which the app never sets. The accent is used ONLY for state (provisional, verified, delivered).
   Note: the mock's canvas token is called --canvas here, because --paper keeps its older meaning (primary text)
   for code written against the first palette. New code: use --canvas / --surface / --ink / --rule / --acc.
 */
 :root {
   color-scheme: light;
-  --canvas: #F5F6F7; --surface: #FFFFFF; --raised: #FFFFFF; --hover: #F0F2F4; --row-hover: #FAFBFB; --sel: #FBFBFC;
-  --ink: #15171C; --ink-2: #474D59; --ink-3: #6B717C; --on-ink: #FFFFFF; --ink-hover: #2A2E36;
-  --rule: #DFE2E6; --rule-2: #ECEEF1;
+  --canvas: #FAFAFB; --surface: #FFFFFF; --raised: #FFFFFF; --hover: #F3F4F6; --row-hover: #F9FAFB; --sel: #F6F7F9;
+  --ink: #15171C; --ink-2: #4B515C; --ink-3: #6B717C; --on-ink: #FFFFFF; --ink-hover: #2A2E36;
+  --rule: #E4E6EA; --rule-2: #EEEFF2;
   --acc: #0A6B5C; --acc-2: #0E8572; --acc-weak: #E4F1EE; --acc-line: #9CCBC1; --on-acc: #FFFFFF;
   --hatch: rgba(132, 138, 149, .18); --sample-a: #ECEEF1; --sample-b: #F5F6F7;
   --shadow: 0 8px 24px rgba(21, 23, 28, .10);
   --err: #B42318; --err-weak: #FDECEA;
   --serif-w: 600;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme=light]) {
-    color-scheme: dark;
-    --canvas: #0E1013; --surface: #15181D; --raised: #1C2026; --hover: #1F2329; --row-hover: #191C21; --sel: #1A1E23;
-    --ink: #E7E9EC; --ink-2: #A8AEB8; --ink-3: #808792; --on-ink: #0E1013; --ink-hover: #FFFFFF;
-    --rule: #2A2F37; --rule-2: #21252B;
-    --acc: #3DBFA6; --acc-2: #5ED0BA; --acc-weak: #112C27; --acc-line: #235C51; --on-acc: #06201B;
-    --hatch: rgba(168, 174, 184, .22); --sample-a: #22262D; --sample-b: #15181D;
-    --shadow: none;
-    --err: #F97066; --err-weak: #2A1715;
-    --serif-w: 600;
-  }
-}
+/* Garud 17:17: light only. Dark tokens are kept but apply ONLY with an explicit data-theme="dark" (never set by the
+   app); the system dark preference is ignored. */
 :root[data-theme=dark] {
   color-scheme: dark;
   --canvas: #0E1013; --surface: #15181D; --raised: #1C2026; --hover: #1F2329; --row-hover: #191C21; --sel: #1A1E23;
@@ -46,11 +35,23 @@
   --serif: var(--sans); /* Garud 15:17: no serif anywhere. Kept as an alias so older rules render in the sans. */
   --sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --fs-cap: 12px; --fs-ui: 13px; --fs-body: 14px; --fs-lead: 15px; --fs-h: 20px; --fs-title: 30px;
+  /* Attio-derived scale (17:05): few sizes, strict steps; display sizes medium/semibold with tight tracking. */
+  --fs-cap: 12px; --fs-ui: 13px; --fs-body: 14px; --fs-lead: 15px; --fs-sec: 16px; --fs-h: 20px; --fs-page: 24px; --fs-title: 30px;
+  --lh-cap: 16px; --lh-ui: 18px; --lh-body: 20px; --lh-h: 28px; --lh-page: 30px;
+  --track-tight: -0.02em; --track-snug: -0.01em;
+  --w-med: 500; --w-semi: 600;
 
-  /* rhythm: 4px base */
+  /* rhythm: 4px base, 8px steps */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
-  --r-sm: 3px; --r: 4px; --r-lg: 6px;
+  /* shape: small control radii, softer cards, 1px hairlines, one popover elevation */
+  /* Attio SPEC: cards and panels 8px, controls 8-10px (8 here: 32px-tall controls read bubbly at 10), tiles 12px */
+  --r-sm: 4px; --r: 6px; --r-ctl: 8px; --r-lg: 8px; --r-xl: 12px; --r-pill: 999px;
+  --track-ui: -0.005em;
+  --hair: 1px solid var(--rule); --hair-2: 1px solid var(--rule-2);
+  /* data grid */
+  --row-h: 40px; --row-h-compact: 36px; --head-h: 36px; --cell-x: 12px; --cell-x-edge: 16px;
+  /* navigation */
+  --nav-h: 32px; --nav-pill: var(--hover); --nav-pill-on: var(--sel);
 
   /* motion: one scale. Entrances once at 220 ms, menus 160 ms, everything else 200 ms. */
   --ease: cubic-bezier(.2, .7, .2, 1); --t: 200ms;

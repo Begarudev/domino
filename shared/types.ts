@@ -222,7 +222,9 @@ export interface Draft {
   meeting: { title: string; durationMin: number; proposedSlots: IsoDateTime[] };
   // 'not_drafted': fewer than 2 verified, dated, cited facts survived, or no named decider role. Never sent or approved;
   // shown as "Not drafted: …" with the stripped claims under "I can't verify".
-  status?: 'ready' | 'not_drafted';
+  // 'held_pre_gate': drafted by an older build that let it through, but it fails today's gate. Served that way (never
+  // as ready), and approving it is refused.
+  status?: 'ready' | 'not_drafted' | 'held_pre_gate';
   blockedReason?: string | null;
 }
 
@@ -294,8 +296,9 @@ export interface LedgerEntry {
 
 export interface BudgetState {
   limits: RunLimits;
-  used: { credits: number; modelUsd: number; seconds: number };
+  used: { credits: number; modelUsd: number; seconds: number };   // includes `reserved`
   exhausted: null | 'credits' | 'model_usd' | 'seconds';
+  reserved?: { credits: number; modelUsd: number };              // estimates held by calls still in flight
 }
 
 // ---------- run state ----------
@@ -306,6 +309,9 @@ export type RunStatus =
 
 /** Longest request the server accepts; the web request field uses the same limit. */
 export const MAX_REQUEST_CHARS = 12_000;
+/** Machine-readable `code` on /api 404s, so clients never parse error prose: the route isn't built on this server, or
+ *  the route exists but has nothing to serve yet (no openings scan). Any other 404 is a real answer about that id. */
+export const API_ERROR = { routeMissing: 'route_missing', noData: 'no_data' } as const;
 
 export const STEP_ORDER = [
   'parse_request',
@@ -397,6 +403,9 @@ export interface RunSnapshot {
   baseline: { hiringFilterCompanyIds: string[] };   // what a plain "is hiring" filter returns
   engine: { pid: number | null; alive: boolean; crashes: number; resumes: number };
   replay: ReplayScore | null;
+  // Set when a run labelled live has drafts citing fixture rows (only runs from before live runs stopped falling back
+  // to fixtures, 13:18 IST 22 Nov). Screens show the note and never present such a run as live.
+  integrity?: { fixtureCitations: number; note: string };
 }
 
 // ---------- event stream (SSE, append-only, also persisted) ----------

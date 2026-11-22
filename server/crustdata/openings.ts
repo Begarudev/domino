@@ -5,7 +5,7 @@ import type { Evidence, IsoDate } from '../../shared/types.ts';
 import type { RoleFamily } from '../../shared/desk.ts';
 import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
 import { shiftDays } from '../domain/facts.ts';
-import { FAMILY_PHRASES, monthInterval, roleFamily } from '../domain/openings.ts';
+import { article, FAMILY_PHRASES, monthInterval, roleFamily } from '../domain/openings.ts';
 import type { DepartureFact, ReplacementFact } from '../domain/openings.ts';
 import type { ParseMeta } from '../domain/types.ts';
 import { condition, evidenceRow, group, int, str, validate } from './common.ts';
@@ -86,7 +86,7 @@ export const personDepartures: EndpointSpec<{ window: ScanWindow; cursor?: strin
         const recordId = `${personId}:${past.crustdata_company_id}:${past.end_date.slice(0, 7)}`;
         const observed = left[1] > window.asOf ? window.asOf : left[1];
         const row = evidenceRow(meta, recordId, '$.experience.employment_details.past[].end_date',
-          `${initial} left a ${past.title} role at ${past.name} in ${monthName(left[0])} and started at ${next.row.name} in ` +
+          `${initial} left ${article(past.title!)} ${past.title} role at ${past.name} in ${monthName(left[0])} and started at ${next.row.name} in ` +
           `${monthName(next.started[0])} (month precision).`, observed, past.title!);
         evidence.push(row);
         departures.push({

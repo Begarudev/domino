@@ -14,10 +14,13 @@ ContextCon 05 (Crustdata x BITS Pilani), theme "Services, Replaced". Primary pro
 with **9.1 The Outbound Desk** for the company-analysis part (the handbook allows combining themes). Team DOMINO.
 Built on 22 Nov 2026 between 10:15 and 18:00 IST; the commit history starts at 12:16 IST.
 
-> **Status, 14:30 IST.** The company-analysis engine (rules, verifier, approvals, send-once, ledger, replay, Crustdata
-> adapters) is built and tested. Rule O1 has run on live data and on the 1 Sep replay (numbers below, details in
-> [`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)). The hiring screens (candidate onboarding and dashboard, company hiring
-> tabs) are being finished this afternoon; items marked *to fill* are completed at 16:30.
+> **Status, code freeze 16:45 IST (tag `freeze-1645`).** Both parts run end to end and are tested.
+> - The company-analysis engine: rules, verifier, approvals, send-once, ledger, replay and the Crustdata adapters.
+> - The hiring side: candidate onboarding with consent, predicted openings, intros approved and delivered once.
+>
+> Rule O1 has run on live data and on the 1 Sep replay (numbers below, details in [`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)).
+> A fresh clone with no keys runs on a labelled fixture world. The demo walkthrough, screen by screen, is
+> [`docs/RUN-OF-SHOW.md`](docs/RUN-OF-SHOW.md).
 
 - [The customer and the service](#the-customer-and-the-service)
 - [What you can do with it](#what-you-can-do-with-it)
@@ -146,11 +149,13 @@ bun install
 bun start            # builds the UI on first run, then serves http://localhost:4321
 ```
 
-Open <http://localhost:4321>. If port 4321 is taken, `bun start` names the busy port; pick another with
-`DOMINO_PORT=4399 bun start`.
+Open <http://localhost:4321> and sign in as a candidate or a company (the role is chosen at sign-in; sign out to switch).
+The original run view, with the live step theatre and kill and resume, is at <http://localhost:4321/classic>. If port
+4321 is taken, `bun start` names the busy port; pick another with `DOMINO_PORT=4399 bun start`.
 
 **Without API keys**, DOMINO runs on a labelled synthetic fixture world (the data badge reads "Fixture", and the demo
-candidate is a labelled fictional person) and writes drafts from an evidence template. Every feature works this way,
+candidate is a labelled fictional person) and writes drafts from an evidence template. The first start scans that world
+by itself (0 credits, a few seconds), so both sides have predicted openings to open straight away. Every feature works this way,
 including consent, approvals, crash and resume, the ledger and replay. **For live data**, create `.env` in the repo
 root. It is gitignored and never committed:
 
@@ -165,9 +170,10 @@ DOMINO_PORT=4321           # optional
 Tests:
 
 ```bash
-bun run test         # unit, domain and engine tests (bun test server); live-adapter checks skip without a Crustdata key
+bun run test         # unit, domain and engine tests (bun test server); live-adapter checks run only with DOMINO_LIVE_TESTS=1
 bun run test:e2e     # end to end over HTTP: messy input, timeouts, kill/resume, double approve, budgets, replay
 bun run smoke        # one scripted run: approve twice, kill the engine and resume
+bun run proof:send-once   # kill between delivery and the outbox write, retry: "Already delivered · skipped · Deliveries: 1"
 bun run typecheck
 ```
 
@@ -354,13 +360,17 @@ The data badge in the header always says which world you are in, and every evide
 
 | Mode | When | What happens |
 |---|---|---|
-| **live** | `CRUSTDATA_API_KEY` set (default) | Every read goes to Crustdata. The raw response is cached in `tool_cache` keyed by endpoint and request |
+| **live** | `CRUSTDATA_API_KEY` set (default) | Cache-first: a request already in `tool_cache` (keyed by endpoint and request) is answered from the recorded live response at 0 credits; anything else goes to Crustdata, and the raw response is recorded |
+| **cache** | `DOMINO_DATA=cache`, or a scan sent with `dataMode: "cache"` | replays recorded live reads only, at 0 credits; a request that was never recorded is skipped, never fetched |
 | **cache** (fallback) | a live call times out, errors or returns nonsense after its retries | answered from the cached live response; the feed shows a fallback line and the evidence row says *cached*, with its retrieval time |
 | **unavailable** | no cached response either | the source is skipped with a warning; nothing is invented |
 | **fixture** | no key, or `DOMINO_DATA=fixture` | a labelled synthetic world for tests and keyless clones. A live run **never** falls back to fixtures |
 
 The live decisions are the candidate's person enrich, opening detection on the live cohort, and the company-analysis
-rules on live Crustdata reads.
+rules on live Crustdata reads. The cohort itself was read live on 22 Nov 2026 between 13:50 and 14:40 IST. Later scans,
+including the one in the demo, replay that recorded read for 0 credits, and the scan badge says so: "Live Crustdata
+read 22 Nov … · replayed from the recorded cache (0 credits)" (`GET /api/openings/funnel` → `served`). A new live scan
+must be asked for explicitly (`confirmLive: true`), because a full cohort pull costs 300–600 credits.
 
 ## Sources, consent, approvals and send-once
 
@@ -431,7 +441,11 @@ Example: live company-analysis run `run_1b4fda05` (22 Nov, 13:32 IST). Excerpt:
 That run cost **86.3 credits and $0.0073** over 30 ledger rows in 216 s, including a deliberate kill and resume. Its
 model timeouts led us to switch the default model to `gpt-6-luna`. The live O1 funnel, its replay and their checks
 used about 1,559 credits, each figure summed from the `x-credits-used` header ([`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)).
-*To fill at 16:30: a ledger excerpt and the cost per intro from a live hiring run.*
+**Cost per intro (live hiring run, 22 Nov).** Onboarding a candidate is one Crustdata person enrich (`run_0950755b`:
+1 credit) plus one GPT-6 Luna parse (178 input / 44 output tokens, $0.00004). The intro itself makes no paid call: the
+draft is assembled from the opening's verified, dated claims and the candidate's consented fields, so its run has no
+ledger rows. The opening it points to comes from the scan, which cost 0 credits here because it replayed the recorded
+live read. So one intro costs about **1 credit and $0.00004**, against a search fee that is a share of first-year salary.
 
 ## Experiments
 
@@ -489,14 +503,29 @@ matter.
 - **Held, acqui-hire: Poolside (302 staff), inference.** L. and A., both inference engineers, left in Sep 2026 for
   NVIDIA. A dated article found through Crustdata news search, "Nvidia pays Poolside $6bn to license its model factory
   and hire 109 staff" ([The Next Web](https://thenextweb.com/news/nvidia-poolside-6bn-model-factory-licence),
-  published 21 Aug 2026), shows this is an acqui-hire, not a drain. This hold comes from the live analysis scripts
-  (`scripts/live/`, recorded in `docs/LIVE-DATA.md`). The app's automatic news check for acqui-hires isn't merged yet;
-  in the app today, an acquisition is held when it is in the configured or enriched acquisition records.
+  published 21 Aug 2026), shows this is an acqui-hire, not a drain. The app's own O1 run detects this hold itself: its
+  acqui-hire guard reads Crustdata news for the destination company and finds the same dated article. A second guard
+  agrees: Poolside's headcount fell 13.2% over 90 days, a possible restructure.
 - **Held, dates can't settle the window: SANI (34 staff), ML platform**, because of August month-only dates.
 - Multiverse Computing's departures ended in July, outside the 90 days. Every other group with 2 or more departures
   is above 5,000 staff (Intel, Google, Meta, Microsoft, Oracle, Qualcomm, AWS, Apple, Optum, TikTok).
 
-*To fill at 16:30:* the openings matched to the demo candidate, and the same counts from the app's own live run.
+The app's own O1 run (`run_c0d62009`) produced this funnel from the same live read, served from the recorded cache at
+0 credits. `GET /api/openings/funnel` serves it, and every stage opens its rows:
+
+| O1 stage (app run) | Count |
+|---|---|
+| People who left an infra/serving title and started a new role (last 90 days) | 1,410 |
+| Direct moves out of an engineering role in a tracked family | 312 |
+| Departure month inside or straddling the 90-day window | 250 |
+| At a company with 20–5,000 staff | 95 |
+| Company and role family with 2 or more departures | 3 |
+| **Predicted openings** | **0 settled, 1 provisional** (Abacus.AI, ML platform) |
+| **Held by a false-drain guard** | **2** (Poolside: acqui-hire and restructure; SANI: month straddle) |
+| Watchlist (under 2 departures: 63 with one so far, 25 whose only month is on the window edge) | 88 |
+
+The two tables count slightly differently: the scripts count conclusive departures, while the app counts months that
+straddle the window edge and then settles them as intervals. Both reach the same decisions.
 
 ### 3. Part 2: live company-analysis run
 
@@ -512,7 +541,23 @@ matter.
 | Bright Vision Technologies | DIRECT (baseline) | yes |
 
 3 decision-makers found, 5 verified drafts, 10 approvals queued (a message and a meeting hold each), 86.3 credits,
-$0.0073, 216 s. *To refresh at 16:30 after the CONTAGION tightening.*
+$0.0073, 216 s.
+
+**After the CONTAGION tightening and the 2-fact gate:** live run `run_1a165a3d` (22 Nov, 16:19 IST, the run shown in
+Find buyers). 441 triggers from 1,107 evidence rows (956 live, 151 from the recorded cache, 0 fixture), 244 canonical
+companies after 59 merges, 17 cascade edges (14 DISPLACEMENT, 3 CONTAGION), **5 ranked accounts**:
+
+| Account | Rule | Hiring filter would find it? | Draft |
+|---|---|---|---|
+| EWOR | DIRECT (baseline) | yes | drafted from 2 verified live facts, to the CTO role |
+| Crusoe | CONTAGION | no | not drafted (0 of 2 verified facts) |
+| Nscale | CONTAGION | no | not drafted (0 of 2) |
+| Undisclosed | CONTAGION | no | not drafted (0 of 2) |
+| The Royal | DISPLACEMENT | no | not drafted (1 of 2; no named decider role) |
+
+142.0 credits, $0.0003, 114 s. Four of the five accounts come from cross-company rules a hiring filter wouldn't find.
+None of those four had two verified, dated facts to write from, so DOMINO held them back and said why. The one
+drafted account is the baseline. Its send and meeting approvals are left pending: nothing was sent.
 
 ### 4. Replay from 1 September
 
@@ -548,6 +593,18 @@ departures, but the June month-only dates straddle the window start. So this rep
 on this cohort, and we say so. For scale, 10 of the 118 cohort companies (8%) showed an infra opening in the next two
 months, and 10 of the 70 recently-hiring companies did (14%). Files: `docs/live/replay-2026-09-01-summary.json`,
 `docs/live/o1-replay-2026-09-01.json`.
+
+**The same replay in the app** (Check → Replay; `POST /api/openings/scan` with `dataMode: "cache"` and
+`replay.asOf: "2026-09-01"`, 0 credits, all 59 reads from the recorded cache). It uses the app's cohort, which keeps
+companies with at least one family departure inside or straddling the window, so its counts differ from the script
+table above. The conclusion is the same:
+
+| Arm | Picks | Outcome appeared by 31 Oct |
+|---|---|---|
+| O1 | **0** predicted (6 held) | 0 |
+| Any job post in the last 30 days | 57 | 6 (11%) |
+| Headcount +30% | 0 | 0 |
+| Base rate | 91 cohort companies | 6 |
 
 **Part 2** (live replay `run_396d5e95`, 0 facts after 1 Sep used, 54.4 credits):
 

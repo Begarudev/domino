@@ -14,6 +14,7 @@
     "dev": "bun scripts/dev.ts",
     "build:web": "bun --bun vite build --config web/vite.config.ts",
     "build:classic": "bun --bun vite build --config web/vite.config.ts --base /classic/ --outDir dist-classic",
+    "demo:reset-intros": "bun scripts/demo-reset-intros.ts",
     "dev:web": "bun --bun vite --config web/vite.config.ts",
     "probe": "bun scripts/probe-live.ts",
     "test": "bun test server",
