@@ -20,9 +20,6 @@
   box-shadow: 0 -8px 24px rgba(21, 23, 28, .06);
   font-family: var(--sans);
 }
-.demo-progress { height: 2px; background: var(--rule-2); }
-.demo-progress span { display: block; height: 100%; background: var(--ink); transition: width 250ms linear; }
-
 .demo-cap-in {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s5); align-items: start;
   max-width: 1280px; margin: 0 auto; padding: var(--s5) var(--s6) var(--s3);
@@ -50,9 +47,6 @@
 }
 
 .demo-meta { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s2); padding-top: 4px; white-space: nowrap; }
-.demo-clock { font-size: var(--fs-sec); color: var(--ink-3); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.demo-clock b { color: var(--ink); font-weight: var(--w-semi); font-size: 22px; }
-.demo-clock.late b { color: var(--h-amber-fg); }
 .demo-step { font-size: var(--fs-ui); color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .demo-crit { font-size: var(--fs-ui); }
 
@@ -64,17 +58,3 @@
 .demo-key:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
 .demo-key:disabled { opacity: .4; cursor: default; }
 .demo-key:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
-
-/* Start card */
-.demo-start { max-width: 720px; margin: 12vh auto 0; padding: 0 var(--s5); font-family: var(--sans); }
-.demo-start h1 { margin: 0; font-size: var(--fs-title); line-height: 1.2; font-weight: var(--w-semi); letter-spacing: var(--track-tight); color: var(--ink); }
-.demo-sub { margin: var(--s3) 0 0; font-size: var(--fs-lead); line-height: 1.5; color: var(--ink-2); max-width: 60ch; }
-.demo-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); margin-top: var(--s7); padding-top: var(--s5); border-top: var(--hair); }
-.demo-cols h2 { margin: 0 0 var(--s3); font-size: var(--fs-ui); font-weight: var(--w-semi); color: var(--ink-3); }
-.demo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); font-size: var(--fs-body); color: var(--ink); }
-.demo-list li { display: flex; align-items: center; }
-.demo-list .faint { margin-left: .35em; }
-.demo-actions { display: flex; gap: var(--s2); margin-top: var(--s7); }
-.demo-actions .btn { height: 40px; padding: 0 16px; font-size: var(--fs-lead); }
-.demo-actions .faint-on { opacity: .6; margin-left: var(--s2); font-weight: 400; }
-.demo-help { margin: var(--s4) 0 0; font-size: var(--fs-ui); color: var(--ink-3); }

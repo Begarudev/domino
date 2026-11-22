@@ -8,7 +8,7 @@ import { CandidatePage } from './pages/CandidatePage.tsx';
 import { CompaniesPage, CompanyPage } from './pages/CompanyPage.tsx';
 import { TracePage } from './features/trace/Trace.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
-import { DemoOverlay, DemoStart } from './features/demo/Demo.tsx';
+import { DemoBoot, DemoOverlay } from './features/demo/Demo.tsx';
 import { TopBar } from './shell/TopBar.tsx';
 import { LedgerDrawer } from './features/ledger/Ledger.tsx';
 import { EvidenceDrawer } from './shell/EvidenceDrawer.tsx';
@@ -57,12 +57,7 @@ export function App() {
 
   if (redirect) return null;
   if (route.page === 'demo') {
-    return (
-      <div className="app app-login">
-        <TopBar minimal />
-        <main className="main" id="main"><DemoStart /></main>
-      </div>
-    );
+    return <DemoBoot />;
   }
   if (route.page === 'login') {
     return (

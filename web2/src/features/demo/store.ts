@@ -29,14 +29,17 @@ export interface DemoStep {
 }
 
 const RUN = 'run_2a38d6d8-217d-45e7-8c30-29a7c6d4ec46'; // full id: the short id 404s
+const SELL_RUN = 'run_1a165a3d-5c87-43dc-aedb-9307e98f9973';
 /** Where each step looks. Selectors are existing data-testids, ordered so the spotlight follows the screen's state. */
 const DIRECTION: Record<string, { route?: string; focus: string; cue?: string }[]> = {
   hook: [{ focus: '.rec-op' }],
-  funnel: [{ focus: '[data-testid="funnel"]' }, { focus: '[data-testid="departures"]' }],
+  opening: [{ focus: '[data-testid="funnel"]' }, { focus: '[data-testid="departures"]' }],
   approve: [{
     focus: '[data-testid="approve"], [data-testid="resume"], [data-testid="approve-retry"], [data-testid="deliveries"], [data-testid="outreach-draft"]',
     cue: 'Presenter: click Approve, then Resume from checkpoint. It delivers once; the overlay never clicks.',
   }],
+  // Buyers pins its run from ?buyers= (prefix match), not ?run=; pin the full id so the page never picks another run.
+  sell: [{ route: `/company/abacus-ai/buyers?buyers=${SELL_RUN}`, focus: '.by-t, [data-testid^="buyer-row-"]' }],
   verifier: [{ focus: '[data-testid="guard-card"]' }, { route: '/company/abacus-ai/reading', focus: '[data-testid="reading-chart"], [data-testid="reading-row"]' }],
   'replay-ledger': [
     { focus: '[data-testid="replay-summary"], [data-testid="replay-protocol"]' },
@@ -67,22 +70,14 @@ export const STEPS: DemoStep[] = (rawSteps as RawStep[]).flatMap((r, i) => {
   }));
 });
 export const STEP_COUNT = rawSteps.length;
-/** The planned length of the talk, from the last step's end. */
-export const PLAN_SECONDS = Math.max(60, ...STEPS.map((s) => s.end));
 export const DEMO_COMPANY = { id: 'cd:632052', name: 'Abacus.AI' };
 
-interface DemoState {
-  active: boolean;
-  index: number;
-  autoplay: boolean;
-  clockStart: number | null;   // epoch ms the talk started (shifted on pause so elapsed stays true)
-  pausedAt: number | null;     // set while the clock is paused
-  stepEnteredAt: number;       // epoch ms, for autoplay dwell
-}
+/** Presenter-paced: no clock, no autoplay. Only the active flag and the step index persist (sessionStorage). */
+interface DemoState { active: boolean; index: number }
 
 const KEY = 'domino.v2.demo';
-const initial: DemoState = { active: false, index: 0, autoplay: false, clockStart: null, pausedAt: null, stepEnteredAt: 0 };
-let state: DemoState = (() => { try { return { ...initial, ...JSON.parse(sessionStorage.getItem(KEY) ?? '{}') }; } catch { return initial; } })();
+const initial: DemoState = { active: false, index: 0 };
+let state: DemoState = (() => { try { const v = JSON.parse(sessionStorage.getItem(KEY) ?? '{}'); return { active: !!v.active, index: Number(v.index) || 0 }; } catch { return initial; } })();
 const listeners = new Set<() => void>();
 function set(patch: Partial<DemoState>) {
   state = { ...state, ...patch };
@@ -97,50 +92,32 @@ export function useDemo<T>(sel: (s: DemoState) => T): T {
   return useSyncExternalStore((f) => { listeners.add(f); return () => { listeners.delete(f); }; }, () => sel(state));
 }
 
-export function elapsedSeconds(now = Date.now()): number {
-  if (!state.clockStart) return 0;
-  return Math.max(0, ((state.pausedAt ?? now) - state.clockStart) / 1000);
-}
-
 /** Navigate the real app to a step's route, signed in as the side that route belongs to. */
-function go(step: DemoStep) {
+function go(step: DemoStep, replace = false) {
   (document.activeElement as HTMLElement | null)?.blur?.(); // a focused button must never catch a Space press
   if (!step.route) return;
   const path = step.route.split('?')[0];
   if (path.startsWith('/candidate')) signInCandidate();
   else if (path.startsWith('/company')) signInCompany(DEMO_COMPANY.id, DEMO_COMPANY.name);
   if (location.pathname + location.search !== step.route) {
-    history.pushState(null, '', step.route);
+    if (replace) history.replaceState(null, '', step.route); else history.pushState(null, '', step.route);
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
   const run = new URLSearchParams(step.route.split('?')[1] ?? '').get('run');
-  if (run && runStore.backend && runStore.get().runId !== run) void runStore.attach(run); // read-only load of a finished run
+  if (run && run.length > 30 && runStore.backend && runStore.get().runId !== run) void runStore.attach(run); // read-only load of a finished run (full ids only; short ids 404)
 }
 
-export function startDemo(autoplay = false) {
-  const now = Date.now();
-  set({ active: true, index: 0, autoplay, clockStart: now, pausedAt: null, stepEnteredAt: now });
-  go(STEPS[0]);
+/** Opening /demo starts at step 1. The /demo entry is replaced, so browser Back never lands on it and restarts. */
+export function startDemo() {
+  set({ active: true, index: 0 });
+  go(STEPS[0], true);
 }
 export function goTo(index: number) {
   if (!state.active) return;
   const i = Math.max(0, Math.min(STEPS.length - 1, index));
-  const now = Date.now();
-  const resume = state.pausedAt && state.clockStart ? { clockStart: state.clockStart + (now - state.pausedAt), pausedAt: null } : {};
-  set({ index: i, stepEnteredAt: now, ...resume }); // moving on by hand resumes a paused clock
+  set({ index: i });
   go(STEPS[i]);
 }
-export const next = () => { if (state.index < STEPS.length - 1) goTo(state.index + 1); else if (state.autoplay) set({ autoplay: false }); };
+export const next = () => goTo(state.index + 1);
 export const back = () => goTo(state.index - 1);
-/** P: pause or resume autoplay (and the talk clock with it while autoplaying). */
-export function toggleAutoplay() {
-  const now = Date.now();
-  if (state.autoplay) set({ autoplay: false, pausedAt: now });
-  else {
-    const clockStart = state.pausedAt && state.clockStart ? state.clockStart + (now - state.pausedAt) : state.clockStart ?? now;
-    set({ autoplay: true, clockStart, pausedAt: null, stepEnteredAt: now });
-  }
-}
-export function exitDemo() {
-  set({ ...initial });
-}
+export const exitDemo = () => set({ ...initial });
