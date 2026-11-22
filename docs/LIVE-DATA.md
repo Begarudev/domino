@@ -31,6 +31,26 @@ outcome was read.
 | Companies with ≥ 2 such departures | 3 (Poolside, Abacus.AI, Multiverse Computing) |
 | Companies with ≥ 3 to one hirer in the window, 3rd in the last 30 days (old R1) | **0** |
 
+## Rule O1 in the engine (openings pipeline)
+
+`POST /api/openings/scan` runs scope_search → pull_departures → resolve_departures → check_replacements →
+detect_openings (→ score_openings in replay). Every read is a cached `source.read` with a ledger row.
+
+| Run | Mode | Credits | Time | Result |
+|---|---|---|---|---|
+| `run_0c071dae-52fa-48bb-bdb5-989bf3f87203` | live | 339.3 | 224 s | 1 open (provisional), 2 held, 88 watch |
+| `run_12852b1c-6483-4efc-ae53-c109b221217c` | cache (the live responses above) | 0 | 0.4 s | identical |
+
+Engine funnel (`detect_openings.output.funnel`; each stage opens its rows, people shown as role + initial + month):
+1,410 profiles → 312 direct moves out of a tracked-family engineering role → 250 with the departure month inside or
+straddling the 90-day window → 95 at 20–5,000 staff → 3 company × family groups with ≥ 2 → **1 provisional opening,
+2 held**. The engine counts each (person, past role) once and classifies titles with `roleFamily()`, so its counts are
+a little higher than the offline script's 281/176 below. The decisions are the same.
+
+- **Abacus.AI · ML platform · provisional.** ✓ 2 conclusive departures (Oct, Oct) · ✓ no acquisition report naming Patronus AI, Arcfront or Bravebird · ✓ 288 staff · ✓ headcount +3.6% over 90 days · ✓ job search 1 Oct–22 Nov: 0 records · ✓ person search: 0 · ⏳ window closes by 30 Nov.
+- **Poolside · inference · held.** ✓ 2 conclusive departures (Sep, Sep) → NVIDIA · ✗ acqui-hire guard: "Nvidia pays Poolside $6bn to license its model factory and hire 109 staff" (thenextweb.com, 21 Aug 2026), plus a Quartz report from 24 Aug, both found live through Crustdata Web Search and dated from the article pages, with no analyst entry · ✗ restructure guard: headcount −13.2% over 90 days. The news report is company-level and doesn't verify either person's move.
+- **SANI · ML platform · held.** Month-only dates can't settle the window.
+
 ## Rule O1, live
 
 O1 (rule fixed at 14:08 IST, after seeing the live departure counts and before looking at any replay outcomes): at company A (20–5,000 staff), if there are ≥ 2 conclusive dated departures in role family F
