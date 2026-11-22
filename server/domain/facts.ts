@@ -97,3 +97,33 @@ export function relatedDomains(a?: string | null, b?: string | null): boolean {
   };
   return root(first) === root(second);
 }
+
+
+export const DRAIN_HISTORY_DAYS = 90;
+export const DRAIN_WINDOW_DAYS = 30;
+export const DRAIN_REPLAY_HISTORY_DAYS = 120;
+export const DRAIN_REPLAY_WINDOW_DAYS = 60;
+export const DRAIN_OUTCOME_DAYS = 60;
+export const servingSignalKeywords = ['inference', 'ML platform', 'machine learning platform', 'ML infrastructure', 'machine learning infrastructure', 'ML infra',
+  'serving', 'GPU software', 'GPU cluster', 'GPU', 'LLM serving', 'model serving', 'MLOps', 'LLMOps', 'ML systems',
+  'machine learning systems', 'AI infrastructure', 'LLM infrastructure', 'LLM infra', 'distributed training',
+  'distributed inference'];
+
+export function servingTitleStatus(title?: string | null): 'serving' | 'unknown' | 'excluded' {
+  if (!title || /\b(?:asic|rtl|physical design|gpu design|hardware design|chip design|semiconductor design|finance|program manager|account manager|account executive|sales|recruit(?:er|ing)|marketing)\b/i.test(title)) {
+    return 'excluded';
+  }
+  if (servingSignalKeywords.some(keyword => keyword !== 'GPU' && containsPhrase(title, keyword)) ||
+    /\bgpu\s+(?:engineer|reliability|performance|systems)\b/i.test(title)) return 'serving';
+  return /\b(?:engineer(?:ing)?|developer|architect|scientist|technical|systems)\b/i.test(title) ? 'unknown' : 'excluded';
+}
+
+export const servingTitle = (title?: string | null) => servingTitleStatus(title) === 'serving';
+
+export function formatMonth(day: IsoDate): string {
+  return new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(day));
+}
+
+export function formatDay(day: IsoDate): string {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(day));
+}

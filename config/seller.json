@@ -17,6 +17,15 @@
     "durationMin": 20,
     "slots": ["2026-11-24T11:00:00+05:30", "2026-11-25T15:30:00+05:30"]
   },
+  "acquisitionEvents": [
+    {
+      "acquirer": "Pylon Signals",
+      "acquired": "Saffron Stack",
+      "date": "2026-11-02",
+      "sourceUrl": "https://example.com/news/pylon-acquires-saffron",
+      "fixtureOnly": true
+    }
+  ],
   "displacementEvents": [
     {
       "provider": "Lumen Serve",

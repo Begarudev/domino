@@ -6,3 +6,4 @@ export { buildClaims, templateDraft, llmDraftPrompt, verifyDraft } from './draft
 export { filterAsOf, PROFILE_LAG_DAYS } from './replay-guard.ts';
 export { scoreReplay } from './replay.ts';
 export * from './types.ts';
+export { DRAIN_HISTORY_DAYS, DRAIN_WINDOW_DAYS, DRAIN_REPLAY_HISTORY_DAYS, DRAIN_REPLAY_WINDOW_DAYS, DRAIN_OUTCOME_DAYS } from './facts.ts';

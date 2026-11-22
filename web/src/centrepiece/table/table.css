@@ -7,7 +7,7 @@
   font-size: 16px; font-variation-settings: 'wdth' 78; font-weight: 600; fill: var(--text-2);
 }
 .tile-body { cursor: pointer; outline: none; transform: rotate(0deg); }
-.tile-shadow { fill: #0B0806; filter: url(#tile-shadow); }
+.tile-shadow { fill: #04060A; filter: url(#tile-shadow); }
 .tile-face { fill: url(#bone); }
 .tile-bevel { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.2; }
 .tile-ring { fill: none; stroke: transparent; stroke-width: 3; }

@@ -1,6 +1,6 @@
 import sellerJson from '../../config/seller.json' with { type: 'json' };
 import type { CascadeGraph, Company, Decider, Draft, DraftSentenceCheck, Evidence, Target, Trigger } from '../../shared/types.ts';
-import { stableId } from './facts.ts';
+import { formatDay, isoDay, stableId } from './facts.ts';
 import type { Claim, SellerProfile } from './types.ts';
 
 const config = sellerJson as SellerProfile;
@@ -13,12 +13,12 @@ function isPublicCompanyFact(row: Evidence) {
   if (row.source.provider !== 'crustdata' || !row.source.url) return false;
   const field = row.source.field ?? '';
   return field === '$.job_details.title' ||
-    /^\$\.funding\.last_/.test(field) ||
-    /^\$\.headcount\.(?:total$|timeseries\[\d+\]\.employee_count$|growth_percent\.)/.test(field);
+    /^\$\.funding\.(?:last_|milestones\[)/.test(field) ||
+    /^\$\.headcount\.(?:total$|timeseries(?:\[\d+\]\.employee_count)?$|growth_percent\.)/.test(field);
 }
 
 export function buildClaims(target: Target, company: Company, triggers: Trigger[], evidence: Evidence[], graph: CascadeGraph): Claim[] {
-  if (target.companyId !== company.id) return [];
+  if (target.companyId !== company.id || target.hold) return [];
   const own = new Set([
     ...company.evidenceIds,
     ...triggers.filter(trigger => trigger.companyId === company.id && ['job_post', 'post', 'headcount_jump', 'funding'].includes(trigger.kind))
@@ -39,12 +39,17 @@ export function buildClaims(target: Target, company: Company, triggers: Trigger[
     return Number(b.verifiable && Boolean(b.observedAt)) - Number(a.verifiable && Boolean(a.observedAt)) ||
       relevance(b) - relevance(a) || (b.observedAt ?? '').localeCompare(a.observedAt ?? '') || a.id.localeCompare(b.id);
   });
-  return rows.map((row, index) => ({
-    n: index + 1, text: row.claim, evidenceIds: [row.id], recipientCompany: company.name, sellerCompany: config.company,
-    verifiable: row.verifiable && !!row.observedAt,
-    reason: !row.observedAt ? 'The public record has no date for this fact.' : !row.verifiable ? 'The source could not be verified.' : undefined,
-    numbers: tokens(row.claim),
-  }));
+  return rows.map((row, index) => {
+    const text = row.claim.replace(/over ([136]|12)m through /g, (_, months: string) =>
+      months === '1' ? 'in the month to ' : `in the ${months} months to `)
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, value => isoDay(value) ? formatDay(value) : value);
+    return {
+      n: index + 1, text, evidenceIds: [row.id], recipientCompany: company.name, sellerCompany: config.company,
+      verifiable: row.verifiable && !!row.observedAt,
+      reason: !row.observedAt ? 'The public record has no date for this fact.' : !row.verifiable ? 'The source could not be verified.' : undefined,
+      numbers: tokens(text),
+    };
+  });
 }
 
 const SLOT_FORMAT = new Intl.DateTimeFormat('en-IN', {
@@ -59,6 +64,13 @@ function meetingCopy(seller: SellerProfile) {
   return `Would you have 20 minutes to discuss your plans${slots.length ? ' on ' + slots.join(' or ') : ''}?`;
 }
 
+function offerQuestion(offering: string, drain: boolean) {
+  const offer = offering.replace(/[.!?]+$/, '');
+  return drain && /inference/i.test(offer)
+    ? `Are you planning to run serving in-house, or would ${offer} help?`
+    : `Would ${offer} be useful for the work ahead?`;
+}
+
 function subjectLine(target: Target, company: string | undefined, offering: string) {
   const focus = target.mechanisms.includes('TALENT_DRAIN') ? 'Keeping inference capacity covered'
     : target.mechanisms.includes('DISPLACEMENT') ? 'Inference integration planning' : offering;
@@ -68,7 +80,7 @@ function subjectLine(target: Target, company: string | undefined, offering: stri
 export function templateDraft(target: Target, decider: Decider | null, claims: Claim[], seller: SellerProfile): Draft {
   const subject = subjectLine(target, claims.find(claim => claim.recipientCompany)?.recipientCompany, seller.offering);
   const greeting = decider ? 'Hi ' + decider.name.trim().split(/\s+/)[0] + ',' : 'Hi,';
-  const pitch = `We offer ${seller.offering.replace(/[.!?]+$/, '')}.`;
+  const pitch = offerQuestion(seller.offering, target.mechanisms.includes('TALENT_DRAIN'));
   const cta = meetingCopy(seller);
   const signoff = 'Thanks,\n' + seller.senderName;
   const lines = [greeting, pitch, cta, signoff];
@@ -84,7 +96,7 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
     remaining -= words;
   }
   const cited = included.map(claim => claim.text.replace(/[.!?]+$/, '') + '. [' + claim.n + ']');
-  const body = [greeting, ...(cited.length ? [cited.join(' ')] : []), pitch, cta, signoff].join('\n\n');
+  const body = target.hold ? '' : [greeting, ...(cited.length ? [cited.join(' ')] : []), pitch, cta, signoff].join('\n\n');
   const checks: DraftSentenceCheck[] = [
     { sentence: greeting, status: 'no_claim', evidenceIds: [] },
     ...included.map((claim, i): DraftSentenceCheck => ({ sentence: cited[i], status: 'cited', evidenceIds: claim.evidenceIds })),
@@ -96,7 +108,7 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
     checks, unverifiable: claims.filter(claim => !claim.verifiable).map(claim => ({
       claim: claim.text, reason: claim.reason || 'No dated evidence was supplied.',
     })),
-    generator: 'template', verified: true,
+    generator: 'template', verified: !target.hold,
     meeting: { title: seller.meeting.title, durationMin: 20, proposedSlots: [...seller.meeting.slots] },
   };
 }
@@ -104,11 +116,12 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
 export function llmDraftPrompt(target: Target, decider: Decider | null, claims: Claim[], seller: SellerProfile): { system: string; user: string } {
   const usable = claims.filter(claim => claim.verifiable && claim.evidenceIds.length);
   return {
-    system: 'Write a concise first outreach email of 110 words or fewer. Return JSON with subject and body. State factual sentences only from the numbered public facts about the recipient, preserving their numbers and dates exactly. Put each sentence’s [n] citations at its end. The seller offer and meeting invitation may be stated as supplied. Do not mention engineers moving, departure counts, outside companies, inferred needs as facts, or any unlisted fact. If no fact is supplied, write a short introduction and meeting invitation.',
+    system: 'Write a concise first outreach email of 110 words or fewer. Return JSON with subject and body. State factual sentences only from the numbered public facts about the recipient, preserving their numbers and dates exactly. Put each sentence’s [n] citations at its end. Lead with the recipient’s own dated facts. Format dates as day and abbreviated month, such as 15 Nov. Ask about the seller’s offer as a question and include the meeting invitation as supplied. Do not mention engineers moving, departure counts, outside companies, inferred needs as facts, or any unlisted fact. If no fact is supplied, write a short introduction and meeting invitation.',
     user: [
       `Recipient ${decider?.name ?? 'company team'} at ${claims.find(claim => claim.recipientCompany)?.recipientCompany ?? 'the target company'}.`,
       `Suggested subject ${subjectLine(target, claims.find(claim => claim.recipientCompany)?.recipientCompany, seller.offering)}.`,
       `Seller ${seller.company}, offering ${seller.offering}, sender ${seller.senderName}.`,
+      offerQuestion(seller.offering, target.mechanisms.includes('TALENT_DRAIN')),
       meetingCopy(seller),
       'Numbered facts:',
       ...usable.map(claim => `[${claim.n}] ${claim.text}`),
@@ -136,10 +149,12 @@ function splitSentences(text: string): string[] {
 
 function permittedCopy(sentence: string, names: string[]) {
   if (/^(?:(?:hi|hello|dear)(?:\s+[^.!?\d,]+)?|(?:thanks|thank you|best|regards|cheers|sincerely|warmly)),?$/i.test(sentence)) return true;
-  if (sentence === config.senderName || sentence === meetingCopy(config)) return true;
+  if ([config.senderName, meetingCopy(config), offerQuestion(config.offering, true),
+    offerQuestion(config.offering, false)].includes(sentence)) return true;
   if (/^(?:would (?:you|it)|could we|are you open to|do you have|can we)\b[^.!?]*\?$/i.test(sentence) &&
       !/\b(?:since|recently|raised|founded|grew|hired|left|moved|posted|employees|engineers|million|billion)\b/i.test(sentence) &&
       tokens(sentence).every(value => value === '20' || tokens(meetingCopy(config)).includes(value))) return true;
+  if (/^(?:I hope you(?:'re|’re| are) well|Hope you(?:'re|’re| are) well|Thanks for your time)[.!]?$/i.test(sentence)) return true;
   if (sentence === `We offer ${config.offering}.` || sentence === config.oneLiner) return true;
   return names.includes(sentence.trim());
 }
@@ -148,14 +163,28 @@ const sentenceStarters = new Set(['A', 'An', 'And', 'As', 'At', 'Could', 'Do', '
   'If', 'In', 'It', 'Let', 'May', 'Our', 'Please', 'See', 'That', 'The', 'Their', 'They', 'This', 'To',
   'We', 'What', 'Would', 'You', 'Your']);
 
+function properWords(sentence: string) {
+  const text = sentence.replace(markerPattern, '');
+  return [...text.matchAll(/\b\p{Lu}[\p{L}'’-]*/gu)].flatMap(word =>
+    sentenceStarters.has(word[0]) && (word.index ?? 0) <= 2 ? [] : [word[0]]);
+}
+
 function factual(sentence: string, names: string[]) {
   if (tokens(sentence).length) return true;
-  let text = sentence.replace(markerPattern, '');
+  let text = sentence;
   for (const name of names) {
     if (name) text = text.replaceAll(name, ' ');
   }
-  const words = [...text.matchAll(/\b\p{Lu}[\p{L}'’-]*/gu)];
-  return words.some((word, index) => index > 0 || !sentenceStarters.has(word[0]) || (word.index ?? 0) > 2);
+  return properWords(text).length > 0 ||
+    /\b(?:raised|hired|founded|acquired|reported|posted|announced|reached|grew|deployed|poached|departed|moved)\b/i.test(text);
+}
+
+function claimWordingAllowed(sentence: string, claims: Claim[], names: string[]) {
+  if (/\b(?:engineers? (?:left|departed|moved)|left for|poached|departures?)\b/i.test(sentence)) return false;
+  const words = new Set([...claims.flatMap(claim => properWords(claim.text)), ...names.flatMap(properWords),
+    'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
+    'Jan', 'Feb', 'Mar', 'Apr', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+  return properWords(sentence).every(word => words.has(word));
 }
 
 export function verifyDraft(draft: { subject: string; body: string }, claims: Claim[], evidence: Evidence[]):
@@ -177,7 +206,9 @@ export function verifyDraft(draft: { subject: string; body: string }, claims: Cl
     const numbers = tokens(sentence);
     const evidenceIds = [...new Set(markers.flatMap(marker => allowed.get(marker)?.evidenceIds ?? []))];
     const citedNumbers = new Set(markers.flatMap(marker => allowed.get(marker)?.numbers ?? []).map(canonicalToken));
-    if (markers.length && markers.every(marker => allowed.has(marker)) && numbers.every(value => citedNumbers.has(canonicalToken(value)))) {
+    const citedClaims = markers.flatMap(marker => allowed.get(marker) ?? []);
+    if (markers.length && citedClaims.length === markers.length && numbers.every(value => citedNumbers.has(canonicalToken(value))) &&
+      claimWordingAllowed(sentence, citedClaims, names)) {
       checks.push({ sentence, status: 'cited', evidenceIds });
       for (const marker of markers) for (const evidenceId of allowed.get(marker)!.evidenceIds) {
         citations.set(marker + ':' + evidenceId, { marker, evidenceId });

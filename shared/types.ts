@@ -386,6 +386,7 @@ export type RunEvent =
   | { type: 'engine.resumed'; fromStep: StepName; skipped: StepName[] }
   | { type: 'replay.outcome'; outcome: ReplayOutcome }
   | { type: 'replay.scored'; score: ReplayScore }
+  | SourceReadEvent
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string };
 
 // ---------- replay scoring ----------
@@ -410,6 +411,30 @@ export interface ReplayScore {
   note: string;                     // honest one-liner, including when DOMINO loses to a baseline
   snapshotLabel?: string;           // "Not point-in-time: today's Crustdata index, filtered to facts dated on or before 1 Sep"
   outcomeDefinition?: string;       // frozen before outcomes were looked at (see README "Replay protocol")
+}
+
+// What the agent actually read on one tool call, for the run theatre. Emitted after every Crustdata / web / posts
+// call (live, cache or fixture: `mode` says which). Items are capped (~12) and carry only public business facts.
+export interface SourceItem {
+  kind: 'job_post' | 'person_move' | 'company' | 'funding' | 'headcount' | 'post' | 'news' | 'decider';
+  title: string;                    // job title, post headline, company name, "Engineer moved A -> B" (no person names for moves)
+  company: string | null;           // company the item is about
+  url: string | null;               // public source URL if any
+  date: IsoDate | null;             // date of the fact (month-precision dates use the 1st, see `precision`)
+  precision?: 'day' | 'month' | null;
+  signal: string | null;            // what DOMINO extracted: "serving role posted", "infra engineer left", "Series B raised"
+  matched: boolean;                 // true if it fed a trigger/edge; false = read and discarded (shown dimmed)
+}
+
+export interface SourceReadEvent {
+  type: 'source.read';
+  callId: string;
+  step: StepName;
+  endpoint: string;                 // 'job_search', 'person_recent_moves', 'company_posts', ...
+  mode: DataMode;
+  query: string;                    // human summary of the query: "serving/inference job posts, 23 Oct-22 Nov"
+  totalAvailable: number | null;    // total_count reported by the source
+  items: SourceItem[];
 }
 
 export interface StoredEvent { seq: number; runId: string; ts: IsoDateTime; event: RunEvent }
