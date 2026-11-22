@@ -14,7 +14,7 @@
 .side a[aria-current='page'] { background: var(--hover); color: var(--ink); }
 .side a .c { color: var(--ink-3); font-weight: 400; }
 .side-foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--rule-2); font-size: 13px; color: var(--ink-3); line-height: 18px; }
-.co-main { flex: 1; padding: 28px 32px 48px; min-width: 0; max-width: 1240px; }
+.co-main { flex: 1; padding: 20px 24px 40px; min-width: 0; max-width: 1240px; }
 @media (min-width: 1800px) { .co-main { max-width: 1480px; } }
 
 .reading-panel { min-height: 60vh; display: grid; }
@@ -46,7 +46,7 @@
 .op-list { display: grid; gap: 12px; }
 .op-row { padding: 16px; display: grid; gap: 12px; }
 .op-top { display: grid; gap: 8px; justify-items: start; }
-.op-role { margin: 0; font-family: var(--serif); font-weight: var(--serif-w); font-size: 24px; line-height: 30px; }
+.op-role { margin: 0; font-weight: 600; font-size: 16px; line-height: 22px; }
 .op-hold { margin: 0; color: var(--ink-2); font-weight: 600; }
 .op-chips { display: grid; gap: 0; border-top: 1px solid var(--rule-2); }
 .op-chip { display: grid; grid-template-columns: 1fr auto; gap: 16px; text-align: left; padding: 9px 0; border: 0; border-bottom: 1px solid var(--rule-2); background: none; }
