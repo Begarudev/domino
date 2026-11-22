@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import type { Approval, Company, Draft, OutboxAction, Target } from '../../shared/types.ts';
 import { decode, now, Store } from '../db.ts';
+import type { RunChaos } from '../db.ts';
 import type { Outputs } from '../engine/steps.ts';
 import { config, root } from '../env.ts';
+import { receiveMessage } from './receiver.ts';
 
 export class ApprovalError extends Error {}
 
@@ -24,6 +26,7 @@ function context(store: Store, approval: Approval) {
   const draft = draftStep?.drafts.find(row => row.id === approval.draftId);
   const target = draftStep?.targets.find(row => row.companyId === approval.companyId);
   if (!draft || !company || !target) throw new ApprovalError('Draft details are unavailable');
+  if (target.hold) throw new ApprovalError('This target is on hold');
   return { draft, company, target };
 }
 
@@ -62,19 +65,28 @@ function finishRun(store: Store, runId: string) {
 }
 
 type Decision = 'approve' | 'reject';
-export function decideApproval(store: Store, id: string, decision: Decision) {
-  const work = store.transaction(() => {
+type Reservation = { status: 'rejected' | 'pending' | 'delivered'; approval: Approval };
+
+export function reserveApproval(store: Store, id: string, decision: Decision): Reservation | undefined {
+  return store.transaction(() => {
     const approval = store.getApproval(id);
     if (!approval) return;
     const run = store.requireRun(approval.runId);
-    const row = store.sql.prepare('SELECT json, executed_at FROM outbox WHERE idempotency_key = ?').get(approval.idempotencyKey);
-    if (decision === 'approve' && row) return { approval, action: decode<OutboxAction>(row.json as string), duplicate: true };
+    const row = store.sql.prepare('SELECT status FROM outbox WHERE idempotency_key = ?').get(approval.idempotencyKey);
+    if (decision === 'approve' && row) {
+      if (row.status === 'delivered') {
+        store.recordEvent(run.id, { type: 'action.duplicate_blocked', approvalId: id,
+          idempotencyKey: approval.idempotencyKey, note: 'The idempotency key already exists' });
+        return { approval, status: 'delivered' };
+      }
+      return { approval, status: 'pending' };
+    }
     if (approval.status !== 'pending' || row) throw new ApprovalError('This approval already has a decision');
     if (run.status !== 'awaiting_approval' && run.status !== 'budget_exhausted') throw new ApprovalError('This run is not ready for a decision');
     if (decision === 'reject') {
       store.recordEvent(run.id, { type: 'approval.decided', approvalId: id, status: 'rejected' });
       finishRun(store, run.id);
-      return { approval: store.getApproval(id)!, duplicate: false };
+      return { approval: store.getApproval(id)!, status: 'rejected' };
     }
 
     const { draft, company, target } = context(store, approval);
@@ -86,58 +98,70 @@ export function decideApproval(store: Store, id: string, decision: Decision) {
       testMode: true, sink: relativePath.startsWith('..') ? filename : relativePath, executedAt: now(),
       summary: approval.kind === 'send_message' ? `Saved local message for ${company.name}` : `Saved tentative hold for ${company.name}`,
     };
-    // Validate before reserving the key. The execution transaction handles file recovery.
     fileContents(action, draft, company, target);
-    store.sql.prepare('INSERT INTO outbox (idempotency_key, run_id, approval_id, json) VALUES (?, ?, ?, ?)')
+    store.sql.prepare("INSERT INTO outbox (idempotency_key, run_id, approval_id, json, status) VALUES (?, ?, ?, ?, 'pending')")
       .run(action.idempotencyKey, action.runId, id, JSON.stringify(action));
-    return { approval, action, duplicate: false };
+    return { approval, status: 'pending' };
   });
-  if (!work) return;
-  if (!work.action) return { approval: work.approval };
-  const alreadyExecuted = executeReservation(store, work.action);
-  if (work.duplicate || alreadyExecuted) {
-    store.appendEvent(work.approval.runId, { type: 'action.duplicate_blocked', approvalId: id,
-      idempotencyKey: work.approval.idempotencyKey, note: 'The idempotency key already exists' });
-    return { duplicate: true as const };
-  }
-  return { approval: store.getApproval(id)!, action: work.action };
 }
 
 function fileContents(action: OutboxAction, draft: Draft, company: Company, target: Target) {
   return action.kind === 'send_message' ? messageFile(action, draft, company, target) : meetingFile(action, draft, company);
 }
 
-function executeReservation(store: Store, action: OutboxAction): boolean {
-  return store.transaction(() => {
-    const row = store.sql.prepare('SELECT executed_at FROM outbox WHERE idempotency_key = ?').get(action.idempotencyKey);
-    if (row?.executed_at) return true;
+function writeArtifact(action: OutboxAction, content: string) {
+  const filename = isAbsolute(action.sink) ? action.sink : join(root, action.sink);
+  let existing: string | undefined;
+  try {
+    existing = readFileSync(filename, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  if (existing === content) return;
 
-    const approval = store.getApproval(action.approvalId)!;
-    const { draft, company, target } = context(store, approval);
-    const content = fileContents(action, draft, company, target);
-    const filename = isAbsolute(action.sink) ? action.sink : join(root, action.sink);
-    mkdirSync(config.outboxPath, { recursive: true, mode: 0o700 });
-    const temp = `${filename}.${randomUUID()}.tmp`;
-    try {
-      writeFileSync(temp, content, { mode: 0o600, flag: 'wx', flush: true });
-      renameSync(temp, filename);
-    } finally {
-      rmSync(temp, { force: true });
-    }
-    store.sql.prepare('UPDATE outbox SET executed_at = ? WHERE idempotency_key = ?').run(action.executedAt, action.idempotencyKey);
-    store.recordEvent(action.runId, { type: 'approval.decided', approvalId: action.approvalId, status: 'approved' });
-    store.recordEvent(action.runId, { type: 'action.executed', action });
-    finishRun(store, action.runId);
-    return false;
-  });
+  mkdirSync(dirname(filename), { recursive: true, mode: 0o700 });
+  const temp = `${filename}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temp, content, { mode: 0o600, flag: 'wx', flush: true });
+    renameSync(temp, filename);
+  } finally {
+    rmSync(temp, { force: true });
+  }
 }
 
-export function recoverOutbox(store: Store) {
-  for (const row of store.sql.prepare('SELECT json FROM outbox WHERE executed_at IS NULL').all()) {
-    try {
-      executeReservation(store, decode<OutboxAction>(row.json as string));
-    } catch {
-      // Leave the reservation for a retry when the local filesystem becomes writable.
-    }
+export function pendingKeys(store: Store, runId: string): string[] {
+  return store.sql.prepare("SELECT idempotency_key FROM outbox WHERE run_id = ? AND status = 'pending' ORDER BY rowid")
+    .all(runId).map(row => row.idempotency_key as string);
+}
+
+export function dispatchAction(store: Store, key: string) {
+  const row = store.sql.prepare("SELECT json FROM outbox WHERE idempotency_key = ? AND status = 'pending'").get(key);
+  if (!row) return;
+  const action = decode<OutboxAction>(row.json as string);
+  const approval = store.getApproval(action.approvalId);
+  if (!approval) throw new ApprovalError('Approval is unavailable');
+  const { draft, company, target } = context(store, approval);
+  const content = fileContents(action, draft, company, target);
+  const receipt = action.kind === 'send_message' ? receiveMessage(store, key, {
+    runId: action.runId, approvalId: action.approvalId, kind: action.kind, testMode: true, message: content,
+  }) : null;
+
+  const { crashAfterDeliver } = decode<RunChaos>(store.requireRun(action.runId).chaos_json);
+  if (receipt?.status === 'delivered' && crashAfterDeliver) {
+    process.kill(process.pid, 'SIGKILL');
+    process.exit(1);
   }
+
+  store.transaction(() => {
+    const pending = store.sql.prepare("SELECT 1 FROM outbox WHERE idempotency_key = ? AND status = 'pending'").get(key);
+    if (!pending) return;
+    writeArtifact(action, content);
+    const delivered = { ...action, executedAt: receipt?.receivedAt ?? now() };
+    store.sql.prepare("UPDATE outbox SET executed_at = ?, json = ?, status = 'delivered' WHERE idempotency_key = ?")
+      .run(delivered.executedAt, JSON.stringify(delivered), key);
+    if (receipt) store.recordEvent(action.runId, { type: 'delivery.receipt', receipt, approvalId: action.approvalId });
+    store.recordEvent(action.runId, { type: 'approval.decided', approvalId: action.approvalId, status: 'approved' });
+    store.recordEvent(action.runId, { type: 'action.executed', action: delivered });
+    finishRun(store, action.runId);
+  });
 }

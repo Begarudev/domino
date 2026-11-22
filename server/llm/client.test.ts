@@ -1,10 +1,25 @@
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-// Configure the OpenAI provider before env.ts computes `config` at import time.
-process.env.OPENAI_API_KEY = 'sk-test-not-a-real-key';
-process.env.ANTHROPIC_API_KEY = '';
-delete process.env.OPENAI_MODEL;
-delete process.env.OPENAI_REASONING_EFFORT;
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const isolated = process.env.DOMINO_OPENAI_ADAPTER_TEST === '1';
+const exec = promisify(execFile);
+
+function adapterTest(name: string, check: () => void | Promise<void>) {
+  if (isolated) {
+    test(name, check);
+    return;
+  }
+  // The provider is set at startup. Other Bun test files can already have loaded env.ts.
+  test(name, async () => {
+    await exec(process.execPath, ['test', '--test-name-pattern', name, fileURLToPath(import.meta.url)], {
+      env: { ...process.env, DOMINO_OPENAI_ADAPTER_TEST: '1', OPENAI_API_KEY: 'sk-test-not-a-real-key',
+        ANTHROPIC_API_KEY: '', OPENAI_MODEL: 'gpt-5-mini', OPENAI_REASONING_EFFORT: '', OPENAI_TIMEOUT_MS: '' },
+    });
+  });
+}
 
 const { Store } = await import('../db.ts');
 const { defaultLimits } = await import('../env.ts');
@@ -32,14 +47,16 @@ function context() {
 
 const request = { purpose: 'draft', system: 'Write.', user: 'Draft one line.', maxTokens: 400, json: true } as const;
 
-beforeAll(() => { store = new Store(':memory:'); });
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  delete process.env.OPENAI_TIMEOUT_MS;
-});
+if (isolated) {
+  beforeAll(() => { store = new Store(':memory:'); });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    delete process.env.OPENAI_TIMEOUT_MS;
+  });
+}
 
 describe('openai adapter', () => {
-  test('asks gpt-5 models for minimal reasoning and sends no unsupported sampling params', async () => {
+  adapterTest('asks gpt-5 models for minimal reasoning and sends no unsupported sampling params', async () => {
     mockFetch(async () => Response.json({
       model: 'gpt-5-mini-2025-08-07',
       usage: { prompt_tokens: 40, completion_tokens: 20 },
@@ -58,14 +75,14 @@ describe('openai adapter', () => {
     expect(entry.usd).toBeCloseTo((40 * 0.25 + 20 * 2) / 1e6, 12);
   });
 
-  test('picks an effort each model family accepts', () => {
+  adapterTest('picks an effort each model family accepts', () => {
     expect(openaiReasoning('gpt-5-mini')).toEqual({ reasoning_effort: 'minimal' });
     expect(openaiReasoning('gpt-5-nano-2025-08-07')).toEqual({ reasoning_effort: 'minimal' });
     expect(openaiReasoning('gpt-5.4-mini')).toEqual({ reasoning_effort: 'low' });
     expect(openaiReasoning('gpt-4.1-mini')).toEqual({});
   });
 
-  test('a 5xx retries once, then falls back to the template with every attempt in the ledger', async () => {
+  adapterTest('a 5xx retries once, then falls back to the template with every attempt in the ledger', async () => {
     mockFetch(async () => new Response('{"error":{"message":"overloaded"}}', { status: 503 }));
     const ctx = context();
     expect(await modelClient(ctx).complete(request)).toBeNull();
@@ -77,7 +94,7 @@ describe('openai adapter', () => {
     expect(events.some(event => event.type === 'log' && /deterministic output/.test(event.message))).toBe(true);
   });
 
-  test('a 400 is not retried', async () => {
+  adapterTest('a 400 is not retried', async () => {
     mockFetch(async () => new Response('{"error":{"code":"unsupported_parameter"}}', { status: 400 }));
     const ctx = context();
     expect(await modelClient(ctx).complete(request)).toBeNull();
@@ -85,7 +102,7 @@ describe('openai adapter', () => {
     expect(store.getLedger(ctx.runId)).toHaveLength(1);
   });
 
-  test('a timeout retries once and still charges the ledger for each aborted request', async () => {
+  adapterTest('a timeout retries once and still charges the ledger for each aborted request', async () => {
     process.env.OPENAI_TIMEOUT_MS = '40';
     mockFetch(signal => new Promise<Response>((_, reject) => {
       signal.addEventListener('abort', () => reject(signal.reason), { once: true });
