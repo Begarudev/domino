@@ -14,10 +14,12 @@ ContextCon 05 (Crustdata x BITS Pilani), theme "Services, Replaced". Primary pro
 with **9.1 The Outbound Desk** for the company-analysis part (the handbook allows combining themes). Team DOMINO.
 Built on 22 Nov 2026 between 10:15 and 18:00 IST; the commit history starts at 12:16 IST.
 
-> **Status, 14:30 IST.** The company-analysis engine (rules, verifier, approvals, send-once, ledger, replay, Crustdata
-> adapters) is built and tested. Rule O1 has run on live data and on the 1 Sep replay (numbers below, details in
-> [`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)). The hiring screens (candidate onboarding and dashboard, company hiring
-> tabs) are being finished this afternoon; items marked *to fill* are completed at 16:30.
+> **Status, 16:15 IST.** Both parts run end to end and are tested.
+> - The company-analysis engine: rules, verifier, approvals, send-once, ledger, replay and the Crustdata adapters.
+> - The hiring side: candidate onboarding with consent, predicted openings, intros approved and delivered once.
+>
+> Rule O1 has run on live data and on the 1 Sep replay (numbers below, details in [`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)).
+> A fresh clone with no keys runs on a labelled fixture world.
 
 - [The customer and the service](#the-customer-and-the-service)
 - [What you can do with it](#what-you-can-do-with-it)
@@ -438,7 +440,11 @@ Example: live company-analysis run `run_1b4fda05` (22 Nov, 13:32 IST). Excerpt:
 That run cost **86.3 credits and $0.0073** over 30 ledger rows in 216 s, including a deliberate kill and resume. Its
 model timeouts led us to switch the default model to `gpt-6-luna`. The live O1 funnel, its replay and their checks
 used about 1,559 credits, each figure summed from the `x-credits-used` header ([`docs/LIVE-DATA.md`](docs/LIVE-DATA.md)).
-*To fill at 16:30: a ledger excerpt and the cost per intro from a live hiring run.*
+**Cost per intro (live hiring run, 22 Nov).** Onboarding a candidate is one Crustdata person enrich (`run_0950755b`:
+1 credit) plus one GPT-6 Luna parse (178 input / 44 output tokens, $0.00004). The intro itself makes no paid call: the
+draft is assembled from the opening's verified, dated claims and the candidate's consented fields, so its run has no
+ledger rows. The opening it points to comes from the scan, which cost 0 credits here because it replayed the recorded
+live read. So one intro costs about **1 credit and $0.00004**, against a search fee that is a share of first-year salary.
 
 ## Experiments
 
