@@ -187,3 +187,12 @@ test('replay skips both news reads entirely and explains the skip', async () => 
     store.sql.close();
   }
 });
+
+test('the decision log says why each job post was kept or discarded', async () => {
+  const { jobDecision } = await import('./source-theatre.ts');
+  assert.deepEqual(jobDecision('Serving Staff', false, false), { kept: false, reason: 'Discarded: not an engineering role for serving or infrastructure' });
+  assert.deepEqual(jobDecision('Backend Engineer', false, false), { kept: false, reason: 'Discarded: title names no serving or infrastructure system' });
+  assert.equal(jobDecision('AI Infrastructure Co-Founder / COO', true, false).kept, false);
+  assert.deepEqual(jobDecision('Senior ML Platform Engineer', true, true), { kept: true, reason: 'Kept: title matches “ML platform”; used as evidence' });
+  assert.equal(jobDecision('Backend Engineer', false, true).kept, true);
+});

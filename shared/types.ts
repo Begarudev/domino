@@ -460,6 +460,7 @@ export interface SourceItem {
   precision?: 'day' | 'month' | null;
   signal: string | null;            // what DOMINO extracted: "serving role posted", "infra engineer left", "Series B raised"
   matched: boolean;                 // true if it fed a trigger/edge; false = read and discarded (shown dimmed)
+  decision?: { kept: boolean; reason: string } | null; // decision log: why this record was kept or discarded
 }
 
 export interface SourceReadEvent {
