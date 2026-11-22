@@ -143,7 +143,7 @@ export function candidateView(store: Store, row: CandidateRow): Candidate {
     samples: consent.shareSamples ? row.samples : [],
     consent, confirmedAt: row.confirmedAt,
     evidenceIds: (fetched?.evidence ?? []).filter(evidence => consentedField(evidence, consent)).map(evidence => evidence.id),
-    runId, parsedBy: parsed?.parsedBy ?? 'rules',
+    runId, parsedBy: parsed?.parsedBy ?? 'rules', ...(parsed?.fieldSource && { fieldSource: parsed.fieldSource }),
     ...(fetched?.evidence.some(evidence => evidence.mode === 'fixture') && { fixture: true }),
   };
 }

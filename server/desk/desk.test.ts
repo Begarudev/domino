@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, describe, test } from 'node:test';
 import type { Evidence } from '../../shared/types.ts';
-import type { Candidate, CompanySummary, CompanyView, Departure, IntroRequest, Opening, OpeningForCandidate } from '../../shared/desk.ts';
+import type { Candidate, CompanySummary, CompanyView, Departure, IntroPreview, IntroRequest, Opening, OpeningForCandidate } from '../../shared/desk.ts';
 import { waitFor } from '../../scripts/smoke.ts';
 import { displayName, enrichFixture, linkedinProfileUrl, parseEnrich, personEnrich } from '../crustdata/person-enrich.ts';
 import { Store } from '../db.ts';
@@ -170,7 +170,7 @@ describe('search desk over HTTP (fixture mode)', () => {
         { id: 'co_kestrel', name: 'Kestrel Fictional', aliases: [], headcount: 300, evidenceIds: [] },
       ], departures, evidence: [] },
       check_replacements: { replacements: [], staleCompanyIds: [], evidence: [] },
-      detect_openings: { openings },
+      detect_openings: { openings, funnel: { runId: 'run_seed_openings', rule: 'O1', lockedAt: '2026-11-22T08:38:00Z', snapshot: 'fixture', stages: [{ id: 'departures', label: 'Dated departures', count: 2 }] } },
     } as const;
     for (const [step, output] of Object.entries(outputs)) {
       store.setOutput(runId, step as keyof typeof outputs, output);
@@ -228,6 +228,7 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.equal(candidate.fixture, true);
     assert.equal(candidate.roleFamily, 'ml_platform');
     assert.equal(candidate.parsedBy, 'rules');
+    assert.match(candidate.fieldSource ?? '', /confirm each field/);
     assert.ok(candidate.skills.includes('Kubeflow'));
     assert.equal(candidate.history.length, 2);
     assert.deepEqual(candidate.samples, ['Built a feature store; mail me at [contact redacted]']);
@@ -248,6 +249,12 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.ok(ranked[0].fit.some(reason => reason.status === 'verified' && reason.profileField === 'roleFamily'));
     assert.ok(ranked[0].fit.some(reason => reason.status === 'verified' && reason.evidenceId === 'ev_drain_a'));
     assert.ok(ranked[0].fit.some(reason => reason.status === 'cant_verify'));
+    assert.ok(!('matchScore' in ranked[0]) && !('confidence' in ranked[0]), 'no bare scores leave the API');
+
+    const preview = await call<IntroPreview>(`/api/candidates/${candidate.id}/intros/preview?openingId=op_orbit_mlp`);
+    assert.deepEqual(preview.shared.map(field => field.field), ['displayName', 'title', 'skills', 'history']);
+    assert.ok(preview.withheld.some(field => field.field === 'contact'));
+    assert.equal((await call<{ stages: unknown[] }>('/api/openings/funnel')).stages.length, 1);
 
     await call(`/api/candidates/${candidate.id}/intros`, { openingId: 'op_kestrel_inf' }, [409]);
     const intro = await call<IntroRequest>(`/api/candidates/${candidate.id}/intros`, { openingId: 'op_orbit_mlp' });
@@ -271,7 +278,11 @@ describe('search desk over HTTP (fixture mode)', () => {
     const retry = await call<{ duplicate?: boolean }>(`/api/approvals/${ready.approvalId}`, { decision: 'approve' });
     assert.equal(retry.duplicate, true);
     const view = await call<CompanyView>('/api/companies/co_orbit');
-    assert.equal(view.intros.find(item => item.id === intro.id)?.status, 'delivered');
+    const sent = view.intros.find(item => item.id === intro.id);
+    assert.equal(sent?.status, 'delivered');
+    assert.equal(sent?.receipt?.idempotencyKey.length, 16);
+    assert.ok(!/"(score|matchScore|confidence)"/.test(JSON.stringify({ openings: view.openings, matches: view.matches })));
+    assert.deepEqual(await call(`/api/candidates/${candidate.id}/inbox`), [], 'candidate-requested intros are not inbox items');
   });
 
   test('company view: drain as role + initial, discoverable matches only, company-to-candidate intro reaches the inbox', async () => {
@@ -294,12 +305,20 @@ describe('search desk over HTTP (fixture mode)', () => {
     const target = view.matches[0];
     const intro = await call<IntroRequest>('/api/companies/co_orbit/intros', { candidateId: target.candidateId, openingId: 'op_orbit_mlp' });
     assert.equal(intro.direction, 'company_to_candidate');
-    const inbox = await waitFor(async () => {
-      const rows = await call<IntroRequest[]>(`/api/candidates/${target.candidateId}/inbox`);
+    const pending = await waitFor(async () => {
+      const rows = await call<IntroRequest[]>(`/api/candidates/${target.candidateId}/intros`);
       return rows.find(row => row.id === intro.id && row.status === 'awaiting_approval');
     }, 20_000);
-    assert.match(inbox.message, /^Hello Asha K\.,/);
-    const sent = await call<{ receipt?: { status: string } }>(`/api/approvals/${inbox.approvalId}`, { decision: 'approve' });
+    assert.match(pending.message, /^Hello Asha K\.,/);
+    assert.deepEqual(await call(`/api/candidates/${target.candidateId}/inbox`), [], 'nothing in the inbox before the send-once outbox delivers');
+    const sent = await call<{ receipt?: { status: string } }>(`/api/approvals/${pending.approvalId}`, { decision: 'approve' });
     assert.equal(sent.receipt?.status, 'delivered');
+    const inbox = await call<IntroRequest[]>(`/api/candidates/${target.candidateId}/inbox`);
+    assert.deepEqual(inbox.map(row => [row.id, row.status]), [[intro.id, 'delivered']]);
+    assert.ok(inbox[0].receipt?.receivedAt);
+
+    const hiddenPreview = await call<IntroPreview>(`/api/candidates/${hidden.id}/intros/preview?openingId=op_orbit_mlp`);
+    assert.deepEqual(hiddenPreview.shared.map(field => field.field), ['displayName', 'title', 'skills']);
+    assert.ok(hiddenPreview.withheld.some(field => field.field === 'history'));
   });
 });

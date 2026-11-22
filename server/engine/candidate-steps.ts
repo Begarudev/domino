@@ -19,7 +19,11 @@ import type { CrustReadMeta } from '../runtime/tool.ts';
 import * as deps from './deps.ts';
 import type { Runner } from './steps.ts';
 
-export type ParsedProfile = Pick<Candidate, 'displayName' | 'headline' | 'roleFamily' | 'skills' | 'history' | 'parsedBy'>;
+export type ParsedProfile = Pick<Candidate, 'displayName' | 'headline' | 'roleFamily' | 'skills' | 'history' | 'parsedBy' | 'fieldSource'>;
+// The LLM is labelled wherever its output is shown (anti-wrapper rule 3).
+const modelLabel = (model: string) => /gpt-6-luna/i.test(model) ? 'GPT-6 Luna' : model;
+export const llmFieldSource = (model: string) => `Filled by ${modelLabel(model)} · confirm each field`;
+export const RULES_FIELD_SOURCE = 'Read by rules from your profile · confirm each field';
 export interface IntroDraft {
   introId: string;
   direction: IntroRequest['direction'];
@@ -134,14 +138,16 @@ async function parseProfile(ctx: ToolContext, c: Partial<CandidateOutputs>): Pro
       // Keep only skills that appear in the source fields, so every skill stays traceable to the profile.
       const grounded = [...new Set(parsed.data.skills.map(skill => skill.trim()).filter(skill => skill && source.includes(skill.toLowerCase())))];
       const roleFamily = parsed.data.roleFamily ?? classifyProfile(title, headline, skills);
-      return { output: { ...base, skills: grounded.length ? grounded : skills, roleFamily, parsedBy: 'llm' },
-        summary: `Read as ${label(roleFamily)} (${completion.model})` };
+      const fieldSource = llmFieldSource(completion.model);
+      return { output: { ...base, skills: grounded.length ? grounded : skills, roleFamily, parsedBy: 'llm', fieldSource },
+        summary: `${fieldSource} (read as ${label(roleFamily)})` };
     }
   } catch (error) {
     if (error instanceof BudgetError || ctx.signal?.aborted) throw error;
   }
   const roleFamily = classifyProfile(title, headline, skills);
-  return { output: { ...base, roleFamily, parsedBy: 'rules' }, summary: `Read as ${label(roleFamily)} (rules)` };
+  return { output: { ...base, roleFamily, parsedBy: 'rules', fieldSource: RULES_FIELD_SOURCE },
+    summary: `${RULES_FIELD_SOURCE} (read as ${label(roleFamily)})` };
 }
 
 async function matchOpenings(ctx: ToolContext) {
@@ -150,7 +156,8 @@ async function matchOpenings(ctx: ToolContext) {
   const snapshot = openingsSnapshot(ctx.store);
   const output: CandidateOutputs['match_openings'] = { matches: [], openingsRunId: null };
   if (!snapshot) return { output, summary: 'No completed openings scan to match against yet' };
-  output.matches = matchesFor(candidate, snapshot.openings, snapshot.evidence);
+  // Ranked internally; the stored output carries no bare score (anti-wrapper rule 4).
+  output.matches = matchesFor(candidate, snapshot.openings, snapshot.evidence).map(({ score: _score, ...match }) => match);
   output.openingsRunId = snapshot.runId;
   const n = output.matches.length;
   return { output, summary: `${n} predicted opening${n === 1 ? '' : 's'} fit this profile` };
@@ -169,6 +176,29 @@ const article = (word: string) => /^[A-Z]{2,}/.test(word) ? ('AEFHILMNORSX'.incl
 const monthOf = (date: string | null) => date
   ? new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
 
+// Exactly the candidate fields an intro message carries, given consent. The preview route and the draft share this.
+export interface SharedField { field: string; label: string; value: string; evidenceId: string; claim: string }
+export function introSharedFields(candidate: Candidate, candidateEvidence: Evidence[]): SharedField[] {
+  const fields: SharedField[] = [];
+  const name = candidate.displayName;
+  const title = candidateEvidence.find(row => row.source.field === 'basic_profile.current_title');
+  if (title) fields.push({ field: 'title', label: 'Current title', value: String(title.value), evidenceId: title.id,
+    claim: `${name} lists the current title ${title.value}` });
+  const skills = candidateEvidence.find(row => row.source.field === SKILLS_FIELD);
+  if (candidate.consent.shareSkills && skills && candidate.skills.length) {
+    const top = candidate.skills.slice(0, 3).join(', ');
+    fields.push({ field: 'skills', label: 'Skills (top 3)', value: top, evidenceId: skills.id, claim: `${name} lists skills including ${top}` });
+  }
+  const current = candidate.consent.shareHistory ? candidate.history.find(item => item.to === null) : undefined;
+  const role = current && candidateEvidence.find(row => row.source.field?.startsWith('experience.employment_details.current'));
+  if (current && role) {
+    const since = monthOf(current.from) ?? 'recently';
+    fields.push({ field: 'history', label: 'Current role', value: `${current.title} at ${current.company} since ${since}`, evidenceId: role.id,
+      claim: `${name} has worked as ${current.title} at ${current.company} since ${since}` });
+  }
+  return fields;
+}
+
 // Claims avoid "left"/"departures" wording on purpose: the shared verifier strikes it (tactless to a hiring team).
 export function introClaims(opening: Opening, candidate: Candidate, candidateEvidence: Evidence[], evidence: Map<string, Evidence>): Claim[] {
   const claims: Claim[] = [];
@@ -186,13 +216,7 @@ export function introClaims(opening: Opening, candidate: Candidate, candidateEvi
   const gap = opening.reasons.find(reason => reason.kind === 'no_replacement');
   if (gap) add(`No ${family} job post or hire at ${opening.companyName} has been found since then`,
     gap.evidenceId ? [gap.evidenceId] : [], gap.evidenceId ? undefined : 'The no-replacement check has no dated source record.');
-  const title = candidateEvidence.find(row => row.source.field === 'basic_profile.current_title');
-  if (title) add(`${candidate.displayName} lists the current title ${title.value}`, [title.id]);
-  const skills = candidateEvidence.find(row => row.source.field === SKILLS_FIELD);
-  if (skills && candidate.skills.length) add(`${candidate.displayName} lists skills including ${candidate.skills.slice(0, 3).join(', ')}`, [skills.id]);
-  const current = candidate.history.find(item => item.to === null);
-  const role = current && candidateEvidence.find(row => row.source.field?.startsWith('experience.employment_details.current'));
-  if (current && role) add(`${candidate.displayName} has worked as ${current.title} at ${current.company} since ${monthOf(current.from) ?? 'recently'}`, [role.id]);
+  for (const shared of introSharedFields(candidate, candidateEvidence)) add(shared.claim, [shared.evidenceId]);
   return claims;
 }
 
