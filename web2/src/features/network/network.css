@@ -66,3 +66,22 @@
 .dg-hint { margin-left: auto; color: var(--ink-3); }
 .dg .struck, .dg .struck text, .dg .struck tspan { text-decoration: none; }
 .dg-e text { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+/* Attio pass: shared radius on the panel, softer node chips */
+.dg { border-radius: var(--r-lg); }
+.dg-n rect { rx: 8px; }
+.dg-legend { color: var(--ink-2); }
+
+/* p7 meaning palette: counted edges carry rule O1's hue, held edges the guard (amber) hue, the rest grey */
+.dg-e.counted { --c-dot: var(--h-blue-dot); --c-fg: var(--h-blue-fg); }
+.dg-e.held { --c-dot: var(--h-amber-dot); --c-fg: var(--h-amber-fg); }
+.dg-e.struck, .dg-e.in { --c-dot: var(--h-grey-dot); --c-fg: var(--h-grey-fg); }
+.dg-e .ln { stroke: var(--c-dot) !important; }
+.dg-e .note { fill: var(--c-fg) !important; }
+.dg-m.counted path { fill: var(--h-blue-dot); }
+.dg-m.held path { fill: var(--h-amber-dot); }
+.dg-m.struck path, .dg-m.in path { fill: var(--h-grey-dot); }
+.dg-n.held rect { stroke: var(--h-amber-dot); }
+.dg-legend .sw { border-top-color: var(--h-blue-dot); }
+.dg-legend .sw.held { border-top: 2px dashed var(--h-amber-dot); }
+.dg-legend .sw.struck { border-top: 2px dashed var(--h-grey-dot); }
+.dg-legend .sw.in { border-top: 2px solid var(--h-grey-dot); }

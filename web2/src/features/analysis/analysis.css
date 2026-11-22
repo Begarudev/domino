@@ -178,3 +178,7 @@ ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 40
 .cf-t tbody tr { transition: background 150ms var(--ease); }
 .cf-t tbody tr:hover { background: var(--row-hover); }
 .cf-rule-tally, .cf-hc-date, .cf-date { font-variant-numeric: tabular-nums; }
+/* Attio pass: shared radius on file panels, tight name, muted meta */
+.cf .panel { border-radius: var(--r-lg); }
+.cf-name { font-size: var(--fs-h); line-height: var(--lh-h); letter-spacing: var(--track-tight); font-weight: var(--w-semi); }
+.cf-p > header h2 { letter-spacing: var(--track-snug); }
