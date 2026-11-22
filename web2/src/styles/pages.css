@@ -181,7 +181,6 @@
 .dom-ex { grid-column: 1; margin: 0; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-2); padding-left: 2px; }
 .dom-lane li { animation-duration: 360ms; }
 @media (max-width: 1200px) { .dom-lane ol { flex-wrap: wrap; } .dom-lane li { flex-basis: 40%; } }
-||||||| 790a554
 /* Shell polish (q6): active tab reads at a glance (filled pill + 2px ink bar), hover stays lighter than active; the
    breadcrumb carries the tab group so it always matches the sidebar; the bar and sidebar share one surface and hairline. */
 .side a { position: relative; }
