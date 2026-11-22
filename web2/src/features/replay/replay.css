@@ -74,3 +74,4 @@
 .rp-drawer { padding: 16px; font-size: var(--fs-ui); }
 .rp-drawer dt { font-weight: var(--w-med); color: var(--ink-3); }
 .rp-lead-2 { color: var(--ink-3); }
+.replay { max-width: none; grid-template-columns: minmax(0, 1fr); } .rp-table { max-width: none; width: 100%; }

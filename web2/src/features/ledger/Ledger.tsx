@@ -104,7 +104,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
             <b>Blocked before spend</b> · {stepName(r)} · <span className="mono">{r.endpoint}</span>
             <div className="faint">Credit cap {fmtInt(b.limits.maxCredits)} · used {fmtCredits(credits)} + would have cost ≈ {fmtCredits(r.credits)} = {fmtCredits(credits + r.credits)} · not dispatched</div>
           </div>
-          <span className="st held">Not dispatched</span>
+          <span className="ctag tone-held">Not dispatched</span>
         </div>
       )) : (
         <div className={`blocked${b.exhausted ? '' : ' quiet'}`} data-testid="blocked-call">
@@ -113,7 +113,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
             <div className="faint">A call that would cross a cap is refused before it spends and shows here as “Not dispatched”.
               {b.exhausted === 'seconds' ? ` It ran ${fmtInt(b.used.seconds)} s of ${fmtInt(b.limits.maxSeconds)} s; nothing after that was sent.` : ''}</div>
           </div>
-          <span className={`st ${b.exhausted ? 'held' : 'plain'}`}>{b.exhausted ? 'Cap reached' : 'Within caps'}</span>
+          <span className={`ctag ${b.exhausted ? 'tone-held' : 'tone-met'}`}>{b.exhausted ? 'Cap reached' : 'Within caps'}</span>
         </div>
       )}
 
@@ -165,8 +165,8 @@ function Row({ r }: { r: LedgerEntry }) {
       <td className="lg-time">{fmtTime(r.ts)}</td>
       <td className="lg-step" title={stepName(r)}>{stepName(r)}</td>
       <td className="mono" title={ENDPOINT_NOUN[r.endpoint] ?? r.endpoint}>{r.endpoint}</td>
-      <td>{r.injected ? <span className="st held">Injected fault</span> : modeLabel(r)}</td>
-      <td><span className={`lg-pill ${r.status === 'budget_blocked' ? 'idle' : bad ? 'bad' : 'ok'}`}><i aria-hidden="true" />{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</span></td>
+      <td>{r.injected ? <span className="ctag tone-held">Injected fault</span> : modeLabel(r)}</td>
+      <td><span className={`ctag ${r.status === 'budget_blocked' ? 'tone-held' : bad ? 'tone-not-met' : 'tone-met'}`}>{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</span></td>
       <td className="num">{r.credits ? fmtCredits(r.credits) : <span className="faint">0</span>}</td>
       <td className="num">{isLlm(r) ? fmtInt(r.inputTokens + r.outputTokens) : <span className="faint">–</span>}</td>
       <td className="num">{r.usd ? fmtUsd(r.usd) : <span className="faint">$0</span>}</td>
