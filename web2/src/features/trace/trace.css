@@ -33,7 +33,7 @@
 .tr.is-wait .tr-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--acc); }
 .tr.is-fail .tr-dot { background: var(--err); }
 .tr-t { font-size: 13.5px; line-height: 1.35; font-variant-numeric: tabular-nums; }
-.tr-bar { position: relative; height: 10px; background: var(--rule-2); border-radius: 2px; }
+.tr-bar { overflow: hidden; position: relative; height: 10px; background: var(--rule-2); border-radius: 2px; }
 .tr-bar i { position: absolute; top: 0; bottom: 0; background: var(--ink-2); border-radius: 2px; }
 .tr.is-ok .tr-bar i { background: var(--acc); }
 .tr-bar em { position: absolute; inset: -3px 0 0 6px; font-size: 11px; font-style: normal; color: var(--ink-3); }

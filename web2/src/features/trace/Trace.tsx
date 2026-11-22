@@ -18,6 +18,7 @@ interface Summary {
   sent: { deliveries: number; outbox: number };
   steps: Step[]; credits: number; modelUsd: number;
 }
+interface Call { ts: string; provider: string; endpoint: string; status: string; attempt: number; credits: number; latencyMs: number }
 type PhaseKey = 'read' | 'rules' | 'verify' | 'draft' | 'approve' | 'sent';
 interface Row { tag?: string; id: string; state: 'ok' | 'held' | 'wait' | 'fail'; text: string; detail?: string[]; start?: number; end?: number }
 
@@ -42,7 +43,7 @@ function stepState(s: string): Row['state'] {
   return 'wait';
 }
 
-function build(sum: Summary) {
+function build(sum: Summary, calls: Call[]) {
   const times = sum.steps.flatMap((s) => [s.startedAt, s.finishedAt]).filter(Boolean).map((t) => Date.parse(t!));
   const t0 = times.length ? Math.min(...times) : 0;
   const t1 = times.length ? Math.max(...times) : 0;
@@ -58,10 +59,15 @@ function build(sum: Summary) {
     let why = '';
     if (p.key === 'read') {
       for (const r of sum.reads) {
-        const calls = r.live + r.cache + r.blocked + r.failed;
-        rows.push({ tag: r.endpoint, id: `read-${r.endpoint}`, state: r.failed || r.blocked ? 'held' : 'ok',
-          text: `${plural(calls, 'call')} to Crustdata ${r.kind} · ${n(r.live)} live, ${n(r.cache)} from cache · ${n(Math.round(r.credits * 10) / 10)} credits`,
-          detail: [`Endpoint ${r.endpoint}`, `Live ${r.live} · Cache ${r.cache} · Budget-blocked ${r.blocked} · Failed or retried ${r.failed}`] });
+        const mine = calls.filter((c) => c.provider === 'crustdata' && c.endpoint === r.endpoint && c.ts);
+        const st = mine.map((c) => Date.parse(c.ts) - (c.latencyMs || 0) - t0);
+        const en = mine.map((c) => Date.parse(c.ts) - t0);
+        const timed = t0 && mine.length ? { start: Math.max(0, Math.min(...st)), end: Math.max(...en) } : {};
+        const callLines = mine.map((c) => `${new Date(c.ts).toLocaleTimeString('en-GB')} · attempt ${c.attempt} · ${c.status.replace(/_/g, ' ')} · ${c.credits} credits · ${secs(c.latencyMs || 0)}`);
+        const calls_ = r.live + r.cache + r.blocked + r.failed;
+        rows.push({ ...timed, tag: r.endpoint, id: `read-${r.endpoint}`, state: r.failed || r.blocked ? 'held' : 'ok',
+          text: `${plural(calls_, 'call')} to Crustdata ${r.kind} · ${n(r.live)} live, ${n(r.cache)} from cache · ${n(Math.round(r.credits * 10) / 10)} credits`,
+          detail: [`Endpoint ${r.endpoint}`, `Live ${r.live} · Cache ${r.cache} · Budget-blocked ${r.blocked} · Failed or retried ${r.failed}`, ...callLines] });
       }
       why = 'This run made no Crustdata reads.';
     }
@@ -101,24 +107,27 @@ function build(sum: Summary) {
 }
 
 function useSummary(runId: string) {
-  const [state, set] = useState<{ data?: Summary; err?: string }>({});
+  const [state, set] = useState<{ data?: Summary; calls?: Call[]; err?: string }>({});
   useEffect(() => {
     let live = true;
     fetch(`/api/runs/${encodeURIComponent(runId)}/summary`).then(async (r) => {
       if (!r.ok) throw new Error(r.status === 404 ? 'This run does not exist on this server.' : `The server answered ${r.status}.`);
       return r.json() as Promise<Summary>;
-    }).then((d) => live && set({ data: d }), (e: Error) => live && set({ err: e.message }));
+    }).then(async (d) => {
+      const full = await fetch(`/api/runs/${encodeURIComponent(runId)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      return { d, calls: ((full?.ledger ?? full?.snapshot?.ledger ?? []) as Call[]) };
+    }).then(({ d, calls }) => live && set({ data: d, calls }), (e: Error) => live && set({ err: e.message }));
     return () => { live = false; };
   }, [runId]);
   return state;
 }
 
 export function TracePage({ route }: { route: Extract<Route, { page: 'trace' }> }) {
-  const { data, err } = useSummary(route.runId);
+  const { data, calls, err } = useSummary(route.runId);
   const reduce = useReducedMotion();
   const [closed, setClosed] = useState<Set<PhaseKey>>(new Set());
   const [open, setOpen] = useState<string | null>(null);
-  const built = useMemo(() => (data ? build(data) : null), [data]);
+  const built = useMemo(() => (data ? build(data, calls ?? []) : null), [data, calls]);
   const back = { page: 'company', id: route.id, tab: 'recruitment' } as const;
   const focus = PHASES.find((p) => p.key === route.phase)?.key;
 
