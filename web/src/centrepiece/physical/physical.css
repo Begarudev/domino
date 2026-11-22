@@ -128,13 +128,17 @@
 .dp-row span { color: rgba(236, 230, 216, 0.55); }
 .dp-score-num {
   font-family: 'Big Shoulders Display', sans-serif; font-weight: 800;
-  font-size: clamp(44px, 13cqh, 130px); line-height: 0.88; font-variant-numeric: tabular-nums;
+  font-size: clamp(40px, 11.5cqh, 124px); line-height: 0.88; font-variant-numeric: tabular-nums;
 }
-.dp-score-num small { font-size: 0.36em; font-weight: 700; color: rgba(236, 230, 216, 0.66); }
+.dp-score-num small { font-size: 0.5em; font-weight: 800; color: rgba(236, 230, 216, 0.9); }
+.dp-score-lead { font-size: clamp(14px, 2.8cqh, 24px); font-weight: 600; line-height: 1.25; color: var(--dp-jade); }
 .dp-score-domino .dp-score-num { color: var(--dp-jade); text-shadow: 0 0 40px rgba(63, 191, 143, 0.35); }
 .dp-score-base .dp-score-num { color: var(--dp-ivory); opacity: 0.78; }
 .dp-score-lab { font-size: clamp(12px, 2.3cqh, 20px); color: rgba(236, 230, 216, 0.85); }
-.dp-score-note { font-size: clamp(11px, 1.8cqh, 15px); color: rgba(236, 230, 216, 0.62); line-height: 1.4; }
+.dp-score-note {
+  font-size: clamp(11px, 1.8cqh, 15px); color: rgba(236, 230, 216, 0.62); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .dp-again { font-size: clamp(11px, 1.9cqh, 15px); padding: 0.35em 1em; border-radius: 999px;
   background: transparent; color: var(--dp-ivory); border: 1px solid rgba(236, 230, 216, 0.3);
 }

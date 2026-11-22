@@ -29,6 +29,7 @@ export interface TileSpec {
   outcomeDay: number | null;  // days after asOf when the outcome happened (replay), null = never / no replay
   evidenceIds: string[];
   incomingEdgeIds: string[];
+  onHold?: string | null;     // Target.hold: shown, never scored
 }
 
 export interface SpacerSpec { edgeId: string; index: number; pos: V2; dir: V2; last: boolean }
@@ -202,6 +203,7 @@ export function buildLayout(snap: RunSnapshot): TableLayout {
       keyCaption: n.confidence != null ? 'predicted' : "can't verify",
       mechanism: n.mechanisms[0] ?? null, confidence: n.confidence, netNew: n.netNew, alsoBaseline: baselineIds.has(n.id),
       outcome: oc, outcomeDay: day, evidenceIds: n.evidenceIds, incomingEdgeIds: inc.map((e) => e.id),
+      onHold: snap.targets.find((t) => t.companyId === n.id)?.hold?.reasons?.[0] ?? null,
     };
     tiles.push(spec); tileByCompany.set(n.id, spec);
   }

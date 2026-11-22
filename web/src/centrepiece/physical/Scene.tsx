@@ -22,8 +22,8 @@ export const COLORS = {
   ivory: new THREE.Color('#ffffff'),
   spacerIdle: new THREE.Color('#e9e1cd'),
   spacerAmber: new THREE.Color('#f0c98c'),
-  spacerJade: new THREE.Color('#a6dcc4'),
-  spacerAsh: new THREE.Color('#7b8087'),
+  spacerJade: new THREE.Color('#62d3a2'),
+  spacerAsh: new THREE.Color('#4b5056'),
 };
 
 const DYNAMIC = 0 as never; // rapier RigidBodyType.Dynamic
@@ -169,19 +169,20 @@ function Table({ layout }: { layout: TableLayout }) {
 
 // Keep slips inside the visible frame (clear of the clock at the top and the timeline at the bottom).
 const clampTmp = new THREE.Vector3();
-function clampedPosition(halfW: number, halfH: number) {
+function clampedPosition(halfW: number, halfH: number, dy = 0) {
   return (el: THREE.Object3D, camera: THREE.Camera, size: { width: number; height: number }): number[] => {
     clampTmp.setFromMatrixPosition(el.matrixWorld).project(camera);
     let x = (clampTmp.x * 0.5 + 0.5) * size.width;
     let y = (-clampTmp.y * 0.5 + 0.5) * size.height;
     const m = 12;
     x = Math.min(Math.max(x, halfW + m), size.width - halfW - m);
-    y = Math.min(Math.max(y, halfH + size.height * 0.25), size.height - halfH - size.height * 0.12);
+    y = Math.min(Math.max(y, halfH + size.height * 0.25), size.height - halfH - size.height * 0.12) + dy;
     return [x, y];
   };
 }
 const clampCard = clampedPosition(150, 46);
 const clampChip = clampedPosition(80, 22);
+const clampChipLow = clampedPosition(80, 22, 46);
 
 // A tile that has not fallen yet may only show what was knowable on the as-of date: never its outcome.
 function cardEvidence(spec: TileSpec, snap: RunSnapshot, ev: Map<string, Evidence>, fallen: boolean, asOf: string | null): Evidence | null {
@@ -200,7 +201,8 @@ function EvidenceCard({ spec, status, snap, ev, compact, selected }: {
   const fallen = status === 'hit' || status === 'falling-hit' || status === 'fallen' || status === 'hypothesis';
   const e = cardEvidence(spec, snap, ev, status === 'hit' || status === 'falling-hit', snap.replay?.asOf ?? null);
   // where the tile ends up: one tile-height along its fall direction
-  const stagger = spec.role === 'baseline' ? (Math.round((spec.pos[0] + 20) / 1.85) % 2) * 1.3 : 0;
+  const odd = spec.role === 'baseline' && Math.round((spec.pos[0] + 20) / 1.85) % 2 === 1;
+  const stagger = 0;
   const land: [number, number, number] = fallen && spec.role !== 'baseline'
     ? [spec.pos[0] + spec.dir[0] * TILE.h * 0.55, 0.9, spec.pos[1] + spec.dir[1] * TILE.h * 0.55]
     : [spec.pos[0], TILE.h + 0.5 + stagger, spec.pos[1]];
@@ -211,6 +213,10 @@ function EvidenceCard({ spec, status, snap, ev, compact, selected }: {
     tone = 'jade';
     head = spec.outcome?.outcomeDate ? `Outcome ${fmtFull(spec.outcome.outcomeDate)}` : 'Outcome';
     body = e?.claim ?? spec.outcome?.outcome ?? '';
+  } else if (status === 'miss' && spec.onHold) {
+    tone = 'ash';
+    head = 'On hold, not scored';
+    body = spec.onHold;
   } else if (status === 'miss') {
     tone = 'ash';
     head = 'Still standing';
@@ -223,7 +229,7 @@ function EvidenceCard({ spec, status, snap, ev, compact, selected }: {
     body = e?.claim ?? 'No dated evidence before the freeze';
   }
   return (
-    <Html position={land} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }} calculatePosition={compact ? clampChip : clampCard}>
+    <Html position={land} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }} calculatePosition={compact ? (odd ? clampChipLow : clampChip) : clampCard}>
       <div className={`dp-card dp-${tone}${compact ? ' dp-compact' : ''}${selected ? ' dp-selected' : ''}`}>
         {compact && <div className="dp-card-name">{spec.name}</div>}
         <div className="dp-card-head">{compact ? head.replace(/^Outcome /, '') : head}</div>
@@ -292,7 +298,7 @@ function RowLabel({ layout, hud }: { layout: TableLayout; hud: Hud }) {
   const x = Math.max(...base.map((t) => t.pos[0])) + 1.0;
   return (
     <Html position={[x, 0.2, base[0].pos[1]]} center={false} zIndexRange={[10, 0]} style={{ pointerEvents: 'none', transform: 'translate(0, -50%)' }}>
-      <div className="dp-row" style={{ textAlign: 'left' }}>Hiring filter's picks<br /><span>no chain, only their own job posts</span></div>
+      <div className="dp-row" style={{ textAlign: 'left' }}>Hiring filter's picks<br /><span>picked because they posted ML roles; no chain</span></div>
     </Html>
   );
 }

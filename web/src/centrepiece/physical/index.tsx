@@ -113,7 +113,7 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
 
   const caption = !layout.isReplay
     ? (phase === 'idle' ? 'Live run. Press play to tip the trigger.' : phase === 'predict' ? 'The change runs downstream.' : 'Each amber tile is a hypothesis resting on dated evidence. Click one for its sources.')
-    : phase === 'idle' ? `Clock frozen. Predictions use ${replay?.factsAfterAsOfUsed ?? 0} facts dated after ${fmtDay(layout.asOf)}.`
+    : phase === 'idle' ? `Forecast from facts available on ${fmtDay(layout.asOf)} (${replay?.factsAfterAsOfUsed ?? 0} dated after it), then checked against dated signals through ${fmtDay(layout.horizonEnd)}.`
       : phase === 'predict' ? `DOMINO predicts on ${fmtDay(layout.asOf)}. The chain leans on every company it expects to move.`
         : phase === 'replay' ? 'Now the real record: a tile falls only on a dated event.'
           : `Scored on what happened by ${fmtDay(layout.horizonEnd)}.`;
@@ -157,10 +157,10 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
         <div className="dp-score">
           {layout.isReplay && replay ? (
             <>
+              {netNewHits > 0 && <div className="dp-score-lead">{netNewHits} {netNewHits === 1 ? 'company' : 'companies'} with dated signals that the hiring filter missed</div>}
               <div className="dp-score-col dp-score-domino">
                 <div className="dp-score-num">{replay.domino.hits}<small> of {replay.domino.predicted}</small></div>
                 <div className="dp-score-lab">DOMINO picks with a dated signal by {fmtDay(layout.horizonEnd)}</div>
-                {netNewHits > 0 && <div className="dp-score-new">{netNewHits} of them a hiring filter never returned</div>}
               </div>
               <div className="dp-score-col dp-score-base">
                 <div className="dp-score-num">{replay.baselineFirstOrder.hits}<small> of {replay.baselineFirstOrder.predicted}</small></div>
