@@ -58,7 +58,8 @@ export function Buyers({ desk }: { desk: CompanyDesk }) {
   if (err) {
     return (
       <div className="empty-act" role="alert">
-        <p><b>Couldn’t load the outbound runs.</b> {err}. The server at /api may be restarting.</p>
+        <p><b>Couldn’t load the outbound runs.</b> The server may be restarting; try again in a few seconds.</p>
+        <p className="faint by-diag">{err}</p>
         <button className="btn" onClick={() => setNonce((n) => n + 1)}>Try again</button>
       </div>
     );
@@ -111,7 +112,6 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
 
   return (
     <>
-      <RequestBox defaultText="" />
       <section className="panel by-head" data-testid="buyers-run">
         <div className="by-req">
           <q>{snap.request}</q>
@@ -119,6 +119,7 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
             <span className="mono">{fmtDate(snap.createdAt, true)}, {fmtTime(snap.createdAt)}</span>
             <span className="mono faint">{snap.id.slice(0, 12)}</span>
             <span>Window {intent?.windowDays ?? "?"} days to {fmtDate(intent?.asOf, true)}</span>
+            <ModeTag evidence={snap.evidence} />
             {added && <span className="llm">{added.label || 'Terms added by GPT-6 Luna (schema-checked)'}</span>}
             {added && <span className="faint">{[...added.signalKeywords, ...added.deciderTitles].join(', ')}</span>}
           </div>
@@ -137,7 +138,7 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
           <select value={snap.id} onChange={(e) => onPick(e.target.value)} data-testid="buyer-run-pick">
             {runs.map((r) => (
               <option key={r.row.id} value={r.row.id}>
-                {fmtDate(r.row.createdAt)}, {fmtTime(r.row.createdAt)} · {short(r.row.request)} · {plural(r.snap.drafts.length, 'draft')} · {r.row.status.replace(/_/g, ' ')}
+                {fmtDate(r.row.createdAt)}, {fmtTime(r.row.createdAt)} · {short(r.row.request)} · {runCounts(r.snap)}
               </option>
             ))}
           </select>
@@ -147,7 +148,7 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
 
       <div className="by-grid">
         <section className="panel by-accounts">
-          <header><h2>Accounts</h2><span className="faint">ranked by the run’s cross-company rules · people as role and initial</span></header>
+          <header><h2>Accounts, ranked</h2><span className="faint">people as role and initial</span></header>
           {shown.length ? (
             <table className="t by-t">
               <thead><tr><th>Company</th><th>Predicted need</th><th>Trigger</th><th>Decider</th><th>Status</th></tr></thead>
@@ -162,6 +163,7 @@ function RunView({ snap, runs, onPick }: { snap: RunSnapshot; runs: Loaded[]; on
         </section>
         {current && <DraftPanel key={current.target.companyId} a={current} ev={ev} snap={snap} />}
       </div>
+      <RequestBox defaultText="" />
     </>
   );
 }
@@ -180,8 +182,8 @@ function Row({ a, ev, sel, onSel }: { a: Account; ev: Map<string, Evidence>; sel
         {a.trigger ? (
           <>
             <span className="mono">{fmtDate(a.trigger.date, true)}{a.trigger.precision === 'month' && <span className="tag">month-level date</span>}</span>
-            <span>{readableDates(trigEv ? tidyClaim(trigEv.claim) : a.trigger.summary)}</span>
-            {trigEv && <button className="srclink" onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{sourceName(trigEv.source.endpoint, trigEv.source.provider)}</button>}
+            <span>{readableDates(trigEv ? tidyClaim(trigEv.claim) : a.trigger.summary).replace(/ on \d{1,2} [A-Z][a-z]{2} \d{4}(?=\.?$)/, '')}</span>
+            {trigEv && <button className="srclink" onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{sourceName(trigEv.source.endpoint, trigEv.source.provider)}</button>}{trigEv?.mode === 'fixture' && <span className="tag">fixture</span>}
           </>
         ) : t.whyNowDate ? <span className="mono">{fmtDate(t.whyNowDate, true)}</span> : <span className="cant">No dated trigger</span>}
       </td>
@@ -226,10 +228,14 @@ function DraftPanel({ a, ev, snap }: { a: Account; ev: Map<string, Evidence>; sn
         <h2>{a.name}</h2>
         {d && <span className="llm" data-testid="buyer-draft-label">{draftLabel(d, markers.filter((m) => cites.has(m)).length)}</span>}
       </header>
-      <div className="out-meta">
-        <span>To <b>{to}</b>{!a.target.decider && <span className="faint"> (role only: no named decider verified)</span>}</span>
-        <span className="faint">Team test inbox</span>
-      </div>
+      <dl className="by-meta">
+        <dt>Why ranked</dt>
+        <dd><b>{a.target.mechanisms.map(ruleWords).join(' + ')}</b> · {readableDates(a.target.whyNow)}{a.target.whyNowDate && <span className="mono"> · {fmtDate(a.target.whyNowDate, true)}</span>}</dd>
+        <dt>Target role</dt>
+        <dd><b>{to}</b>{!a.target.decider && <span className="faint"> · no named decider verified</span>}</dd>
+        <dt>Sends to</dt>
+        <dd>Team test inbox, at most once</dd>
+      </dl>
       {!d ? (
         <div className="out-blocked" data-testid="buyer-not-drafted">
           <span className={`st ${a.status.cls}`}>{a.status.label}</span>
@@ -238,6 +244,7 @@ function DraftPanel({ a, ev, snap }: { a: Account; ev: Map<string, Evidence>; sn
         </div>
       ) : (
         <div className="out-body">
+          <p className="by-sec">Facts used in this draft</p>
           <p className="by-subj"><span className="faint">Subject</span> {d.subject}</p>
           <div className="draft">
             {redactGreeting(d.body).split(/\n\n+/).filter(Boolean).map((p, i) => (
@@ -257,7 +264,7 @@ function DraftPanel({ a, ev, snap }: { a: Account; ev: Map<string, Evidence>; sn
                     {e ? (
                       <button className="fn-row fn-btn" onClick={() => openEvidence(e.id)}>
                         <span className="fn-claim">{readableDates(tidyClaim(e.claim))}</span>
-                        <span className="fn-src">{e.observedAt ? fmtDate(isMonthly(e) ? e.observedAt.slice(0, 7) : e.observedAt, true) : 'undated'}{isMonthly(e) && <span className="tag">month-level date</span>}<span aria-hidden>·</span>{sourceName(e.source.endpoint, e.source.provider)}</span>
+                        <span className="fn-src">{e.observedAt ? fmtDate(isMonthly(e) ? e.observedAt.slice(0, 7) : e.observedAt, true) : 'undated'}{isMonthly(e) && <span className="tag">month-level date</span>}<span aria-hidden>·</span>{sourceName(e.source.endpoint, e.source.provider)}{e.mode === 'fixture' && <span className="tag">fixture</span>}</span>
                       </button>
                     ) : <span className="faint">No source row attached</span>}
                   </div>
@@ -316,3 +323,20 @@ const short = (s: string) => (s.length > 44 ? `${s.slice(0, 42).trimEnd()}…` :
 
 /** Drafts greet the decider by first name; the screen shows role and initial only ("Hi Dipak," -> "Hi D.,"). */
 const redactGreeting = (body: string) => body.replace(/^(Hi|Hello|Dear) ([A-Z][\p{L}'-]+),/u, (_, hi, name) => `${hi} ${name[0]}.,`);
+
+/** One truthful data label for the run: how many of its source rows are live, cached or labelled fixtures. */
+function ModeTag({ evidence }: { evidence: Evidence[] }) {
+  const n = { live: 0, cache: 0, fixture: 0 } as Record<string, number>;
+  for (const e of evidence) n[e.mode ?? 'live'] = (n[e.mode ?? 'live'] ?? 0) + 1;
+  const parts = [n.live && `${n.live} live`, n.cache && `${n.cache} cached`, n.fixture && `${n.fixture} fixture`].filter(Boolean);
+  return <span className={`tag${n.fixture ? ' warn' : ' live'}`} data-testid="buyer-datamode">{parts.join(' · ')} source rows</span>;
+}
+
+/** "2 ready · 1 delivered · 2 not drafted" for the run picker, from the run's own rows. */
+function runCounts(snap: RunSnapshot): string {
+  const rows = accounts(snap);
+  const n = (k: StatusKind[]) => rows.filter((r) => k.includes(r.status.kind)).length;
+  const parts = [[n(['ready', 'approved']), 'ready'], [n(['sent']), 'delivered'], [n(['held', 'watch', 'not_drafted']), 'not drafted or held']] as const;
+  const s = parts.filter(([c]) => c > 0).map(([c, w]) => `${c} ${w}`).join(' · ');
+  return s || plural(rows.length, 'account');
+}

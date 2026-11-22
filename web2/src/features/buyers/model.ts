@@ -28,7 +28,10 @@ export const ruleWords = (m: string) => RULE_WORDS[m] ?? m.replace(/_/g, ' ').to
 /** Why a run's drafting step stopped, in plain words ("Run reached its seconds ceiling"). */
 export function draftStopReason(snap: RunSnapshot): string | null {
   const s = snap.steps.find((x) => x.step === 'draft_messages');
-  if (s?.status === 'failed') return s.summary ?? 'The drafting step failed';
+  if (s?.status === 'failed') {
+    if (/seconds ceiling/i.test(s.summary ?? '')) return `Run timed out before drafting (${snap.budget?.limits?.maxSeconds ?? '?'} s cap)`;
+    return s.summary ?? 'The drafting step failed';
+  }
   if (snap.status === 'budget_exhausted') return `Run hit its ${snap.budget?.exhausted ?? 'budget'} cap before drafting`;
   return null;
 }
