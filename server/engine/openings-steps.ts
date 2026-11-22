@@ -121,9 +121,11 @@ export const openingsSteps: { [K in keyof OpeningsOutputs]: Runner<K> } = {
     let cursor: string | undefined;
     let totalCount: number | null = null;
     const seen = new Set<string>();
+    let lastLive = false;
     for (let page = 0; page < DEPARTURE_PAGES + 5; page++) {
-      if (page) await pace(ctx);
+      if (lastLive) await pace(ctx);                        // cache hits do not touch the rate limit
       const batch = await readSource(ctx, personDepartures, { window: scanWindow(scope), ...(cursor ? { cursor } : {}) }, time(scope));
+      lastLive = batch.observation?.mode === 'live';
       const parsed = batch.parsed;
       ctx.store.transaction(() => publishSource(ctx, batch, batch.evidence, batch.evidence.map(row => row.id)));
       evidence.push(...batch.evidence);
