@@ -185,12 +185,15 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
   const zt = clamp((s - m.sZoom) / (m.sLetter - m.sZoom));
   const ez = easeInOut(zt);
   const focus = m.focusId ? m.byId.get(m.focusId) : undefined;
-  const Z = 1 + ez * 1.15;
+  const drift = 0.04 * easeInOut(clamp((s - m.sSee0) / (m.sFreeze - m.sSee0)));   // slow push-in while history plays
+  const Z = (1 + drift) * (1 - ez) + (1 + 1.15) * ez;
   frame.zoom = Z;
   const base = (c: FlowCompany): [number, number] => [v.rect.x + c.x * v.rect.w, v.rect.y + c.y * v.rect.h];
-  const fb = focus ? base(focus) : [w / 2, h / 2];
+  const centre: [number, number] = [v.rect.x + v.rect.w / 2, v.rect.y + v.rect.h / 2];
+  const fb = focus && ez > 0 ? base(focus) : centre;
   const targetX = Math.min(v.letterLeft * 0.5, w * 0.3);
   const tx = fb[0] + (targetX - fb[0]) * ez, ty = fb[1] + (h * 0.5 - fb[1]) * ez;
+  // (with no zoom the pivot is the field centre, so the drift pushes in around the middle)
   const P = (c: FlowCompany): [number, number] => { const b = base(c); return [(b[0] - fb[0]) * Z + tx, (b[1] - fb[1]) * Z + ty]; };
   const rz = Math.pow(Z, 0.75);
 
@@ -201,6 +204,17 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     const ft = clamp((s - m.sFreeze) / 0.5) * (1 - clamp((s - m.sForward0 + 0.6) / 0.6));
     g.fillStyle = `rgba(150,190,255,${0.05 * ft})`;
     g.fillRect(0, 0, w, h);
+    // frost scan line: the clock stops as it crosses the field
+    const st = (s - m.sFreeze) / 0.75;
+    if (st >= 0 && st <= 1) {
+      const x = easeInOut(st) * (w + 160) - 80;
+      const gr = g.createLinearGradient(x - 140, 0, x + 6, 0);
+      gr.addColorStop(0, 'rgba(111,227,255,0)');
+      gr.addColorStop(0.85, `rgba(111,227,255,${0.10 * (1 - st * 0.5)})`);
+      gr.addColorStop(1, `rgba(220,250,255,${0.7 * (1 - st * 0.5)})`);
+      g.fillStyle = gr;
+      g.fillRect(x - 140, 0, 146, h);
+    }
   }
 
   const dimOf = (id: string) => {
@@ -210,7 +224,14 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     return a;
   };
 
-  for (const c of m.companies) { const [x, y] = P(c); frame.nodes.set(c.id, { x, y, r: nodeRadius(c, k) * rz }); }
+  // serving engineers leaving shrink a company; arriving ones grow it (exaggerated so the eye catches it)
+  const sizeF = new Map<string, number>();
+  for (const mv of m.moves) {
+    if (!mv.serving || mv.day > day) continue;
+    sizeF.set(mv.from, (sizeF.get(mv.from) ?? 1) * 0.94);
+    sizeF.set(mv.to, (sizeF.get(mv.to) ?? 1) * 1.025);
+  }
+  for (const c of m.companies) { const [x, y] = P(c); frame.nodes.set(c.id, { x, y, r: nodeRadius(c, k) * rz * (sizeF.get(c.id) ?? 1) }); }
   const N = (id: string) => frame.nodes.get(id)!;
 
   g.globalCompositeOperation = 'lighter';
@@ -380,6 +401,23 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
         }
       }
       g.globalCompositeOperation = 'lighter';
+      if (crackT < 1.4) {
+        const t = crackT / 1.4;
+        let sd = Math.floor(c.seed * 1e6) || 3;
+        const rr = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+        const spr = glow(C.wound);
+        for (let i = 0; i < 14; i++) {
+          const a = rr() * Math.PI * 2, sp = (40 + rr() * 70) * k;
+          const d = R + easeOut(t) * sp;
+          const x = n.x + Math.cos(a) * d, y = n.y + Math.sin(a) * d + t * t * 14 * k;
+          const sz = (3 + rr() * 5) * k * (1 - t);
+          g.globalAlpha = (1 - t) * dim;
+          g.drawImage(spr, x - sz * 2, y - sz * 2, sz * 4, sz * 4);
+          g.fillStyle = '#ffd0dc';
+          g.fillRect(x - sz * 0.3, y - sz * 0.3, sz * 0.6, sz * 0.6);
+        }
+        g.globalAlpha = 1;
+      }
       if (crackT < 1.1) {
         const t = crackT / 1.1;
         g.strokeStyle = rgba(C.wound, (1 - t) * 0.95);

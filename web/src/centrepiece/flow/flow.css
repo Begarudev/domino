@@ -192,3 +192,16 @@
 .tf-compact .tf-note-quiet { display: none; }
 .tf-compact .tf-chip span { display: none; }
 .tf-snaplabel { margin-top: calc(6 * var(--u)); font-size: calc(11.5 * var(--u)); line-height: 1.35; color: rgba(154, 162, 200, 0.95); }
+
+/* ---- short: the slot while the bottom drawer is open (about 300-440 px tall) ---- */
+.tf-short .tf-date { font-size: calc(30 * var(--u)); }
+.tf-short .tf-caption { font-size: calc(12 * var(--u)); margin-top: 3px; }
+.tf-short .tf-clock { top: calc(10 * var(--u)); }
+.tf-short .tf-score { top: calc(10 * var(--u)); }
+.tf-short .tf-score-title, .tf-short .tf-minor, .tf-short .tf-netnew, .tf-short .tf-snaplabel { display: none; }
+.tf-short .tf-row { padding: 2px 0; }
+.tf-short .tf-num { font-size: calc(24 * var(--u)); }
+.tf-short .tf-letter { top: calc(58 * var(--u)); bottom: calc(52 * var(--u)); overflow-y: auto; padding: calc(10 * var(--u)) calc(14 * var(--u)); }
+.tf-short .tf-l-subject { font-size: calc(16 * var(--u)); margin-top: 4px; }
+.tf-short .tf-sent-text { font-size: calc(13.5 * var(--u)); }
+.tf-short .tf-badge { bottom: calc(50 * var(--u)); }

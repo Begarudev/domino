@@ -58,7 +58,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
   const tailRef = useRef<HTMLDivElement>(null);
   const playBtn = useRef<HTMLButtonElement>(null);
 
-  const st = useRef({ s: props.initialS ?? 0, playing: props.initialS === undefined && props.autoPlay !== false && !reducedMotion, last: 0, frame: null as Frame | null, slots: [] as { x: number; y: number }[], hover: null as string | null, scrubbing: false });
+  const st = useRef({ s: props.initialS ?? 0, playing: props.initialS === undefined && props.autoPlay !== false && !reducedMotion, last: 0, frame: null as Frame | null, slots: [] as { x: number; y: number }[], hover: null as string | null, scrubbing: false, wasRunning: props.running });
   const propsRef = useRef(props);
   propsRef.current = props;
   const [, force] = useState(0);
@@ -69,8 +69,8 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
   const letterW = Math.min(560 * k, width * 0.5);
   const letterLeft = width - letterW - 28 * k;
   const rect = useMemo(() => ({
-    x: (compact ? 56 : 70) * k, y: (compact ? 100 : 128) * k,
-    w: width - (compact ? 100 : 140) * k - scoreW, h: height - (compact ? 100 : 128) * k - (compact ? 92 : 132) * k,
+    x: (compact ? 56 : 70) * k, y: (height < 440 ? 70 : compact ? 100 : 128) * k,
+    w: width - (compact ? 100 : 140) * k - scoreW, h: height - (height < 440 ? 70 : compact ? 100 : 128) * k - (height < 440 ? 86 : compact ? 92 : 132) * k,
   }), [k, width, height, scoreW, compact]);
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
     const cv = canvasRef.current!;
     const g = cv.getContext('2d')!;
     let raf = 0;
-    let lastPhase: Phase | null = null;
+    let lastPhase = '';
     let lastDate = '';
     let lastD = -1, lastF = -1;
     const tick = (t: number) => {
@@ -105,6 +105,12 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
       const p = propsRef.current;
       const dt = S.last ? Math.min(0.05, (t - S.last) / 1000) : 0;
       S.last = t;
+      // while the engine is still working, hold at the start; play the time-lapse once the run has finished
+      if (p.running !== S.wasRunning) {
+        if (S.wasRunning && !p.running && !p.reducedMotion) { S.s = 0; S.playing = true; if (playBtn.current) playBtn.current.textContent = 'Pause'; }
+        S.wasRunning = p.running;
+      }
+      if (p.running) S.s = Math.min(S.s, model.sSee0 * 0.98);
       if (S.playing && !S.scrubbing) {
         S.s += dt * (p.speed ?? 1);
         if (S.s >= model.total) { S.s = model.total; S.playing = false; if (playBtn.current) playBtn.current.textContent = 'Replay'; }
@@ -120,10 +126,11 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
       const day = Math.floor(dayAt(model, s));
       const ds = fmtDay(day, true);
       if (ds !== lastDate && dateRef.current) { dateRef.current.textContent = ds; lastDate = ds; }
-      if (ph !== lastPhase) {
-        if (capRef.current) capRef.current.textContent = caption(model, ph, focusName);
+      const capKey = `${ph}|${p.running}|${model.companies.length}`;
+      if (capKey !== lastPhase) {
+        if (capRef.current) capRef.current.textContent = p.running ? 'DOMINO is pulling dated job moves. The time-lapse plays when the run finishes' : !model.companies.length ? 'No companies yet. Run a request to see the job moves between them' : caption(model, ph, focusName);
         rootRef.current?.setAttribute('data-phase', ph);
-        lastPhase = ph;
+        lastPhase = capKey;
       }
       if (headRef.current) {
         const span = model.dEnd - model.d0 || 1;
@@ -249,7 +256,7 @@ export function TalentFlow(props: CentrepieceProps & TalentFlowExtra): JSX.Eleme
   const fixture = model.fixture || snapshot.evidence.some((e) => e.mode === 'fixture');
 
   return (
-    <div ref={rootRef} className={compact ? 'tf-root tf-compact' : 'tf-root'} tabIndex={0} aria-label="Talent-flow replay" style={{ width, height, ['--k' as string]: k, ['--letter-w' as string]: `${letterW}px` }}>
+    <div ref={rootRef} className={`tf-root${compact ? ' tf-compact' : ''}${height < 440 ? ' tf-short' : ''}`} tabIndex={0} aria-label="Talent-flow replay" style={{ width, height, ['--k' as string]: k, ['--letter-w' as string]: `${letterW}px` }}>
       <canvas ref={canvasRef} style={{ width, height }} onPointerMove={onMove} onClick={onClick} />
 
       <header className="tf-clock">
