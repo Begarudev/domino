@@ -76,7 +76,9 @@ function layout(nodes: GraphNode[], edges: GraphEdge[], slotW: number, slotH: nu
     });
     const vw = x + PAD + 70;
     const vh = PAD * 2 + rows * (H + LABEL) + (rows - 1) * ROW_GAP;
-    const scale = Math.min(slotW / vw, slotH / vh);
+    // Wrapping a tier sends lines across its own tiles, so only wrap when it buys clearly bigger tiles.
+    const wraps = cols.some((c) => c.length > rows);
+    const scale = Math.min(slotW / vw, slotH / vh) * (wraps ? 0.7 : 1);
     if (!best || scale > best.scale + 0.001) best = { placed, vw, vh, scale };
   }
   return best!;

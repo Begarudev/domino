@@ -5,6 +5,7 @@ import type { Backend, StartRequest } from './api.ts';
 import type { Selection } from './centrepiece/contract.ts';
 import { pickCentrepiece } from './centrepiece/registry.ts';
 import { RequestBar, StatusLine } from './components/Header.tsx';
+import { Landing, Reel } from './components/Shell.tsx';
 import { Timeline } from './components/Timeline.tsx';
 import { EvidenceDrawer } from './components/Evidence.tsx';
 import { TargetsStrip } from './components/Targets.tsx';
@@ -15,7 +16,7 @@ import { AskCard } from './components/AskCard.tsx';
 import { MAIN_REQUEST, MESSY_REQUEST, REPLAY_REQUEST } from './mock/events.ts';
 import { useReducedMotion, useRun, useSize } from './useRun.ts';
 
-type Tab = 'drafts' | 'replay' | 'ledger' | 'entities';
+type Tab = 'targets' | 'log' | 'drafts' | 'replay' | 'ledger' | 'entities';
 
 export function App() {
   const [backend, setBackend] = useState<Backend | null>(null);
@@ -34,8 +35,10 @@ export function App() {
   const autoTabs = tabParam === null;
   const [draftCompany, setDraftCompany] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [slotRef, slot] = useSize<HTMLDivElement>();
+  const [slotRef, slot] = useSize<HTMLElement>();
   const [requestText, setRequestText] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
   // First load: reattach to ?run=ID, else the newest run; in mock mode, start the recorded run.
   useEffect(() => {
@@ -69,7 +72,7 @@ export function App() {
   }, [setError]);
 
   const onRun = (req: StartRequest) => {
-    setSelection(null); setTab(null); setDraftCompany(null); setHiringFilterView(false);
+    setSelection(null); setTab(null); setDraftCompany(null); setHiringFilterView(false); setEditing(false); setEvidenceOpen(false);
     act('run', () => start(req));
   };
   const onRecheck = async (ev: Evidence) => {
@@ -87,6 +90,8 @@ export function App() {
   const hasRun = !!runId;
   const Centre = centre.Component;
   const tabs: { id: Tab; label: string }[] = [
+    { id: 'targets', label: `Ranked targets${snap.targets.length ? ` (${snap.targets.length})` : ''}` },
+    { id: 'log', label: 'Run log' },
     { id: 'drafts', label: pending ? `Drafts and approvals (${pending})` : `Drafts and approvals${snap.drafts.length ? ` (${snap.drafts.length})` : ''}` },
     { id: 'replay', label: 'Replay score' },
     { id: 'ledger', label: `Cost ledger${snap.ledger.length ? ` (${snap.ledger.length})` : ''}` },
@@ -98,59 +103,80 @@ export function App() {
     if (s && (s.kind === 'node' || s.kind === 'target') && snap.drafts.some((d) => d.companyId === s.id)) setDraftCompany(s.id);
   };
 
-  return (
-    <div className={`app${tab ? ' has-tab' : ''}`}>
-      <header className="top">
-        <div className="brand">
-          <span className="wordmark">DOMINO</span>
-          <span className="brand-sub">Outbound desk</span>
-        </div>
-        <RequestBar initial={requestText} busy={busy === 'run'} onRun={onRun} />
-        <StatusLine snap={snap} mock={!!backend?.mock} connected={connected} hasRun={hasRun} fallbacks={state.fallbacks} health={backend?.health ?? null} onLower={onLower} />
-      </header>
+  const kill = () => backend && runId && act('kill', () => backend.kill(runId));
+  const resume = () => backend && runId && act('resume', () => backend.resume(runId));
+  const drawerOpen = !!selection || evidenceOpen;
+  const requestBar = <RequestBar initial={requestText} busy={busy === 'run'} onRun={onRun} />;
+  const statusLine = (
+    <StatusLine snap={snap} mock={!!backend?.mock} connected={connected} hasRun={hasRun} fallbacks={state.fallbacks} health={backend?.health ?? null} onLower={onLower} />
+  );
+  const errorBanner = error && (
+    <div className="error" role="alert">
+      <span>{error}</span>
+      <button type="button" className="btn btn-quiet btn-xs" onClick={() => setError(null)}>Dismiss</button>
+    </div>
+  );
 
-      {error && (
-        <div className="error" role="alert">
-          <span>{error}</span>
-          <button type="button" className="btn btn-quiet btn-xs" onClick={() => setError(null)}>Dismiss</button>
+  // Before any run: a title card with the request box. After Run: the theatre takes the screen.
+  if (!hasRun) {
+    return (
+      <div className="app app-landing">
+        {errorBanner}
+        <Landing requestBar={requestBar} source={statusLine} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`app app-run${tab ? ' has-tab' : ''}${drawerOpen ? ' has-drawer' : ''}`}>
+      <header className="bar">
+        <span className="wordmark" aria-label="DOMINO">DOMINO</span>
+        <div className={`bar-request${editing ? ' is-editing' : ''}`}>
+          {editing ? requestBar : (
+            <button type="button" className="bar-request-line" onClick={() => setEditing(true)} title="Edit the request or start a new run">
+              <span className="bar-request-text">{snap.request || requestText}</span>
+              <span className="bar-request-edit">New request</span>
+            </button>
+          )}
         </div>
+        {statusLine}
+      </header>
+      {errorBanner}
+
+      <main className="stage film" ref={slotRef}>
+        {ask && backend && runId && (
+          <AskCard ask={ask} onAnswer={(a) => act('ask', () => backend.answer(runId, ask.id, a))} busy={busy === 'ask'} />
+        )}
+        {slot.width > 0 && (
+          <Centre
+            snapshot={snap} events={state.events} running={running} selection={selection} onSelect={selectFromCentre}
+            hiringFilterView={hiringFilterView} reducedMotion={reducedMotion} width={slot.width} height={slot.height}
+            replayToken={replayToken}
+          />
+        )}
+        <div className="stage-tools">
+          <h2 className="sr-only">Cascade</h2>
+          <label className="toggle">
+            <input type="checkbox" checked={hiringFilterView} onChange={(e) => setHiringFilterView(e.target.checked)} disabled={!snap.targets.length} />
+            <span className="toggle-track" aria-hidden="true" />
+            Hiring-filter view
+          </label>
+          <button type="button" className="btn btn-quiet btn-sm" disabled={!snap.graph.edges.length} onClick={() => setReplayToken((t) => t + 1)}>Replay cascade</button>
+          <button type="button" className={`btn btn-quiet btn-sm${drawerOpen ? ' is-on' : ''}`} aria-expanded={drawerOpen}
+            onClick={() => { if (drawerOpen) { setSelection(null); setEvidenceOpen(false); } else setEvidenceOpen(true); }}>
+            Evidence{snap.evidence.length ? ` (${snap.evidence.length})` : ''}
+          </button>
+        </div>
+      </main>
+
+      {drawerOpen && (
+        <aside className="drawer-wrap" aria-label="Evidence drawer">
+          <EvidenceDrawer snap={snap} selection={selection} hoverEvidence={hover} onRecheck={onRecheck} onSelect={setSelection} />
+          <button type="button" className="btn btn-quiet btn-xs drawer-close" onClick={() => { setSelection(null); setEvidenceOpen(false); }}>Close</button>
+        </aside>
       )}
 
-      <main className="main">
-        <Timeline state={state} hasRun={hasRun} busy={busy}
-          onKill={() => backend && runId && act('kill', () => backend.kill(runId))}
-          onResume={() => backend && runId && act('resume', () => backend.resume(runId))} />
-
-        <div className="centre">
-          <div className="slot" ref={slotRef}>
-          <div className="centre-bar">
-              <h2 className="sr-only">Cascade</h2>
-              <label className="toggle">
-                <input type="checkbox" checked={hiringFilterView} onChange={(e) => setHiringFilterView(e.target.checked)} disabled={!snap.targets.length} />
-                <span className="toggle-track" aria-hidden="true" />
-                Hiring-filter view
-              </label>
-              <button type="button" className="btn btn-quiet btn-sm" disabled={!snap.graph.edges.length} onClick={() => setReplayToken((t) => t + 1)}>Replay cascade</button>
-            </div>
-            {snap.graph.nodes.length > 0 && (
-              <p className="centre-legend">Top half: the dated change; pips count dated sources. Bottom half: the predicted need; pips show confidence out of 6.</p>
-            )}
-            {ask && backend && runId && (
-              <AskCard ask={ask} onAnswer={(a) => act('ask', () => backend.answer(runId, ask.id, a))} busy={busy === 'ask'} />
-            )}
-            {slot.width > 0 && (
-              <Centre
-                snapshot={snap} events={state.events} running={running} selection={selection} onSelect={selectFromCentre}
-                hiringFilterView={hiringFilterView} reducedMotion={reducedMotion} width={slot.width} height={slot.height}
-                replayToken={replayToken}
-              />
-            )}
-          </div>
-          <TargetsStrip snap={snap} selection={selection} hiringFilterView={hiringFilterView} onSelect={(s) => { selectFromCentre(s); }} />
-        </div>
-
-        <EvidenceDrawer snap={snap} selection={selection} hoverEvidence={hover} onRecheck={onRecheck} onSelect={setSelection} />
-      </main>
+      <Reel state={state} busy={busy} onKill={kill} onResume={resume} onOpenLog={() => setTab('log')} />
 
       <section className="dock" aria-label="Run details">
         <div className="dock-tabs" role="tablist">
@@ -161,7 +187,9 @@ export function App() {
           {tab && <button type="button" className="btn btn-quiet btn-xs dock-close" onClick={() => setTab(null)}>Collapse</button>}
         </div>
         {tab && (
-          <div className="dock-panel" role="tabpanel">
+          <div className="dock-panel m-print" role="tabpanel">
+            {tab === 'targets' && <TargetsStrip snap={snap} selection={selection} hiringFilterView={hiringFilterView} onSelect={(s) => selectFromCentre(s)} />}
+            {tab === 'log' && <Timeline state={state} hasRun={hasRun} busy={busy} onKill={kill} onResume={resume} />}
             {tab === 'drafts' && (
               <DraftsTab state={state} selectedCompany={draftCompany} busy={busy}
                 onSelectCompany={(id) => { setDraftCompany(id); setSelection({ kind: 'target', id }); }}
