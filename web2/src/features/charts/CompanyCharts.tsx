@@ -39,15 +39,13 @@ const monthLabel = (d: string) =>
 const dayLabel = (t: number) =>
   new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-/** Point closest to asOf-90 days, within the 80–100 day band the restructure guard uses. */
-function baselinePoint(series: HeadcountPoint[], asOf: string) {
-  const target = ms(asOf) - 90 * DAY;
+/** Same base as the restructure guard and Analysis.tsx: latest point at least 80 days before the last point. */
+function baselinePoint(series: HeadcountPoint[], _asOf: string) {
+  const last = series[series.length - 1];
+  if (!last) return undefined;
+  const cutoff = ms(last.date) - 80 * DAY;
   let best: HeadcountPoint | undefined;
-  for (const p of series) {
-    const age = (ms(asOf) - ms(p.date)) / DAY;
-    if (age < 80 || age > 100) continue;
-    if (!best || Math.abs(ms(p.date) - target) < Math.abs(ms(best.date) - target)) best = p;
-  }
+  for (const p of series) if (ms(p.date) <= cutoff && (!best || ms(p.date) > ms(best.date))) best = p;
   return best;
 }
 
