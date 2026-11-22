@@ -31,6 +31,13 @@ export function decode<T>(json: string): T {
   return JSON.parse(json) as T;
 }
 
+// Departure rows written before the a/an fix (22 Nov, 16:30 IST) read "left a ML Platform Engineer role"; our own
+// template now picks the article, and stored rows are read the same way.
+export function withArticle(row: Evidence): Evidence {
+  return typeof row.claim === 'string' && / left a [AEFHILMNORSX][A-Z]/.test(row.claim)
+    ? { ...row, claim: row.claim.replace(/ left a (?=[AEFHILMNORSX][A-Z])/g, ' left an ') } : row;
+}
+
 export interface RunRow {
   id: string;
   request: string;
@@ -257,14 +264,15 @@ export class Store {
   }
 
   getEvidence(runId: string): Evidence[] {
-    return this.sql.prepare('SELECT json FROM evidence WHERE run_id = ? ORDER BY rowid').all(runId).map(row => decode(row.json as string));
+    return this.sql.prepare('SELECT json FROM evidence WHERE run_id = ? ORDER BY rowid').all(runId)
+      .map(row => withArticle(decode<Evidence>(row.json as string)));
   }
 
   findEvidence(id: string) {
     const row = this.sql.prepare(`SELECT evidence.run_id, evidence.json, evidence_sources.json AS source
       FROM evidence LEFT JOIN evidence_sources USING(id) WHERE id = ?`).get(id);
     return row && {
-      runId: row.run_id as string, evidence: decode<Evidence>(row.json as string),
+      runId: row.run_id as string, evidence: withArticle(decode<Evidence>(row.json as string)),
       source: typeof row.source === 'string' ? decode<EvidenceSource>(row.source) : undefined,
     };
   }

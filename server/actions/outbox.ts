@@ -42,7 +42,7 @@ function introContext(store: Store, approval: Approval) {
     decider: { personId: '', name: intro.recipient, title: intro.recipient, reason: 'Intro recipient', evidenceIds: [] },
   };
   // A company -> candidate intro reaches the candidate through the desk, not at the hiring company.
-  const company = intro.direction === 'company_to_candidate' ? { ...intro.company, name: 'DOMINO Search Desk' } : intro.company;
+  const company = intro.direction === 'company_to_candidate' ? { ...intro.company, name: 'DOMINO' } : intro.company;
   return { draft, company, target };
 }
 
