@@ -1,11 +1,13 @@
 // The default centrepiece: the cascade drawn as a domino run on a walnut table.
 // Each GraphNode is a bone tile (top half: the dated change; bottom half: the predicted need + confidence).
 // When the cascade is built, tiles tip in edge `order`, each edge drawing toward the next tile.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Evidence, GraphEdge, GraphNode, Mechanism, RunSnapshot } from '../../../../shared/types.ts';
 import type { CentrepieceModule, CentrepieceProps } from '../contract.ts';
 import { fmtRange } from '../../dates.ts';
+import { CHIP_H, placeChips } from './edgeChips.ts';
+import type { Box } from './edgeChips.ts';
 import './table.css';
 
 const W = 156;            // tile width (viewBox units)
@@ -15,6 +17,9 @@ const COL_GAP = 210;      // room for the edge label between columns
 const ROW_GAP = 40;
 const LABEL = 30;         // mechanism label under each tile
 const PAD = 18;
+const MECH_H = 40;        // two caption lines under a tile
+const TIP_REACH_X = 72;   // a tipped tile's top corner swings this far right (H sin 14deg)
+const TIP_REACH_Y = 29;   // and this far above its standing top
 const TIP_DEG = 14;
 const STAGGER = 720;      // ms between edges
 
@@ -121,9 +126,9 @@ function nodeChange(n: GraphNode, snap: RunSnapshot, evById: Map<string, Evidenc
 
 function Tile(props: {
   p: Placed; snap: RunSnapshot; evById: Map<string, Evidence>; fireAt: number | null; selected: boolean;
-  dimmed: boolean; stamp: boolean; onSelect: () => void; reducedMotion: boolean;
+  dimmed: boolean; stamp: boolean; onSelect: () => void; reducedMotion: boolean; mechW: number;
 }) {
-  const { p, snap, evById, fireAt, selected, dimmed, stamp, onSelect, reducedMotion } = props;
+  const { p, snap, evById, fireAt, selected, dimmed, stamp, onSelect, reducedMotion, mechW } = props;
   const n = p.node;
   const unverifiable = n.status === 'unverifiable';
   const change = nodeChange(n, snap, evById);
@@ -139,7 +144,10 @@ function Tile(props: {
   const label = `${n.name}. ${change.text}, ${change.date}. ${n.need ?? 'Trigger company'}${conf != null ? `, confidence ${Math.round(conf * 100)}%` : ''}${unverifiable ? ", can't verify" : ''}`;
   return (
     <g className={cls}>
-      <text className="tile-mech" x={p.x + 2} y={p.y + H + 24}>{mechanismText(n)}</text>
+      {/* Clamped to the room before the next tile in its row, so two captions never run together. */}
+      <foreignObject className="tile-mech-fo" x={p.x + 2} y={p.y + H + 6} width={mechW} height={MECH_H}>
+        <div className="tile-mech">{mechanismText(n)}</div>
+      </foreignObject>
       <g
         className="tile-body" style={style} tabIndex={0} role="button" aria-pressed={selected} aria-label={label}
         onClick={(e) => { e.stopPropagation(); onSelect(); }}
@@ -215,11 +223,57 @@ function TableCentrepiece(props: CentrepieceProps) {
   }, [snap.graph, snap.targets]);
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
   const { placed, vw, vh } = useMemo(() => layout(nodes, edges, width || 800, height || 500), [nodes, edges, width, height]);
-  const showLabels = edges.length <= 6;
   const times = useMemo(() => schedule(nodes, edges), [nodes, edges]);
   const evById = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
   const baseline = new Set(snap.baseline.hiringFilterCompanyIds);
   const animate = cascadeDone && (edges.length > 0 || nodes.length > 0);
+  const [hot, setHot] = useState<string | null>(null);
+  const selectedEdge = selection?.kind === 'edge' ? selection.id : null;
+
+  // Each caption gets the room up to the next tile in its row, less some air.
+  const mechW = useMemo(() => {
+    const all = [...placed.values()];
+    return new Map(all.map((p) => {
+      const next = all.filter((q) => q.y === p.y && q.x > p.x).reduce((m, q) => Math.min(m, q.x), Infinity);
+      return [p.node.id, Math.min(W + COL_GAP - 24, next - p.x - 14)] as const;
+    }));
+  }, [placed]);
+
+  // Chips are laid out in screen px over the svg (viewBox -> px is the 'meet' fit, centred).
+  const chips = useMemo(() => {
+    const w = width || 800, h = height || 500;
+    const s = Math.min(w / vw, h / vh);
+    const ox = (w - vw * s) / 2, oy = (h - vh * s) / 2;
+    const toPx = (x: number, y: number) => ({ x: ox + x * s, y: oy + y * s });
+    const box = (x0: number, y0: number, x1: number, y1: number): Box => {
+      const a = toPx(x0, y0), b = toPx(x1, y1);
+      return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+    };
+    // Two obstacles per tile: the body (with the room its tipped corner swings through) and its caption.
+    const tiles: Box[] = [...placed.values()].flatMap((p) => {
+      const tipped = animate && p.node.status !== 'unverifiable';
+      const capW = Math.min(mechW.get(p.node.id) ?? W, mechanismText(p.node).length * 8.4 + 8);
+      return [
+        box(p.x - 2, p.y - 2 - (tipped ? TIP_REACH_Y : 0), p.x + W + 2 + (tipped ? TIP_REACH_X : 0), p.y + H + 4),
+        box(p.x, p.y + H + 6, p.x + Math.max(capW, 1), p.y + H + 6 + MECH_H),
+      ];
+    });
+    const ordered = [...edges].sort((a, b) =>
+      Number(b.id === selectedEdge) - Number(a.id === selectedEdge) || b.confidence - a.confidence || a.order - b.order);
+    const input = ordered.flatMap((e) => {
+      const a = placed.get(e.from), b = placed.get(e.to);
+      if (!a || !b) return [];
+      const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
+      return [{ id: e.id, text: `${MECH_LABEL[e.mechanism]} ${Math.round(e.confidence * 100)}%`, curve: g }];
+    });
+    return { ...placeChips(input, tiles, toPx, { w, h }), toPx, w, h };
+  }, [edges, placed, vw, vh, width, height, animate, selectedEdge, mechW]);
+  const chipById = new Map(chips.placed.map((c) => [c.id, c]));
+  const hotEdge = hot ? edges.find((e) => e.id === hot) ?? null : null;
+  const hoverOn = (id: string) => ({
+    onMouseEnter: () => setHot(id), onMouseLeave: () => setHot((h) => (h === id ? null : h)),
+    onFocus: () => setHot(id), onBlur: () => setHot((h) => (h === id ? null : h)),
+  });
 
   if (!nodes.length) {
     return (
@@ -252,11 +306,9 @@ function TableCentrepiece(props: CentrepieceProps) {
           const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
           const sel = selection?.kind === 'edge' && selection.id === e.id;
           const weak = b.node.status === 'unverifiable';
-          const midX = (g.x1 + g.x2) / 2;
-          const labelW = Math.max(120, g.x2 - g.x1 - 30);
           const style = { '--draw-delay': `${times.edge.get(e.id) ?? 0}ms` } as CSSProperties;
           return (
-            <g key={e.id} className={`edge${weak ? ' is-weak' : ''}${sel ? ' is-selected' : ''}${reducedMotion ? ' no-motion' : ''}`} style={style}>
+            <g key={e.id} className={`edge${weak ? ' is-weak' : ''}${sel ? ' is-selected' : ''}${hot === e.id ? ' is-hot' : ''}${reducedMotion ? ' no-motion' : ''}`} style={style}>
               <path className="edge-track" d={g.d} />
               <path className="edge-line" d={g.d} pathLength={1} />
               <circle className="edge-head" cx={g.x2} cy={g.y2} r={4.5} />
@@ -265,13 +317,8 @@ function TableCentrepiece(props: CentrepieceProps) {
                 aria-label={`${e.label}. ${MECH_LABEL[e.mechanism]}, confidence ${Math.round(e.confidence * 100)}%`}
                 onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: e.id }); }}
                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onSelect({ kind: 'edge', id: e.id }); } }}
+                {...hoverOn(e.id)}
               />
-              {(showLabels || sel) && <foreignObject x={midX - labelW / 2} y={Math.min(g.y1, g.y2) - 92} width={labelW} height={86} className="edge-fo">
-                <div className="edge-label" onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: e.id }); }}>
-                  <span>{e.label}</span>
-                  <span className="edge-meta">{MECH_LABEL[e.mechanism]} {Math.round(e.confidence * 100)}%</span>
-                </div>
-              </foreignObject>}
             </g>
           );
         })}
@@ -287,12 +334,64 @@ function TableCentrepiece(props: CentrepieceProps) {
               dimmed={hiringFilterView && !inBaseline}
               stamp={hiringFilterView && !inBaseline && isTargetish}
               onSelect={() => onSelect({ kind: 'node', id: n.id })}
+              mechW={mechW.get(n.id) ?? W}
             />
           );
         })}
       </svg>
-      {!showLabels && <p className="table-foot table-foot-right">{edges.length} lines: select one to read its dated evidence</p>}
+      <div key={`chips-${replayToken}-${animate ? 1 : 0}`} className={`edge-chips${animate ? ' is-playing' : ''}${hiringFilterView ? ' hf-view' : ''}`}>
+        <svg className="edge-leaders" width={chips.w} height={chips.h} aria-hidden="true">
+          {chips.placed.filter((c) => c.offset).map((c) => {
+            const top = c.box.y > c.ay;
+            return <line key={c.id} className={`edge-leader${hot === c.id ? ' is-hot' : ''}`} x1={c.ax} y1={c.ay}
+              x2={Math.max(c.box.x + 10, Math.min(c.box.x + c.box.w - 10, c.ax))} y2={top ? c.box.y : c.box.y + c.box.h}
+              style={{ '--draw-delay': `${times.edge.get(c.id) ?? 0}ms` } as CSSProperties} />;
+          })}
+        </svg>
+        {chips.placed.map((c) => {
+          const e = edges.find((x) => x.id === c.id)!;
+          const weak = placed.get(e.to)?.node.status === 'unverifiable';
+          return (
+            <button
+              key={c.id} type="button" tabIndex={-1} aria-hidden="true"
+              className={`edge-chip${weak ? ' is-weak' : ''}${selectedEdge === c.id ? ' is-selected' : ''}${hot === c.id ? ' is-hot' : ''}${reducedMotion ? ' no-motion' : ''}`}
+              data-testid="edge-chip"
+              style={{ left: c.box.x, top: c.box.y, width: c.box.w, height: CHIP_H, '--draw-delay': `${times.edge.get(c.id) ?? 0}ms` } as CSSProperties}
+              onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: c.id }); }}
+              onMouseEnter={() => setHot(c.id)} onMouseLeave={() => setHot((h) => (h === c.id ? null : h))}
+            >{c.text}</button>
+          );
+        })}
+        {hotEdge && <EdgeReason edge={hotEdge} chip={chipById.get(hotEdge.id)} bounds={chips} fallback={(() => {
+          const a = placed.get(hotEdge.from), b = placed.get(hotEdge.to);
+          if (!a || !b) return { x: chips.w / 2, y: chips.h / 2 };
+          const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
+          return chips.toPx((g.x1 + g.x2) / 2, (g.y1 + g.y2) / 2);
+        })()} />}
+      </div>
+      {chips.dropped.length > 0 && <p className="table-foot table-foot-right">{chips.dropped.length} more {chips.dropped.length === 1 ? 'line' : 'lines'} without a chip: select a line to read its dated evidence</p>}
       {offTable > 0 && <p className="table-foot">{offTable} more scanned {offTable === 1 ? 'company has' : 'companies have'} no dated link in the cascade and stay off the table.</p>}
+    </div>
+  );
+}
+
+/** The full reason for a line, on hover or focus. Transient, so it may sit over the board. */
+function EdgeReason({ edge, chip, bounds, fallback }: {
+  edge: GraphEdge; chip?: { box: { x: number; y: number; w: number; h: number } };
+  bounds: { w: number; h: number }; fallback: { x: number; y: number };
+}) {
+  const CARD_W = 340;
+  const cx = chip ? chip.box.x + chip.box.w / 2 : fallback.x;
+  const below = chip ? chip.box.y + chip.box.h + 10 : fallback.y + 14;
+  const left = Math.max(8, Math.min(bounds.w - CARD_W - 8, cx - CARD_W / 2));
+  const flip = below > bounds.h - 150;
+  const style: CSSProperties = flip
+    ? { left, width: CARD_W, bottom: bounds.h - (chip ? chip.box.y - 10 : fallback.y - 14) }
+    : { left, width: CARD_W, top: below };
+  return (
+    <div className="edge-reason" role="tooltip" style={style} data-testid="edge-reason">
+      <p className="edge-reason-text">{edge.label}</p>
+      <p className="edge-reason-meta">{MECH_LABEL[edge.mechanism]}, {Math.round(edge.confidence * 100)}% confidence. Select the line for its dated sources.</p>
     </div>
   );
 }
