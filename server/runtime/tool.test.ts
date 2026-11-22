@@ -82,6 +82,35 @@ test('a credit ceiling blocks the fetch and marks the run budget_exhausted', asy
   assert.match(note.error, /^Blocked before spend · cap credits 1 · would have cost /);
 });
 
+test('an expensive live call that times out is not retried (a timeout can still be billed)', async t => {
+  process.env.DOMINO_CRUST_TIMEOUT_MS = '60';
+  t.after(() => { delete process.env.DOMINO_CRUST_TIMEOUT_MS; });
+  const fetch = t.mock.method(globalThis, 'fetch', (_url: unknown, init: RequestInit) => new Promise((_resolve, reject) => {
+    init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+  }));
+  const ctx = create('slow-pricey', 'live', {}, 200);
+  const pricey = { ...spec, name: 'pricey', path: '/test/pricey', estimateCredits: () => 46 };
+  await ctx.crust(pricey, { a: 1, b: 2 }, time, noFixture, empty).catch(() => undefined);
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.deepEqual(store.getLedger(ctx.runId).filter(row => row.mode === 'live').map(row => row.status), ['timeout']);
+  assert.ok(!events(ctx.runId).some(event => event.type === 'tool.retry'));
+});
+
+test('a cheap live call that times out is still retried', async t => {
+  process.env.DOMINO_CRUST_TIMEOUT_MS = '60';
+  t.after(() => { delete process.env.DOMINO_CRUST_TIMEOUT_MS; });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', (_url: unknown, init: RequestInit) => {
+    calls++;
+    if (calls > 1) return Promise.resolve(new Response(JSON.stringify({ rows: ['late'] }), { status: 200 }));
+    return new Promise((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+  });
+  const ctx = create('slow-cheap', 'live', {}, 200);
+  const result = await ctx.crust(spec, { a: 3, b: 4 }, time, noFixture, empty);
+  assert.deepEqual(result.rows, ['late']);
+  assert.equal(calls, 2);
+});
+
 test('a limit lowered during an attempt blocks a paid retry', async t => {
   const ctx = create('lower', 'live');
   const fetch = t.mock.method(globalThis, 'fetch', async () => {

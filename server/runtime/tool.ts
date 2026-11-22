@@ -50,6 +50,18 @@ export class BudgetError extends Error {
   }
 }
 
+// Person search returns large pages and often takes 20–40 s live; enrich is slower than search. A timeout that fires
+// before the body arrives still costs the call, so the slow endpoints get room to finish.
+export function crustTimeoutMs(path: string): number {
+  const override = Number(process.env.DOMINO_CRUST_TIMEOUT_MS);
+  if (Number.isFinite(override) && override > 0) return Math.min(override, 120_000);
+  if (path.startsWith('/person/search')) return 45_000;
+  if (path.startsWith('/person/enrich') || path.startsWith('/company/enrich')) return 30_000;
+  return 15_000;
+}
+// Live calls estimated at this many credits or more are not retried after a timeout.
+export const EXPENSIVE_CREDITS = 10;
+
 // "Blocked before spend · cap credits 600 · would have cost ≈ 2.3 credits"
 export function blockedNote(reason: Exhausted, limits: { maxCredits: number; maxModelUsd: number; maxSeconds: number },
   estimate?: { credits?: number; usd?: number }): string {
@@ -251,7 +263,7 @@ export class ToolContext {
 
     const run = (mode: DataMode, attempt: Attempt<O>['run'], estimate?: AttemptCost) => this.attempts({
       provider: 'crustdata', endpoint: spec.name, path: spec.path, body,
-      attempt: { mode, run: attempt, inject: raw => parse(raw, mode, true), estimate, timeoutMs: 15_000 },
+      attempt: { mode, run: attempt, inject: raw => parse(raw, mode, true), estimate, timeoutMs: crustTimeoutMs(spec.path) },
     }, callId);
 
     if (this.mode === 'fixture') {
@@ -407,6 +419,9 @@ export class ToolContext {
       }
 
       if (mode === 'live' && !injected && failure.retry === 'nonsense') maxAttempts = Math.min(maxAttempts, attempt + 1);
+      // A live call that timed out may already be billed (Crustdata answers headers, then the body stalls). Retrying an
+      // expensive one repeats that charge for nothing, so it falls straight back to the cache instead.
+      if (mode === 'live' && !injected && failure.retry === 'timeout' && (estimate?.credits ?? 0) >= EXPENSIVE_CREDITS) maxAttempts = attempt;
       if (!failure.retry || attempt >= maxAttempts || (mode === 'cache' && !injected)) throw failure;
       const newsRateLimit = mode === 'live' && !injected && failure.retry === 'rate_limit' &&
         call.endpoint.startsWith('news_');
