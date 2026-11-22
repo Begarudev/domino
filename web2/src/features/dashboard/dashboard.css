@@ -19,7 +19,7 @@
 
 /* ---------------------------------------------------------------- opening card */
 .op-list { display: grid; gap: var(--s4); }
-.op { padding: var(--s5); display: grid; gap: var(--s4); }
+.op { padding: 20px 24px; display: grid; gap: var(--s4); border-radius: 12px; }
 .op-head { display: grid; gap: var(--s2); }
 .op-title { display: flex; align-items: baseline; gap: 4px var(--s3); flex-wrap: wrap; }
 .op-co { margin: 0; font-size: 34px; line-height: 1.05; font-weight: 800; font-variation-settings: 'wdth' 125; }
@@ -28,16 +28,16 @@
 .op-rule.provisional, .op-rule.watch { color: var(--warn); }
 .op-rule.held { color: var(--warn); }
 
-.clauses { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.clauses { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .clause {
-  display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px 8px 10px; border-radius: var(--r);
-  border: 1px solid var(--line); background: var(--bg); color: var(--paper); font-size: 17px; text-align: left;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 5px 12px 5px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--paper); font-size: 14px; line-height: 20px; text-align: left;
   transition: border-color 160ms ease-out, background-color 160ms ease-out;
 }
 .clause:hover { border-color: var(--paper-3); }
 .clause[aria-expanded='true'] { border-color: var(--live); background: var(--live-wash); }
 .clause-mark {
-  width: 22px; height: 22px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 13px; font-weight: 800; line-height: 1;
+  width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 700; line-height: 1;
 }
 .clause.s-met .clause-mark { background: var(--ok); color: var(--ink); }
 .clause.s-open .clause-mark { border: 2px solid var(--warn); }
@@ -64,8 +64,9 @@
 .fit-list li { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: var(--fs-body); }
 .fit-mark { width: 18px; flex: none; font-weight: 800; text-align: center; }
 .fit-list li.ok .fit-mark { color: var(--ok-text); }
-.fit-list li.cant { color: var(--warn); }
-.fit-list li.cant .fit-text { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.fit-list li.cant { color: var(--paper-2); }
+.fit-list li.cant .fit-mark { color: var(--warn); }
+.fit-list .tag { font-size: 12px; }
 .op-watch { margin: 0; color: var(--paper-2); }
 
 /* held: visibly grey, the guard and its dated source in the headline */
@@ -149,7 +150,7 @@
   transition: background-color 160ms ease-out;
 }
 .chk:last-child { border-right: 0; }
-.chk b { font-size: 20px; font-weight: 650; font-variant-numeric: proportional-nums; white-space: nowrap; }
+.chk b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .chk span { font-size: 13px; color: var(--paper-2); line-height: 1.35; }
 .chk:hover { background: var(--bg); }
 .chk[aria-expanded='true'] { background: var(--live-wash); }
@@ -159,9 +160,23 @@
 .chk-note code { font-family: var(--mono); font-size: 12.5px; }
 .chk-sub { margin: 6px 0 0; font-size: 13px; font-weight: 600; color: var(--paper); }
 .chk-rows { list-style: none; margin: 0; padding: 0; display: grid; max-height: 320px; overflow: auto; }
-.chk-rows > li { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; min-height: 32px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+/* Record rows read as a data grid: label left, figures right in tabular numerals, hairline dividers, row hover. */
+.chk-rows > li { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; min-height: 36px; padding: 8px 12px; margin: 0 -12px; border-top: 1px solid var(--line); font-size: 14px; transition: background-color 150ms ease-out; }
 .chk-rows > li:first-child { border-top: 0; }
-.r-btn { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.chk-rows > li:hover { background: var(--bg); }
+.chk-rows > li > .r-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chk-rows .r-meta, .wl-meta { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.chk-grid-wrap { max-height: 360px; overflow: auto; margin: 0 -14px; border-top: 1px solid var(--line); }
+.chk-grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+.chk-grid th { position: sticky; top: 0; z-index: 1; background: var(--canvas); text-align: left; font-size: 12.5px; font-weight: 600; color: var(--paper-2); padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.chk-grid td { padding: 8px 14px; border-bottom: 1px solid var(--line); color: var(--paper); max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chk-grid td:first-child { width: 46%; }
+.chk-grid tbody tr { transition: background-color 150ms ease-out; }
+.chk-grid tbody tr:hover { background: var(--row-hover); }
+.chk-grid tbody tr:last-child td { border-bottom: 0; }
+.chk-grid .n { text-align: right; font-variant-numeric: tabular-nums; }
+.chk-grid .mute { color: var(--paper-3); }
+.r-btn { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; width: 100%; background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
 .r-btn:disabled { cursor: default; }
 .r-btn:not(:disabled):hover .r-main { text-decoration: underline; text-underline-offset: 3px; }
 .r-main { color: var(--paper); font-size: 14px; }
@@ -196,3 +211,25 @@
 .op.compact .op-rule { font-size: 15px; }
 .op.compact .clause { font-size: 14px; min-height: 36px; padding: 6px 12px 6px 8px; }
 .wl-row > .btn.sm { justify-self: start; }
+
+/* ---------------------------------------------------------------- tool-grade hierarchy (Garud 17:05)
+   Few sizes in strict steps: page title 26 / section 16 / card title 18 / body 14 / labels 12.5. Semibold, tight tracking,
+   hairline borders, 8px controls, 12px cards, compact 36-40px rows. Scoped under .dash so it outranks the shared side rules. */
+.side-candidate .dash .dash-name { font-size: 26px; line-height: 32px; letter-spacing: -0.02em; font-weight: 600; }
+.side-candidate .dash .dash-h2 { font-size: 16px; line-height: 24px; letter-spacing: -0.01em; font-weight: 600; }
+.dash .dash-h3 { font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: -0.005em; }
+.dash .dash-topline, .dash .sub-lead { font-size: 13px; line-height: 20px; color: var(--paper-2); }
+.dash .dash-sec { gap: 12px; }
+.side-candidate .dash .op-co { letter-spacing: -0.015em; }
+.dash .op-role { font-size: 14px; }
+.dash .fit-h { font-size: 12.5px; font-weight: 600; color: var(--paper-2); }
+.dash .fit-list li { font-size: 13.5px; line-height: 20px; }
+.dash .chk { padding: 12px 16px; }
+.dash .chk b { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.dash .chk span { font-size: 12.5px; }
+.dash .checked, .dash .wl, .dash .chk-records { border-radius: 10px; }
+.dash .wl-row { padding: 10px 16px; transition: background-color 150ms ease-out; }
+.dash .wl-row:hover { background: var(--row-hover); }
+.dash .wl-co { font-size: 14px; font-weight: 600; }
+.dash .wl-meta { font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .dash .wl-row, .chk-grid tbody tr, .chk-rows > li { transition: none; } }
