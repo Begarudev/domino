@@ -27,7 +27,7 @@
 .by-rule { font-weight: 600; color: var(--ink); }
 .by-need > span:last-child { color: var(--ink-2); }
 .by-trig > span:not(.mono) { color: var(--ink-2); margin: 2px 0; }
-.by-trig .tag { margin-left: 6px; font-size: 11px; line-height: 16px; }
+.by-trig .tag { margin-left: 6px; font-size: 12.5px; line-height: 16px; }
 .by-dec { color: var(--ink-2); min-width: 110px; }
 .by-st small { margin-top: 4px; color: var(--ink-3); font-size: 12px; max-width: 200px; }
 .by-none { padding: 16px; margin: 0; }
@@ -72,7 +72,7 @@
 .by-trig .srclink { font-size: 13px; }
 .by-diag { font-size: 12px; margin: 4px 0 12px; }
 .by-ask { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--rule); }
-.by-trig > span.tag { display: inline-flex; margin-left: 8px; font-size: 11px; line-height: 16px; vertical-align: 1px; }
+.by-trig > span.tag { display: inline-flex; margin-left: 8px; font-size: 12.5px; line-height: 16px; vertical-align: 1px; }
 .by-st { min-width: 112px; }
 .by-st .st { white-space: normal; }
 .by-accounts { overflow: hidden; }

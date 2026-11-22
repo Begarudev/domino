@@ -60,6 +60,10 @@ function RunChip() {
   const status = useRunSel((v) => v.ui.snap.status);
   const dataMode = useRunSel((v) => v.ui.snap.dataMode);
   const created = useRunSel((v) => v.ui.snap.createdAt);
+  const request = useRunSel((v) => v.ui.snap.request) ?? '';
+  // Name the run, so the chip changing between tabs reads as intentional (each tab shows the run behind it).
+  const kind = request.startsWith('intro:') ? 'Outreach run' : request.startsWith('candidate:') ? 'Profile read'
+    : /^Predict openings/i.test(request) ? 'Openings scan' : request ? 'Buyer run' : 'Run';
   const page = useShell((s) => s.pageSource);
   const companyId = useShell((s) => s.companyId);
   const running = status === 'running' || status === 'queued';
@@ -81,7 +85,7 @@ function RunChip() {
     <a className="runchip" data-testid="run-chip" title={`Run ${runId}. Open its reading log.`} href={companyId ? href({ page: 'company', id: companyId, tab: 'reading' }) : '#'}
       onClick={(e) => { e.preventDefault(); if (companyId) navigate({ page: 'company', id: companyId, tab: 'reading' }); }}>
       <span className={`dot${running ? ' run' : ''}`} />
-      {served && !running ? served : running ? 'Scan running' : how === 'recorded' ? 'Recorded run' : how === 'mock' ? 'Mock run' : how === 'fixture' ? 'Fixture scan' : how === 'cached live' ? 'Cached live scan' : 'Live scan'}
+      {kind} · {served && !running ? served : running ? 'running' : how === 'recorded' ? 'recorded' : how === 'mock' ? 'mock' : how === 'fixture' ? 'fixture' : how === 'cached live' ? 'cached live' : 'live'}
       {!served && created ? ` · ${fmtDate(created)}, ${fmtTime(created)} IST` : ''}
     </a>
   );

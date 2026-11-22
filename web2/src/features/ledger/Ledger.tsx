@@ -78,7 +78,7 @@ function LedgerView({ snap, readOnly }: { snap: RunSnapshot; readOnly: boolean }
         <p className="lg-line" data-testid="cap-line">
           <span>Used <b><Count value={credits} format={fmtCredits} /></b> credits</span>
           <span className="sep">·</span>
-          <span>{running ? "Reserved" : "Reserved at stop"} <b>{fmtCredits(reserved.credits)}</b>
+          <span>Reserved <b>{fmtCredits(reserved.credits)}</b>
             {reserved.modelUsd > 0 && <> + <b>{fmtUsd(reserved.modelUsd)}</b> model</>}
             {running && (reserved.credits > 0 || reserved.modelUsd > 0) && last ? <span className="faint"> ({last} in flight)</span> : null}</span>
           <span className="sep">·</span>
@@ -193,6 +193,8 @@ function LowerCap({ spent, cap, enabled }: { spent: number; cap: number; enabled
     const r = await runStore.setLimits({ maxCredits: n }).catch(() => null);
     setState(r ? 'done' : 'failed');
   };
+  // A finished run can't change its caps: say so in one line instead of showing a dead control.
+  if (!enabled) return <p className="lg-lower faint">Caps can be lowered while a run is running; this run has finished.</p>;
   return (
     <div className="lg-lower">
       <label htmlFor="lg-cap-in">Lower the credit cap</label>
