@@ -17,6 +17,9 @@ import { findEvidence, sourceName } from '../onboarding/shared.ts';
 import './dashboard.css';
 
 const today = () => new Date().toISOString().slice(0, 10);
+const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+/** '2026-10' -> '2026-10-31'; a full date stays as it is. */
+const lastDay = (d: string) => (d.length === 7 ? new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0)).toISOString().slice(0, 10) : d.slice(0, 10));
 const ENTER_MS = 200;
 
 export function CandidateDashboard({ candidateId }: { candidateId: string }) {
@@ -128,7 +131,7 @@ function clausesOf(o: OpeningX, evidence: Evidence[]): RuleClause[] {
     if (r.kind === 'talent_drain') {
       const rows = ids('person_recent_moves');
       out.push({ id: 'o1.departures', text: r.label, state: 'met', evidenceIds: rows.length ? rows : r.evidenceId ? [r.evidenceId] : [],
-        detail: `${plural(rows.length || 1, 'dated departure')} in ${fmtDate(r.date, true)}${isMonthLevel(r.date) ? ' (month-level dates)' : ''}, inside the 90-day window.` });
+        detail: `${plural(rows.length || 1, 'dated departure')} in ${fmtDate(r.date, true)}${isMonthLevel(r.date) ? ' (month-level dates)' : ''}, inside the 90-day window ${fmtDate(addDays(o.predictedAt, -90), true)} to ${fmtDate(o.predictedAt, true)}.` });
     } else if (r.kind === 'no_replacement') {
       out.push({ id: 'o1.no_replacement', text: r.label, state: 'met', evidenceIds: r.evidenceId ? [r.evidenceId] : [],
         detail: ev ? `${ev.claim}. ${ev.value != null ? `${ev.value} records returned. ` : ''}${sourceName(ev)}, checked ${fmtDate(ev.observedAt, true)}.` : undefined });
@@ -142,8 +145,11 @@ function clausesOf(o: OpeningX, evidence: Evidence[]): RuleClause[] {
   if (o.status === 'open' && o.windowClosesBy) {
     const days = daysBetween(today(), o.windowClosesBy);
     const last = o.reasons.find((r) => r.kind === 'talent_drain')?.date;
+    const from = last ? lastDay(last) : null;
+    // Show the sum only when it reproduces the engine's date; otherwise state the engine's date alone.
+    const sum = from && addDays(from, 30) === o.windowClosesBy ? ` ${fmtDate(from)} + 30 days = ${fmtDate(o.windowClosesBy, true)}.` : '';
     out.push({ id: 'o1.window', text: `Window open through ${fmtDate(o.windowClosesBy)}`, state: 'open', evidenceIds: [],
-      detail: `As of ${fmtDate(o.predictedAt, true)}: latest departure ${fmtDate(last, true)}${isMonthLevel(last) ? ' (month-level, so counted from its last day)' : ''}; the 30-day no-replacement window ends ${fmtDate(o.windowClosesBy, true)}${days >= 0 ? `, ${plural(days, 'day')} from today` : ''}.` });
+      detail: `As of ${fmtDate(o.predictedAt, true)}: latest departure ${fmtDate(last, true)}${isMonthLevel(last) ? `, a month-level date, so counted from its last day (${fmtDate(from)})` : ''}.${sum} No replacement hire or post by then confirms the opening${days >= 0 ? `; ${plural(days, 'day')} left` : ''}.` });
   }
   return out;
 }
@@ -175,6 +181,7 @@ function OpeningCard({ o, cand, evidence, mine, candidateId }: {
               onClick={() => setOpenClause((cur) => (cur === cl.id ? null : cl.id))}>
               <span className="clause-mark" aria-hidden="true">{MARK[cl.state]}</span>
               <span className="clause-text">{cl.text}</span>
+              <span className="clause-chev" aria-hidden="true" />
               <span className="sr-only">, {STATE_WORD[cl.state]}</span>
             </button>
           </li>
@@ -268,7 +275,7 @@ function IntroAction({ o, cand, mine, candidateId }: { o: Opening; cand: Candida
       <div className="intro">
         <button type="button" className="btn intro-done" data-testid={`request-intro-${o.id}`}
           onClick={() => setNote(`Already requested on ${fmtDate(existing.receivedAt)}, ${fmtTime(existing.receivedAt)}. It’s under Your intro requests.`)}>
-          <span aria-hidden="true">✓</span> Intro requested
+          <span aria-hidden="true">✓</span> Intro requested, {STATUS[existing.status].text.toLowerCase()}
         </button>
         {note && <span className="intro-note" role="status">{note}</span>}
       </div>

@@ -107,3 +107,5 @@
   .intro-cols { grid-template-columns: 1fr; }
   .clause-row { grid-template-columns: 1fr; }
 }
+.clause-chev { width: 8px; height: 8px; margin-left: 2px; border-right: 2px solid var(--paper-3); border-bottom: 2px solid var(--paper-3); transform: rotate(45deg) translateY(-2px); transition: transform 180ms ease-out; flex: none; }
+.clause[aria-expanded='true'] .clause-chev { transform: rotate(225deg) translateY(-2px); }

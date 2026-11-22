@@ -72,7 +72,7 @@
 .raw-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
 .raw-call { font-size: var(--fs-ui); color: var(--paper-2); font-variation-settings: 'wdth' 86; font-variant-numeric: tabular-nums; }
 .raw-skills { color: var(--paper); }
-.onb-confirm-form { padding: var(--s5); display: grid; gap: var(--s4); align-content: start; }
+.onb-confirm-form { padding: var(--s5); display: grid; gap: var(--s3); align-content: start; }
 .fsrc { margin: 0; font-size: var(--fs-body); font-weight: 650; color: var(--paper-2); padding-bottom: var(--s3); border-bottom: 1px solid var(--line-soft); }
 .onb-select { appearance: none; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, var(--paper-2) 50%), linear-gradient(135deg, var(--paper-2) 50%, transparent 50%); background-position: calc(100% - 22px) 23px, calc(100% - 16px) 23px; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 40px; font-size: var(--fs-body); }
 .chip-x { border: 0; background: none; color: var(--paper-3); padding: 0 0 0 8px; font-size: 18px; line-height: 1; }
