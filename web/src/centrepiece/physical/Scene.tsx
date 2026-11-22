@@ -167,10 +167,12 @@ function Table({ layout }: { layout: TableLayout }) {
 
 // ---------------------------------------------------------------- cards
 
-function cardEvidence(spec: TileSpec, snap: RunSnapshot, ev: Map<string, Evidence>): Evidence | null {
-  if (spec.outcome && spec.outcome.evidenceIds.length) return ev.get(spec.outcome.evidenceIds[0]) ?? null;
-  const ids = spec.evidenceIds;
-  const dated = ids.map((i) => ev.get(i)).filter((e): e is Evidence => !!e && e.verifiable && !!e.observedAt);
+// A tile that has not fallen yet may only show what was knowable on the as-of date: never its outcome.
+function cardEvidence(spec: TileSpec, snap: RunSnapshot, ev: Map<string, Evidence>, fallen: boolean, asOf: string | null): Evidence | null {
+  if (fallen && spec.outcome && spec.outcome.evidenceIds.length) return ev.get(spec.outcome.evidenceIds[0]) ?? null;
+  const outcomeIds = new Set(spec.outcome?.evidenceIds ?? []);
+  const ids = spec.evidenceIds.filter((i) => !outcomeIds.has(i));
+  const dated = ids.map((i) => ev.get(i)).filter((e): e is Evidence => !!e && e.verifiable && !!e.observedAt && (!asOf || e.observedAt <= asOf));
   dated.sort((a, b) => (b.observedAt! > a.observedAt! ? 1 : -1));
   void snap;
   return dated[0] ?? null;
@@ -179,8 +181,8 @@ function cardEvidence(spec: TileSpec, snap: RunSnapshot, ev: Map<string, Evidenc
 function EvidenceCard({ spec, status, snap, ev, compact, selected }: {
   spec: TileSpec; status: TileStatus; snap: RunSnapshot; ev: Map<string, Evidence>; compact: boolean; selected: boolean;
 }) {
-  const e = cardEvidence(spec, snap, ev);
   const fallen = status === 'hit' || status === 'falling-hit' || status === 'fallen' || status === 'hypothesis';
+  const e = cardEvidence(spec, snap, ev, status === 'hit' || status === 'falling-hit', snap.replay?.asOf ?? null);
   // where the tile ends up: one tile-height along its fall direction
   const land: [number, number, number] = fallen && spec.role !== 'baseline'
     ? [spec.pos[0] + spec.dir[0] * TILE.h * 0.55, 0.9, spec.pos[1] + spec.dir[1] * TILE.h * 0.55]
@@ -200,8 +202,8 @@ function EvidenceCard({ spec, status, snap, ev, compact, selected }: {
     head = e?.observedAt ? fmtFull(e.observedAt) : 'Trigger';
     body = e?.claim ?? spec.name;
   } else {
-    head = e?.observedAt ? fmtFull(e.observedAt) : "I can't verify";
-    body = e?.claim ?? 'No dated evidence';
+    head = e?.observedAt ? `Known ${fmtFull(e.observedAt)}` : "I can't verify";
+    body = e?.claim ?? 'No dated evidence before the freeze';
   }
   return (
     <Html position={land} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
