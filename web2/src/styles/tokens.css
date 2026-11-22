@@ -7,9 +7,9 @@
 */
 :root {
   color-scheme: light;
-  --canvas: #F5F6F7; --surface: #FFFFFF; --raised: #FFFFFF; --hover: #F0F2F4; --row-hover: #FAFBFB; --sel: #FBFBFC;
-  --ink: #15171C; --ink-2: #474D59; --ink-3: #6B717C; --on-ink: #FFFFFF; --ink-hover: #2A2E36;
-  --rule: #DFE2E6; --rule-2: #ECEEF1;
+  --canvas: #FAFAFB; --surface: #FFFFFF; --raised: #FFFFFF; --hover: #F3F4F6; --row-hover: #F9FAFB; --sel: #F6F7F9;
+  --ink: #15171C; --ink-2: #4B515C; --ink-3: #6B717C; --on-ink: #FFFFFF; --ink-hover: #2A2E36;
+  --rule: #E4E6EA; --rule-2: #EEEFF2;
   --acc: #0A6B5C; --acc-2: #0E8572; --acc-weak: #E4F1EE; --acc-line: #9CCBC1; --on-acc: #FFFFFF;
   --hatch: rgba(132, 138, 149, .18); --sample-a: #ECEEF1; --sample-b: #F5F6F7;
   --shadow: 0 8px 24px rgba(21, 23, 28, .10);
@@ -46,11 +46,21 @@
   --serif: var(--sans); /* Garud 15:17: no serif anywhere. Kept as an alias so older rules render in the sans. */
   --sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --fs-cap: 12px; --fs-ui: 13px; --fs-body: 14px; --fs-lead: 15px; --fs-h: 20px; --fs-title: 30px;
+  /* Attio-derived scale (17:05): few sizes, strict steps; display sizes medium/semibold with tight tracking. */
+  --fs-cap: 12px; --fs-ui: 13px; --fs-body: 14px; --fs-lead: 15px; --fs-sec: 16px; --fs-h: 20px; --fs-page: 24px; --fs-title: 30px;
+  --lh-cap: 16px; --lh-ui: 18px; --lh-body: 20px; --lh-h: 28px; --lh-page: 30px;
+  --track-tight: -0.02em; --track-snug: -0.01em;
+  --w-med: 500; --w-semi: 600;
 
-  /* rhythm: 4px base */
+  /* rhythm: 4px base, 8px steps */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
-  --r-sm: 3px; --r: 4px; --r-lg: 6px;
+  /* shape: small control radii, softer cards, 1px hairlines, one popover elevation */
+  --r-sm: 4px; --r: 6px; --r-ctl: 8px; --r-lg: 10px; --r-pill: 999px;
+  --hair: 1px solid var(--rule); --hair-2: 1px solid var(--rule-2);
+  /* data grid */
+  --row-h: 40px; --row-h-compact: 36px; --head-h: 36px; --cell-x: 12px; --cell-x-edge: 16px;
+  /* navigation */
+  --nav-h: 32px; --nav-pill: var(--hover); --nav-pill-on: var(--sel);
 
   /* motion: one scale. Entrances once at 220 ms, menus 160 ms, everything else 200 ms. */
   --ease: cubic-bezier(.2, .7, .2, 1); --t: 200ms;

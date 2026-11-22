@@ -35,7 +35,14 @@ export function CompaniesPage() {
       <div className="ph"><div><h1>What each company needs next</h1><p>Companies where a rule fired on dated moves. Open one to see the decision, its clauses and every source.</p></div></div>
       <SourceNote source={q.source} error={q.error} />
       {q.loading && !q.data && <p className="loading-line" role="status">Loading companies from the latest scan…</p>}
-      <div className="panel">{q.data?.slice(0, 60).map((c) => <CohortRow key={c.id} c={c} />)}</div>
+      {!!q.data?.length && (
+        <div className="panel">
+          <div className="cohort-row cohort-head" role="presentation">
+            <span>Company</span><span>Departures</span><span>Decision</span><span className="num">Headcount</span>
+          </div>
+          {q.data.slice(0, 60).map((c) => <CohortRow key={c.id} c={c} />)}
+        </div>
+      )}
       {q.data && !q.data.length && (
         <div className="empty-act">
           <p>No company has a rule decision yet. A scan reads the latest dated job moves and applies rule O1.</p>
@@ -53,8 +60,8 @@ function CohortRow({ c }: { c: CompanySummary }) {
     <a className="cohort-row" href={href(to)} data-testid={`company-${slug(c.name)}`} onClick={(e) => { e.preventDefault(); navigate(to); }}>
       <span className="cohort-name"><b>{c.name}</b>{c.domain && <small>{c.domain}</small>}</span>
       <span className="num">{plural(c.departures90d, 'departure')} in 90 days</span>
-      <span>{c.openings ? <span className="st prov">O1 · {plural(c.openings, 'opening')}</span> : null}{c.held ? <span className="st held">Held</span> : null}</span>
-      <span className="num faint">{c.headcount ? `${fmtInt(c.headcount)} staff` : ''}</span>
+      <span>{c.openings ? <span className="st prov">O1 · {plural(c.openings, 'opening')}</span> : null}{c.held ? <span className="st held">Held</span> : null}{!c.openings && !c.held ? <span className="faint" title="No rule fired or held at this company in this scan">—</span> : null}</span>
+      <span className="num faint">{c.headcount ? `${fmtInt(c.headcount)} staff` : <span title="Headcount not in the data read">—</span>}</span>
     </a>
   );
 }
@@ -75,6 +82,7 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
   const tab: CompanyTab = BUILT_TABS.has(route.tab) ? route.tab : 'recruitment';
   const current = COMPANY_TABS.find((t) => t.id === tab)!;
   const counts: Partial<Record<CompanyTab, number>> = desk ? { recruitment: desk.openings.length } : {};
+  const companyName = list.data?.find((c) => c.id === id)?.name ?? route.id;
   const go = (t: CompanyTab) => navigate({ page: 'company', id: route.id, tab: t }, true);
 
   return (
@@ -97,6 +105,13 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
         })}
       </nav>
       <div className="co-main">
+        <nav className="crumbs" aria-label="Breadcrumb" data-testid="crumbs">
+          <ol>
+            <li><a href={href({ page: 'companies' })} onClick={(e) => { e.preventDefault(); navigate({ page: 'companies' }); }}>Company</a></li>
+            <li><a href={href({ page: 'company', id: route.id, tab: 'recruitment' })} onClick={(e) => { e.preventDefault(); go('recruitment'); }}>{companyName}</a></li>
+            <li aria-current="page">{current.label}</li>
+          </ol>
+        </nav>
         {desk && <Pipeline desk={desk} companyId={route.id} tab={tab} />}
         {/* Tabs with their own header (file, reading) skip the shell title once their data is in. */}
         {!(desk && OWN_HEADER.has(tab)) && (
