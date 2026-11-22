@@ -122,13 +122,15 @@ export function nodeRadius(c: FlowCompany, k: number) {
 }
 
 let VW = 4000;
+let SAFE = 40;
 let PILLS: { x: number; y: number; w: number }[] = [];   // canvas width, so labels never run off the edge
 function text(g: CanvasRenderingContext2D, str: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = 'center') {
   g.font = font;
   const tw = g.measureText(str).width;
-  if (align === 'center') x = Math.max(tw / 2 + 6, Math.min(VW - tw / 2 - 6, x));
-  else if (align === 'left') x = Math.max(6, Math.min(VW - tw - 6, x));
-  else if (align === 'right') x = Math.max(tw + 6, x);
+  const M = SAFE;
+  if (align === 'center') x = Math.max(tw / 2 + M, Math.min(VW - tw / 2 - M, x));
+  else if (align === 'left') x = Math.max(M, Math.min(VW - tw - M, x));
+  else if (align === 'right') x = Math.max(tw + M, Math.min(VW - M, x));
   g.textAlign = align;
   g.textBaseline = 'middle';
   g.lineJoin = 'round';
@@ -147,7 +149,7 @@ function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k:
   const pw = w1 + w2 + 18 * k, ph = 24 * k;
   if (alpha <= 0.01) return;
   if (anchor === 'left') x += pw / 2; else if (anchor === 'right') x -= pw / 2;
-  x = Math.max(pw / 2 + 6, Math.min(VW - pw / 2 - 6, x));
+  x = Math.max(pw / 2 + SAFE, Math.min(VW - pw / 2 - SAFE, x));
   for (let tries = 0; tries < 6; tries++) {
     const hit = PILLS.find((r) => Math.abs(r.x - x) < (r.w + pw) / 2 + 4 && Math.abs(r.y - y) < ph + 3);
     if (!hit) break;
@@ -172,6 +174,7 @@ function pill(g: CanvasRenderingContext2D, str: string, x: number, y: number, k:
 export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: View): Frame {
   const { w, h, k } = v;
   VW = w;
+  SAFE = v.compact ? 16 : 40;
   PILLS = [];
   const day = dayAt(m, s);
   const phase = phaseAt(m, s);
@@ -217,10 +220,14 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     }
   }
 
+  // chapter 2: everything except the drained pair steps back while the caption explains it
+  const drainPair = m.drainKey ? m.drainKey.split('>') : null;
+  const beat = m.sDrain0 === null ? 0 : clamp((s - m.sDrain0 + 0.2) / 0.5) * (1 - clamp((s - m.sFreeze) / 0.7));
   const dimOf = (id: string) => {
     let a = 1;
     if (v.filterView && m.filterIds.has(id)) a *= 0.22;
     if (focus && id !== focus.id) a *= 1 - ez * 0.9;
+    if (drainPair && !drainPair.includes(id)) a *= 1 - 0.72 * beat;
     return a;
   };
 
@@ -248,8 +255,10 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     g.setLineDash(l.mechanism === 'DISPLACEMENT' ? [7 * k, 6 * k] : [1.5 * k, 6 * k]);
     g.lineDashOffset = -s * 14 * k;
     g.beginPath();
+    const len = Math.hypot(B.x - A.x, B.y - A.y) || 1;
+    const t0 = Math.min(0.4, (A.r + 34 * k * rz) / len), t1 = Math.max(0.6, 1 - (B.r + 34 * k * rz) / len);
     const steps = 40, upto = Math.round(steps * easeOut(a));
-    for (let i = 0; i <= upto; i++) { const p = qpt(A.x, A.y, cx, cy, B.x, B.y, i / steps); if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }
+    for (let i = 0; i <= upto; i++) { const p = qpt(A.x, A.y, cx, cy, B.x, B.y, t0 + (t1 - t0) * (i / steps)); if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }
     g.stroke();
     g.setLineDash([]);
   }
@@ -284,7 +293,7 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
       }
     }
     if (formed) {
-      const e = clamp((day - formDay) / 7) * dim;
+      const e = Math.max(clamp((day - formDay) / 7), clamp((s - r.sForm) / 0.8)) * dim;   // also ramps while the clock is paused
       const thick = (1 + Math.min(arrived, 8) * 0.25) * rz;
       path();
       g.strokeStyle = rgba(C.ember, 0.09 * e); g.lineWidth = 26 * k * thick; g.stroke();
@@ -303,6 +312,33 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
         g.drawImage(spr, x - sz, y - sz, sz * 2, sz * 2);
       }
       g.globalAlpha = 1;
+      // arrowhead where the river meets the hiring company: people moved this way
+      let ai = pts.length - 1;
+      while (ai > 1 && Math.hypot(pts[ai][0] - B.x, pts[ai][1] - B.y) < B.r + 12 * k) ai--;
+      const [hx, hy] = pts[ai], [px, py] = pts[Math.max(0, ai - 3)];
+      const ang = Math.atan2(hy - py, hx - px), as = 13 * k * rz;
+      g.globalCompositeOperation = 'source-over';
+      g.globalAlpha = e;
+      g.fillStyle = C.emberHot;
+      g.beginPath();
+      g.moveTo(hx + Math.cos(ang) * as * 0.6, hy + Math.sin(ang) * as * 0.6);
+      g.lineTo(hx + Math.cos(ang + 2.5) * as, hy + Math.sin(ang + 2.5) * as);
+      g.lineTo(hx + Math.cos(ang - 2.5) * as, hy + Math.sin(ang - 2.5) * as);
+      g.closePath(); g.fill();
+      // the sentence on the arc itself
+      const big = r.key === m.drainKey && s < m.sFreeze + 0.4;
+      const fsA = (big ? 20 : 14) * k;
+      const [mx, my] = pts[24];
+      const nx = mx - cx, ny = my - cy, nl = Math.hypot(nx, ny) || 1;   // points away from the bow's control point
+      const ox = mx - (nx / nl) * (fsA + 14 * k), oy = my - (ny / nl) * (fsA + 14 * k);   // outer side of the bow, clear of the glow
+      const fromN = m.byId.get(r.from)!.name, toN = m.byId.get(r.to)!.name;
+      const label = `${arrived} serving engineers: ${fromN} → ${toN}`;
+      g.globalAlpha = e * (big ? 1 : v.compact ? 0 : 0.8) * (1 - ez);
+      text(g, label, ox, oy, `700 ${fsA}px ${FONT}`, big ? C.emberHot : rgba(C.ember, 0.95));
+      g.font = `700 ${fsA}px ${FONT}`;
+      PILLS.push({ x: ox, y: oy, w: g.measureText(label).width + 10 });
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'lighter';
     }
   }
 
@@ -439,26 +475,27 @@ export function draw(g: CanvasRenderingContext2D, m: FlowModel, s: number, v: Vi
     const predR = n.r + (need ? 26 : 18) * k * rz + Math.max(0, preds.length - 1) * 9 * k;
     const needE = need ? clamp((s - need.sBloom) / 0.5) : 0;
     const outer = Math.max(R, needE * (n.r + 12 * k * rz), placeE * predR);
-    const ly = n.y + outer + 13 * k * Math.max(1, rz * 0.8);
+    const fs = 14 * k * Math.min(1.5, Math.max(1, rz * 0.85));
+    const ly = n.y + outer + 8 * k + fs * 0.65;
     g.globalAlpha = la;
-    const fs = 13.5 * k * Math.min(1.5, Math.max(1, rz * 0.85));
+    text(g, c.name, n.x, ly, `650 ${fs}px ${FONT}`, rgba(C.bone, 0.95));
     g.font = `650 ${fs}px ${FONT}`;
-    const nw = g.measureText(c.name).width;
-    g.font = `450 ${fs * 0.82}px ${FONT}`;
-    const hw = v.compact ? 0 : g.measureText(` ${c.headcount}`).width;
-    text(g, c.name, n.x - hw / 2, ly, `650 ${fs}px ${FONT}`, rgba(C.bone, 0.95));
-    if (!v.compact) text(g, `${c.headcount}`, n.x + nw / 2 - hw / 2 + 5 * k, ly + 0.5, `450 ${fs * 0.82}px ${FONT}`, rgba(C.slate, 0.9), 'left');
+    if (la > 0.05) PILLS.push({ x: n.x, y: ly, w: g.measureText(c.name).width + 8 });
     let line = ly + fs * 1.3;
     if (need) {
       const bt = clamp((s - need.sBloom) / 0.5);
       if (bt > 0) {
         g.globalAlpha = la * bt;
-        text(g, need.weak ? `${need.need}?` : need.need, n.x, line, `700 ${fs * 0.9}px ${FONT}`, need.weak ? rgba(C.wound, 0.6) : C.wound);
+        const pct = need.confidence !== null ? ` · ${Math.round(need.confidence * 100)}%` : '';
+        const nd = /^[A-Z][a-z]/.test(need.need) ? need.need[0].toLowerCase() + need.need.slice(1) : need.need;
+        const nl2 = need.weak ? `Maybe: ${nd}` : `${v.compact ? 'Needs' : 'Likely needs'}: ${nd}${pct}`;
+        text(g, nl2, n.x, line, `700 ${fs * 0.92}px ${FONT}`, need.weak ? rgba(C.wound, 0.62) : C.wound);
+        g.font = `700 ${fs * 0.92}px ${FONT}`;
+        PILLS.push({ x: n.x, y: line, w: g.measureText(nl2).width + 8 });
         line += fs * 1.2;
-        if (!v.compact || (focus && c.id === focus.id && ez > 0.5)) {
-        const ev = need.weak ? `${need.dated} dated row, needs 2 to act` : `${need.dated} dated rows${need.confidence !== null ? `, ${Math.round(need.confidence * 100)}% confidence` : ''}`;
-        text(g, ev, n.x, line, `450 ${fs * 0.8}px ${FONT}`, rgba(C.slate, 0.95));
-        line += fs * 1.15;
+        if (need.weak && !v.compact) {
+          text(g, `${need.dated} dated fact; DOMINO needs 2 to act`, n.x, line, `450 ${fs * 0.82}px ${FONT}`, rgba(C.slate, 0.95));
+          line += fs * 1.15;
         }
       }
     }

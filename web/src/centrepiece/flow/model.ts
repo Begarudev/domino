@@ -11,6 +11,7 @@ const INTRO = 1.0;
 const ACT1 = 8.0;
 const FREEZE_HOLD = 3.0;
 const ACT2 = 9.5;
+const DRAIN_HOLD = 3.4;   // the clock pauses on the first drain so the caption can be read
 const SCORE_HOLD = 2.6;
 const ZOOM = 1.8;
 const SENTENCE = 1.05;
@@ -60,7 +61,10 @@ export interface FlowModel {
   d0: number; dFreeze: number; dEnd: number;
   sSee0: number; sFreeze: number; sForward0: number; sEnd: number; sScore: number; sZoom: number; sLetter: number; total: number;
   edgeById: Map<string, GraphEdge>;
+  segs: Seg[];
+  sDrain0: number | null; sDrain1: number | null; drainKey: string | null;   // the paused "drain" beat
 }
+export interface Seg { s0: number; s1: number; d0: number; d1: number }
 
 export const dayOf = (iso: string) => Math.round(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86400000);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -94,22 +98,6 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
     .filter((d) => d >= dFreeze - 120 && d <= dFreeze);
   const d0 = moveDays.length ? Math.max(dFreeze - 90, Math.min(dFreeze - 30, Math.min(...moveDays) - 21)) : dFreeze - 90;
 
-  // time mapping
-  const sSee0 = INTRO;
-  const sFreeze = sSee0 + ACT1;
-  const sForward0 = replay ? sFreeze + FREEZE_HOLD : sFreeze + 0.8;
-  const sEnd = replay ? sForward0 + ACT2 : sForward0;
-  const sScore = sEnd;
-  const sZoom = replay ? sScore + SCORE_HOLD : sEnd + 0.6;
-  const sLetter = sZoom + ZOOM;
-  const sOfDay = (day: number): number => {
-    if (day <= d0) return sSee0;
-    if (day <= dFreeze) return sSee0 + ((day - d0) / (dFreeze - d0)) * ACT1;
-    if (!replay) return sFreeze;
-    if (day <= dEnd) return sForward0 + ((day - dFreeze) / (dEnd - dFreeze)) * ACT2;
-    return sEnd;
-  };
-
   // ---- moves (one per dated evidence row on a hire/departure trigger with a counterpart company) ----
   const seen = new Set<string>();
   const moves: FlowMove[] = [];
@@ -125,10 +113,63 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
       const day = dayOf(e.observedAt);
       if (day < d0 || day > dEnd) continue;
       const title = /hired an? (.+?) (whose|from)/i.exec(e.claim)?.[1] ?? 'engineer';
-      moves.push({ id, day, from, to, title, serving: SERVING_RE.test(e.claim), afterFreeze: day > dFreeze, sArrive: sOfDay(day) });
+      moves.push({ id, day, from, to, title, serving: SERVING_RE.test(e.claim), afterFreeze: day > dFreeze, sArrive: 0 });
     }
   }
   moves.sort((a, b) => a.day - b.day);
+
+  // focus account (the letter's company): top non-held target with a draft
+  const top = [...snap.targets].filter((t) => !t.hold?.reasons?.length).sort((a, b) => a.rank - b.rank)[0];
+  const held = new Set(snap.targets.filter((t) => t.hold?.reasons?.length).map((t) => t.companyId));
+  const draft: Draft | undefined = snap.drafts.find((d) => d.id === top?.draftId) ?? snap.drafts.find((d) => !held.has(d.companyId));
+  const focusGuess = draft?.companyId ?? top?.companyId ?? null;
+
+  // the drain beat: the first serving-engineer river that forms before the freeze (the focus company's, if it has one)
+  const drainEdge = (from: string, to: string) => snap.graph.edges.find((e) => e.mechanism === 'TALENT_DRAIN' && e.to === from && e.from === to) ?? null;
+  const formDayOf = (from: string, to: string, days: number[]): number | null => {
+    for (let i = RIVER_MIN - 1; i < days.length; i++) if (days[i] - days[i - RIVER_MIN + 1] <= 90) return days[i];
+    return drainEdge(from, to) && days.length >= 2 ? days[days.length - 1] : null;
+  };
+  let drainKey: string | null = null;
+  let dDrain: number | null = null;
+  {
+    const byPair = new Map<string, number[]>();
+    for (const m of moves) if (m.serving && m.day <= dFreeze) byPair.set(`${m.from}>${m.to}`, [...(byPair.get(`${m.from}>${m.to}`) ?? []), m.day]);
+    for (const [key, days] of byPair) {
+      const [from, to] = key.split('>');
+      const fd = formDayOf(from, to, days);
+      if (fd === null || fd <= d0) continue;
+      const better = dDrain === null || (from === focusGuess && !drainKey?.startsWith(`${focusGuess}>`)) || (fd < dDrain && !drainKey?.startsWith(`${focusGuess}>`));
+      if (better) { drainKey = key; dDrain = fd; }
+    }
+  }
+
+  // time mapping: piecewise-linear segments of (story seconds -> day); holds have d0 === d1
+  const segs: Seg[] = [];
+  let tt = 0;
+  const seg = (dur: number, a: number, b: number) => { segs.push({ s0: tt, s1: tt + dur, d0: a, d1: b }); tt += dur; };
+  seg(INTRO, d0, d0);
+  let sDrain0: number | null = null, sDrain1: number | null = null;
+  if (dDrain !== null) {
+    seg(ACT1 * (dDrain - d0) / (dFreeze - d0), d0, dDrain);
+    sDrain0 = tt; seg(DRAIN_HOLD, dDrain, dDrain); sDrain1 = tt;
+    seg(Math.max(0.7, ACT1 * (dFreeze - dDrain) / (dFreeze - d0)), dDrain, dFreeze);
+  } else seg(ACT1, d0, dFreeze);
+  const sSee0 = INTRO;
+  const sFreeze = tt;
+  if (replay) seg(FREEZE_HOLD, dFreeze, dFreeze); else seg(0.8, dFreeze, dFreeze);
+  const sForward0 = tt;
+  if (replay) seg(ACT2, dFreeze, dEnd);
+  const sEnd = tt;
+  const sScore = sEnd;
+  const sZoom = replay ? sScore + SCORE_HOLD : sEnd + 0.6;
+  const sLetter = sZoom + ZOOM;
+  const sOfDay = (day: number): number => {
+    if (day <= d0) return sSee0;
+    for (const g of segs) if (g.d1 > g.d0 && day >= g.d0 && day <= g.d1) return g.s0 + ((day - g.d0) / (g.d1 - g.d0)) * (g.s1 - g.s0);
+    return day <= dFreeze ? sFreeze : sEnd;
+  };
+  for (const m of moves) m.sArrive = sOfDay(m.day);
 
   // ---- companies ----
   const ids = new Set<string>();
@@ -215,14 +256,11 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
   } : null;
 
   // ---- letter ----
-  const top = [...snap.targets].filter((t) => !t.hold?.reasons?.length).sort((a, b) => a.rank - b.rank)[0];
-  const held = new Set(snap.targets.filter((t) => t.hold?.reasons?.length).map((t) => t.companyId));
-  const draft: Draft | undefined = snap.drafts.find((d) => d.id === top?.draftId) ?? snap.drafts.find((d) => !held.has(d.companyId));
   const focusId = draft?.companyId ?? top?.companyId ?? needs[0]?.companyId ?? null;
   let letter: FlowLetter | null = null;
   if (focusId && byId.has(focusId)) {
     const tgt = snap.targets.find((t) => t.companyId === focusId);
-    let t = sLetter + 0.5;
+    let t = sLetter + 0.25;
     const mk = (text: string, status: FlowSentence['status'], evidence: Evidence[], note?: string): FlowSentence => {
       const dur = status === 'cited' ? SENTENCE : status === 'removed' ? SENTENCE * 0.9 : SENTENCE * 0.6;
       const s: FlowSentence = { text, status, evidence, note, sStart: t, sLand: t + (status === 'cited' ? 0.8 : 0.45) };
@@ -249,25 +287,33 @@ export function buildModel(snap: RunSnapshot, hints?: Record<string, { x: number
     return {
       mode: replay ? 'replay' : 'live', fixture: snap.dataMode === 'fixture', companies, byId, moves: validMoves, rivers,
       needs, links, shocks, predictions, letter, focusId, filterIds, score, d0, dFreeze, dEnd,
-      sSee0, sFreeze, sForward0, sEnd, sScore, sZoom, sLetter, total, edgeById,
+      sSee0, sFreeze, sForward0, sEnd, sScore, sZoom, sLetter, total, edgeById, segs, sDrain0, sDrain1, drainKey,
     };
   }
 }
 
 /** Date (as a day number, fractional) shown on the clock at story second s. */
 export function dayAt(m: FlowModel, s: number): number {
-  if (s <= m.sSee0) return m.d0;
-  if (s <= m.sFreeze) return m.d0 + ((s - m.sSee0) / (m.sFreeze - m.sSee0)) * (m.dFreeze - m.d0);
-  if (m.mode === 'live' || s <= m.sForward0) return m.dFreeze;
-  if (s <= m.sEnd) return m.dFreeze + ((s - m.sForward0) / (m.sEnd - m.sForward0)) * (m.dEnd - m.dFreeze);
-  return m.dEnd;
+  for (const g of m.segs) if (s >= g.s0 && s <= g.s1) return g.s1 > g.s0 ? g.d0 + ((s - g.s0) / (g.s1 - g.s0)) * (g.d1 - g.d0) : g.d1;
+  return s < 0 ? m.d0 : m.mode === 'live' ? m.dFreeze : m.dEnd;
 }
 
 export function sAtDay(m: FlowModel, day: number): number {
   if (day <= m.d0) return m.sSee0;
-  if (day <= m.dFreeze) return m.sSee0 + ((day - m.d0) / (m.dFreeze - m.d0)) * (m.sFreeze - m.sSee0);
-  if (m.mode === 'live') return m.sFreeze;
-  return m.sForward0 + ((Math.min(day, m.dEnd) - m.dFreeze) / (m.dEnd - m.dFreeze)) * (m.sEnd - m.sForward0);
+  for (const g of m.segs) if (g.d1 > g.d0 && day >= g.d0 && day <= g.d1) return g.s0 + ((day - g.d0) / (g.d1 - g.d0)) * (g.s1 - g.s0);
+  return day <= m.dFreeze ? m.sFreeze : m.sEnd;
+}
+
+/** Chapter (1-based) and chapter count for the narrative caption. */
+export function chapterAt(m: FlowModel, s: number): { n: number; of: number } {
+  const of = m.mode === 'replay' ? 5 : 3;
+  const c2 = m.sDrain0 !== null ? m.sDrain0 - 0.15 : m.sFreeze;
+  if (s < c2) return { n: 1, of };
+  if (s < m.sFreeze) return { n: 2, of };
+  if (m.mode === 'live') return { n: s < m.sZoom ? 2 : 3, of };
+  if (s < m.sForward0) return { n: 3, of };
+  if (s < m.sZoom) return { n: 4, of };
+  return { n: 5, of };
 }
 
 export function phaseAt(m: FlowModel, s: number): Phase {

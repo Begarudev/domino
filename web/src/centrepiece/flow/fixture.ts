@@ -39,14 +39,14 @@ export const FIXTURE_LAYOUT: Record<string, { x: number; y: number }> = {
   [CO.kestrel]: { x: 0.6, y: 0.44 },
   [CO.orbital]: { x: 0.31, y: 0.36 },
   [CO.tessera]: { x: 0.3, y: 0.78 },
-  [CO.lumen]: { x: 0.52, y: 0.86 },
+  [CO.lumen]: { x: 0.58, y: 0.88 },
   [CO.nimbus]: { x: 0.1, y: 0.18 },
   [CO.quill]: { x: 0.08, y: 0.62 },
   [CO.sable]: { x: 0.85, y: 0.26 },
   [CO.pallas]: { x: 0.9, y: 0.7 },
   [CO.vireo]: { x: 0.46, y: 0.08 },
   [CO.corvid]: { x: 0.72, y: 0.9 },
-  [CO.ibis]: { x: 0.16, y: 0.94 },
+  [CO.ibis]: { x: 0.05, y: 0.88 },
   [CO.marlin]: { x: 0.96, y: 0.04 },
   [CO.fennel]: { x: 0.7, y: 0.07 },
   [CO.halden]: { x: 0.45, y: 0.62 },
@@ -161,9 +161,9 @@ const nodes: GraphNode[] = [
   node(CO.kestrel, 0, 'Inference platform, already hiring for it', 0.55, ['DIRECT'], false, [...drainIds, 'ev_k4']),
   node(CO.lumen, 0, null, null, [], false, ['ev_l1', 'ev_l2']),
   node(CO.orbital, 1, 'Managed inference: buy, since the serving team is gone', 0.81, ['TALENT_DRAIN', 'CAPITAL'], true, [...drainIds, 'ev_o1', 'ev_o2', 'ev_o4', 'ev_o3']),
-  node(CO.tessera, 1, 'Migrate off Lumen Serve before 31 Jan', 0.74, ['DISPLACEMENT', 'CAPITAL'], true, ['ev_t1', 'ev_l1', 'ev_l2', 'ev_t2']),
-  node(CO.nimbus, 2, 'Managed inference instead of a GPU hire', 0.58, ['CONTAGION'], true, ['ev_n1', 'ev_n3']),
-  node(CO.quill, 2, 'Possibly the same migration as its peer', 0.34, ['CONTAGION'], true, ['ev_q1'], 'unverifiable'),
+  node(CO.tessera, 1, 'Migrate off Lumen Serve by 31 Jan', 0.74, ['DISPLACEMENT', 'CAPITAL'], true, ['ev_t1', 'ev_l1', 'ev_l2', 'ev_t2']),
+  node(CO.nimbus, 2, 'Managed inference, not a GPU hire', 0.58, ['CONTAGION'], true, ['ev_n1', 'ev_n3']),
+  node(CO.quill, 2, 'The same migration as its peer', 0.34, ['CONTAGION'], true, ['ev_q1'], 'unverifiable'),
 ];
 
 const edges: GraphEdge[] = [
@@ -210,8 +210,8 @@ const draft: Draft = {
 
 const targets: Target[] = [
   { companyId: CO.orbital, rank: 1, score: 0.84, confidence: 0.81, need: 'Managed inference: buy, since the serving team is gone', mechanisms: ['TALENT_DRAIN', 'CAPITAL'], netNew: true, whyNow: '3 serving engineers left in 18 days; no open serving roles', whyNowDate: '2026-08-22', decider: { personId: 'pe_anika', name: 'Anika Rao', title: 'VP Engineering', tenureSince: '2025-03-01', reason: 'Owns the platform and infra budget; the serving team reported to her.', evidenceIds: ['ev_d1'] }, path: null, draftId: 'dr_orbital' },
-  { companyId: CO.tessera, rank: 2, score: 0.77, confidence: 0.74, need: 'Migrate off Lumen Serve before 31 Jan', mechanisms: ['DISPLACEMENT', 'CAPITAL'], netNew: true, whyNow: 'Its provider was acquired and sunsets new workloads', whyNowDate: '2026-08-12', decider: null, path: null, draftId: null },
-  { companyId: CO.nimbus, rank: 3, score: 0.6, confidence: 0.58, need: 'Managed inference instead of a GPU hire', mechanisms: ['CONTAGION'], netNew: true, whyNow: 'Peer lost its serving team; closed its own GPU post', whyNowDate: '2026-08-20', decider: null, path: null, draftId: null },
+  { companyId: CO.tessera, rank: 2, score: 0.77, confidence: 0.74, need: 'Migrate off Lumen Serve by 31 Jan', mechanisms: ['DISPLACEMENT', 'CAPITAL'], netNew: true, whyNow: 'Its provider was acquired and sunsets new workloads', whyNowDate: '2026-08-12', decider: null, path: null, draftId: null },
+  { companyId: CO.nimbus, rank: 3, score: 0.6, confidence: 0.58, need: 'Managed inference, not a GPU hire', mechanisms: ['CONTAGION'], netNew: true, whyNow: 'Peer lost its serving team; closed its own GPU post', whyNowDate: '2026-08-20', decider: null, path: null, draftId: null },
   { companyId: CO.kestrel, rank: 4, score: 0.52, confidence: 0.55, need: 'Inference platform, already hiring for it', mechanisms: ['DIRECT'], netNew: false, whyNow: "Posted 'Inference Platform Engineer'", whyNowDate: '2026-08-18', decider: null, path: null, draftId: null },
 ];
 
