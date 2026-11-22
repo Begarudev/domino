@@ -37,8 +37,12 @@ export function rulesRegistry(store: Store): RuleCard[] {
       statement: 'At a company with 20–5,000 staff: ≥ 2 conclusive dated departures in one role family within 90 days, and no dated replacement job post or hire for that family within 30 days of the last departure.',
       thresholds: ['≥ 2 departures in 90 days', 'no replacement post or hire within 30 days', '20–5,000 staff', 'month-level dates as intervals'],
       guards, lockedAt: '22 Nov 2026 14:08 IST, after seeing live departure counts and before any replay outcome; month intervals 14:14 IST',
+      // Same split as the funnel: 'watch' counts groups with 2+ departures whose check couldn't be verified; the
+      // watchlist is companies short of the threshold (1 departure so far, or a month on the window edge).
       counts: [{ label: 'open', value: count('open', false) }, { label: 'provisional', value: count('open', true) },
-        { label: 'held', value: count('held') }, { label: 'watch', value: count('watch') }] },
+        { label: 'held', value: count('held') },
+        { label: 'watch (check unverified)', value: openings.filter(row => row.status === 'watch' && (row.watch?.have ?? 0) >= 2).length },
+        { label: 'watchlist (under 2 departures)', value: openings.filter(row => row.status === 'watch' && (row.watch?.have ?? 0) < 2).length }] },
     { id: 'R1', name: 'Talent drain (cross-company)', sourceRunId: analysis?.id ?? null,
       statement: 'Company A loses ≥ 3 conclusive dated infra/serving engineers in 90 days, the 3rd inside the last 30 days; A needs serving capacity it cannot rebuild in-house fast.',
       thresholds: ['≥ 3 departures in 90 days', '3rd within 30 days', 'A ≤ 5,000 staff', 'previous role infra/serving'],
