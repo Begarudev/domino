@@ -1,8 +1,8 @@
 // Plays a mock Scenario as a StoredEvent stream and simulates the server's side effects:
 // SIGKILL + resume from checkpoint, asks, approvals through an idempotent outbox, limits, re-check.
-import type { ApprovalKind, BudgetState, Evidence, OutboxAction, RunEvent, RunLimits, StepName, StoredEvent } from '../../shared/types.ts';
-import { STEP_ORDER } from '../../shared/types.ts';
-import type { Scenario } from '../src/mock/events.ts';
+import type { ApprovalKind, BudgetState, Evidence, OutboxAction, RunEvent, RunLimits, StepName, StoredEvent } from '../../../shared/types.ts';
+import { STEP_ORDER } from '../../../shared/types.ts';
+import type { Scenario } from './events.ts';
 
 type Listener = (events: StoredEvent[]) => void;
 
@@ -217,6 +217,14 @@ export class MockRun {
         sink: `data/outbox/${ap.key}.${ap.kind === 'send_message' ? 'eml' : 'ics'}`, executedAt: new Date().toISOString(),
         summary: ap.kind === 'send_message' ? 'Message written to the team test inbox' : 'Meeting hold written as .ics (test mode)',
       };
+      // One approval replays the receiver-side guard: the send was interrupted after the test inbox
+      // accepted it, so the retry gets 'already_delivered' and nothing is delivered twice.
+      if (approvalId === 'ap_nimbus_msg') {
+        evs.push({ type: 'log', level: 'warn', message: 'Send interrupted after the test inbox accepted it; retrying with the same key' });
+        evs.push({ type: 'delivery.receipt', approvalId, receipt: { idempotencyKey: ap.key, status: 'already_delivered', receivedAt: new Date().toISOString() } });
+      } else if (ap.kind === 'send_message') {
+        evs.push({ type: 'delivery.receipt', approvalId, receipt: { idempotencyKey: ap.key, status: 'delivered', receivedAt: new Date().toISOString() } });
+      }
       evs.push({ type: 'action.executed', action });
     }
     this.send(...evs);

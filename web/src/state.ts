@@ -2,7 +2,7 @@
 // Every array write is an upsert by id, so re-applying an event the snapshot
 // already reflects (snapshot fetched, then stream replayed from seq 0) is harmless.
 import type {
-  Approval, BudgetState, Draft, Evidence, GraphEdge, GraphNode, LedgerEntry, ReplayOutcome, RunSnapshot,
+  Approval, BudgetState, DeliveryReceipt, Draft, Evidence, GraphEdge, GraphNode, LedgerEntry, ReplayOutcome, RunSnapshot,
   StepName, StepState, StoredEvent, Target,
 } from '../../shared/types.ts';
 import { STEP_ORDER } from '../../shared/types.ts';
@@ -47,6 +47,12 @@ export interface UIState {
   cascadeEpoch: number;
   /** replay outcomes as they stream in, before replay.scored lands */
   outcomes: ReplayOutcome[];
+  /** approvalId -> receipt from the test-inbox receiver */
+  receipts: Record<string, DeliveryReceipt>;
+  /** tool calls that fell back from live to cached responses */
+  fallbacks: number;
+  /** every event so far in seq order (the centrepiece contract hands these to the slot) */
+  events: StoredEvent[];
 }
 
 export function emptyBudget(): BudgetState {
@@ -72,7 +78,7 @@ export function initialState(snap: RunSnapshot): UIState {
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
   return {
     snap: normalizeSnapshot(snap), lastSeq: 0, seen: {}, timeline: [], durations: {}, currentStep: null,
-    actionNotes: {}, outcomes: snap.replay?.outcomes ?? [], cascadeEpoch: cascadeDone && snap.graph.edges.length ? 1 : 0,
+    actionNotes: {}, receipts: {}, fallbacks: 0, events: [], outcomes: snap.replay?.outcomes ?? [], cascadeEpoch: cascadeDone && snap.graph.edges.length ? 1 : 0,
   };
 }
 
@@ -108,7 +114,7 @@ function setStep(steps: StepState[], step: StepName, patch: Partial<StepState>):
 }
 
 const companyName = (snap: RunSnapshot, id: string) =>
-  snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name ?? id;
+  snap.companies.find((c) => c.id === id)?.name ?? snap.graph.nodes.find((n) => n.id === id)?.name ?? null;
 
 const secs = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
@@ -125,6 +131,8 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
   const durations = { ...state.durations };
   let actionNotes = state.actionNotes;
   let outcomes = state.outcomes;
+  let receipts = state.receipts;
+  let fallbacks = state.fallbacks;
   const items: Omit<TimelineItem, 'seq' | 'ts'>[] = [];
   const note = (tone: Tone, text: string, extra: Partial<TimelineItem> = {}) =>
     items.push({ step: currentStep, tone, text, ...extra });
@@ -156,6 +164,7 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
       note('retry', `${ev.endpoint} ${RETRY_REASON[ev.reason] ?? ev.reason}${ev.injected ? ' (injected)' : ''}, retried in ${secs(ev.backoffMs)}`, { detail: `attempt ${ev.attempt + 1}` });
       break;
     case 'tool.fallback':
+      fallbacks += 1;
       note('warn', `${ev.endpoint} fell back from ${ev.from} to ${ev.to}`, { detail: ev.reason });
       break;
     case 'ledger.entry':
@@ -202,7 +211,7 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
       snap.targets = snap.targets.map((t) => (t.companyId === ev.draft.companyId ? { ...t, draftId: ev.draft.id } : t));
       break;
     case 'claim.unverifiable':
-      note('warn', `Can't verify: ${ev.claim}`, { detail: `${companyName(snap, ev.companyId)}: ${ev.reason}` });
+      note('warn', `Can't verify: ${ev.claim}`, { detail: companyName(snap, ev.companyId) ? `${companyName(snap, ev.companyId)}: ${ev.reason}` : ev.reason });
       break;
     case 'ask.requested':
       snap.asks = upsert(snap.asks, ev.ask, (a) => a.id);
@@ -230,6 +239,16 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
       note('retry', `Duplicate blocked, key ${shortKey(ev.idempotencyKey)}`, { step: 'approval_gate', detail: ev.note });
       break;
     }
+    case 'delivery.receipt':
+      receipts = { ...receipts, [ev.approvalId]: ev.receipt };
+      note(ev.receipt.status === 'already_delivered' ? 'ok' : 'ok',
+        ev.receipt.status === 'already_delivered' ? `Test inbox already had key ${shortKey(ev.receipt.idempotencyKey)}, skipped` : `Test inbox received key ${shortKey(ev.receipt.idempotencyKey)}`,
+        { step: 'approval_gate', detail: ev.receipt.status === 'already_delivered' ? 'Retry after an interrupted send; the receiver blocked the second delivery' : undefined });
+      break;
+    case 'target.held':
+      snap.targets = snap.targets.map((t): Target => (t.companyId === ev.companyId ? { ...t, hold: { reasons: ev.reasons } } : t));
+      note('warn', `${companyName(snap, ev.companyId) ?? ev.companyId} put on hold`, { detail: ev.reasons.join('; ') });
+      break;
     case 'engine.started':
       snap.engine = { ...snap.engine, pid: ev.pid, alive: true };
       break;
@@ -269,8 +288,8 @@ export function reduce(state: UIState, stored: StoredEvent): UIState {
     : state.timeline;
 
   return {
-    ...state, snap, currentStep, durations, actionNotes, timeline, cascadeEpoch, outcomes,
-    lastSeq: Math.max(state.lastSeq, stored.seq), seen: { ...state.seen, [stored.seq]: true },
+    ...state, snap, currentStep, durations, actionNotes, timeline, cascadeEpoch, outcomes, receipts, fallbacks,
+    events: [...state.events, stored], lastSeq: Math.max(state.lastSeq, stored.seq), seen: { ...state.seen, [stored.seq]: true },
   };
 }
 

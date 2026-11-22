@@ -10,7 +10,7 @@ import { MissionControl } from '../src/centrepiece/mission/index.ts';
 import type { MissionControls } from '../src/centrepiece/mission/index.ts';
 import { MAIN_REQUEST, REPLAY_REQUEST, buildScenario } from '../src/mock/events.ts';
 import { emptySnapshot, initialState, uiReducer } from '../src/state.ts';
-import { MockRun } from './mockPlayer.ts';
+import { MockRun } from '../src/mock/player.ts';
 
 const params = new URLSearchParams(location.search);
 const SPEED = Number(params.get('speed') ?? '1') || 1;
