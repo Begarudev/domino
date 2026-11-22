@@ -430,12 +430,6 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
       h.pool.color.copy(col); h.pool.opacity = THREE.MathUtils.lerp(h.pool.opacity, pool, 0.1);
     }
 
-    // spacer colours: a lane takes the colour of what happened at its end
-    if (st.spacerColorDirty && sp) {
-      st.spacerColorDirty = false;
-      const mesh = (sp[0] as unknown as { __mesh?: THREE.InstancedMesh })?.__mesh;
-      void mesh;
-    }
 
     // ---- camera
     cameraStep(delta);
@@ -461,7 +455,6 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
     const spanX = layout.bounds.maxX - layout.bounds.minX;
     const spanZ = layout.bounds.maxZ - layout.bounds.minZ;
     const wantPos = tmp.v; const wantLook = tmp.w;
-    const overviewDist = Math.max(spanX / aspect * 1.6, spanZ * 1.05) + 6;
     if (H.phase === 'score' || H.phase === 'done' || reducedMotion) {
       // fit the table into the left ~66% of the frame; the score column owns the rest
       const tanH = Math.tan(THREE.MathUtils.degToRad(17));

@@ -1,4 +1,5 @@
-// Centrepiece slot contract (docs/CONTRACT.md, "Centrepiece slot (web)").
+// Centrepiece slot contract (docs/CONTRACT.md, "Centrepiece slot (web)"). The web app owns run flow, approvals,
+// ledger, drawer and plumbing; a centrepiece only renders and reports selections.
 import type { JSX } from 'react';
 import type { RunSnapshot, StoredEvent } from '../../../shared/types.ts';
 

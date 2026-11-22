@@ -239,7 +239,7 @@ export function buildLayout(snap: RunSnapshot): TableLayout {
   if (snap.baseline.hiringFilterCompanyIds.length && isReplay) {
     const ids = snap.baseline.hiringFilterCompanyIds;
     baselineZ = -targetZSpread / 2 - 2.0;
-    const n = ids.length; const gap = 1.85;
+    const gap = 1.85;
     ids.forEach((cid, i) => {
       const c = snap.companies.find((x) => x.id === cid);
       const oc = outcomeFor(cid, 'baseline');
