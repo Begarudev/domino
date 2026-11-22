@@ -25,7 +25,7 @@ const roleFields = [
 ];
 const deciderRoleFields = ['position_id', 'name', 'title', 'start_date', 'end_date', 'crustdata_company_id', 'company_website'];
 const roleSchema = z.object({
-  position_id: str, name: str, title: str, start_date: str, end_date: str, is_default: z.boolean().nullish(),
+  position_id: z.union([z.string(), z.number()]).nullish().transform(v => v == null ? v : String(v)), name: str, title: str, start_date: str, end_date: str, is_default: z.boolean().nullish(),
   crustdata_company_id: int, company_website: str, company_professional_network_profile_url: str,
   company_professional_network_industry: str, company_industries: strs, company_headcount_latest: int,
   company_headquarters_country: str,
