@@ -74,7 +74,17 @@ export function Scoreboard({ view, animate, nameOf, onSelect, fixture, reducedMo
 
   return (
     <div className={`mc-score${done ? ' is-done' : ''}`}>
-      <header className="mc-score__head">
+      {done && final && (() => {
+        const filterIds = new Set(view.outcomes.filter((o) => inLane(o, 'baseline_first_order')).map((o) => o.companyId));
+        const onlyOurs = view.outcomes.filter((o) => inLane(o, 'domino') && o.hit && !filterIds.has(o.companyId)).length;
+        return (
+          <div className="mc-score__verdict">
+            <strong>{onlyOurs} account{onlyOurs === 1 ? '' : 's'} the hiring filter missed came true</strong>
+            <span>{final.domino.hits} of {final.domino.predicted} DOMINO predictions confirmed{final.domino.medianLeadDays != null ? ` · median ${final.domino.medianLeadDays} days ahead of the post` : ''} · hiring filter {final.baselineFirstOrder.hits} of {final.baselineFirstOrder.predicted}</span>
+          </div>
+        );
+      })()}
+      <header className={`mc-score__head${done ? ' is-small' : ''}`}>
         <div className="mc-score__clock">
           <span className="mc-score__k">{p === 0 ? 'Clock frozen at' : done ? 'Scored up to' : 'Replaying'}</span>
           <span className="mc-score__date">{day(isoFromDay(clockDay), true)}</span>

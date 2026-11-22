@@ -75,6 +75,14 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
   useEffect(() => cancel, []);
 
   const state = gate.sent ? 'sent' : 'pending';
+  const assembleLive = gate.requestedSeq > settledSeq && !reducedMotion;
+  const [ready, setReady] = useState(!assembleLive);
+  useEffect(() => {
+    if (!assembleLive) { setReady(true); return; }
+    setReady(false);
+    const t = setTimeout(() => setReady(true), 600 + gate.draft.checks.length * 550 + 700);
+    return () => clearTimeout(t);
+  }, [gate.requestedSeq]);
   // After the seal lands, the band shrinks to a receipt strip that keeps "Approve again" in reach.
   const [sealed, setSealed] = useState(!!gate.sent && !sentLive);
   useEffect(() => {
@@ -125,14 +133,15 @@ export function Gate({ gate, settledSeq, onApprove, reducedMotion }: {
               <button
                 type="button"
                 className={`mc-hold${holding ? ' is-holding' : ''}`}
+                disabled={!ready}
                 style={{ ['--hold' as string]: `${HOLD_MS}ms` }}
                 onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel}
                 onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) start(); }}
                 onKeyUp={cancel}
               >
                 <i className="mc-hold__fill" />
-                <span className="mc-hold__label">{holding ? 'Keep holding' : 'Hold to approve'}</span>
-                <span className="mc-hold__sub">Sends once to the team test inbox</span>
+                <span className="mc-hold__label">{!ready ? 'Assembling draft…' : holding ? 'Keep holding' : 'Hold to approve'}</span>
+                <span className="mc-hold__sub">{ready ? 'Sends once to the team test inbox' : 'Checking every sentence against its source'}</span>
               </button>
             ) : (
               <div className="mc-gate__await"><strong>Waiting for a person</strong><span>Approve it in the Drafts panel</span></div>

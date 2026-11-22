@@ -5,12 +5,12 @@ import type { StepName } from '../../../../shared/types.ts';
 import { STEP_ORDER } from '../../../../shared/types.ts';
 import type { CentrepieceProps } from '../contract.ts';
 import { ChainStage, LooseClaim } from './Chain.tsx';
-import { Desk } from './Desk.tsx';
+import { Desk, SourceList } from './Desk.tsx';
 import { Gate } from './Gate.tsx';
 import { CallStream, Gauge, StepRail } from './Instruments.tsx';
 import { Scoreboard } from './Scoreboard.tsx';
 import {
-  STEP_SHORT, chainRows, companyName, day, deskView, engineView, gateView, looseUnverifiable, narrate, replayView, streamRows,
+  STEP_SHORT, chainRows, sourceKind, companyName, day, deskView, engineView, gateView, looseUnverifiable, narrate, replayView, streamRows,
 } from './model.ts';
 import './mission.css';
 
@@ -106,13 +106,21 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
   if (!current) for (const { event: ev } of events) if (ev.type === 'step.started') current = ev.step;
   const doneCount = snap.steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
   const stepIdx = current ? STEP_ORDER.indexOf(current) + 1 : 0;
-  const statusLine = snap.status === 'running' && current ? `${STEP_SHORT[current]}` : STATUS_LINE[snap.status] ?? snap.status;
+  const statusLine = snap.status === 'running' && current ? `${STEP_SHORT[current]}` : snap.status === 'awaiting_approval' && gate?.sent ? 'Sent once' : STATUS_LINE[snap.status] ?? snap.status;
 
   const isReplayRun = snap.intent?.runKind === 'replay';
   const asOf = snap.intent?.asOf ?? null;
   const nameOf = (id: string) => companyName(snap, id);
   const gateShown = view === 'run' && !!gate;
   const gatePending = gateShown && !gate?.sent;
+  // At the gate, the board shows the recipient's own chain; with none, the draft's own dated sources.
+  const gateRows = gate ? rows.filter((r) => r.edge.to === gate.draft.companyId || r.edge.from === gate.draft.companyId) : [];
+  const gateCards = gate ? gate.draft.citations.flatMap((c) => {
+    const e = gate.evidence.get(c.evidenceId);
+    if (!e) return [];
+    const [kind, kindLabel] = sourceKind(e.source.endpoint);
+    return [{ id: e.id, seq: 0, claim: `[${c.marker}] ${e.claim}`, value: e.value == null ? null : String(e.value), endpoint: e.source.endpoint, kind, kindLabel, observedAt: e.observedAt, dated: e.verifiable && !!e.observedAt, mode: e.mode }];
+  }) : [];
   const maxRows = gatePending ? (compact ? 1 : 2) : 4;
   const gateH = Math.round(height * (compact ? 0.5 : 0.44));
   const empty = rows.length === 0 && loose.length === 0;
@@ -147,7 +155,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
 
       <main className="mc-stage" key={stageKey}>
         {(() => {
-          const ch = chapterFor(view, current, snap.status, !!crashed, !!gate?.sent, rows.length > 0);
+          const ch = chapterFor(view, current, snap.status, !!crashed, !!gate?.sent, rows.length > 0, snap.dataMode);
           return (
             <div className="mc-chapter" key={ch.title}>
               {ch.n && <span className="mc-chapter__n">{ch.n}</span>}
@@ -172,7 +180,11 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
                 <p>{snap.status === 'queued' || snap.status === 'running' ? 'Pulling dated changes. The chain builds here as each link is verified.' : 'Start a run to watch the chain build.'}</p>
               </div>
             )}
-            <ChainStage rows={rows} settledSeq={settledSeq} selection={selection} onSelect={onSelect} hiringFilterView={hiringFilterView} reducedMotion={reducedMotion} maxRows={maxRows} />
+            {gatePending && gate && gateRows.length === 0 ? (
+              <SourceList title={`Dated sources behind the message to ${nameOf(gate.draft.companyId)}`} cards={gateCards} onSelect={onSelect} />
+            ) : (
+            <ChainStage rows={gatePending ? gateRows : rows} settledSeq={settledSeq} selection={selection} onSelect={onSelect} hiringFilterView={hiringFilterView} reducedMotion={reducedMotion} maxRows={maxRows} />
+            )}
             {loose.length > 0 && (
               <div className="mc-tray">
                 {loose.slice(-2).map((l) => <LooseClaim key={l.seq} claim={l.claim} reason={l.reason} animate={!reducedMotion && l.seq > settledSeq} />)}
@@ -216,7 +228,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
           <div className="mc-crash__text">
             <span className="mc-crash__sig">SIGKILL · pid {crashed.pid}</span>
             <strong>The engine died during {crashed.atStep ? STEP_SHORT[crashed.atStep] : 'start-up'}.</strong>
-            <span>{doneCount} of {STEP_ORDER.length} steps are checkpointed in SQLite. Sends go through an idempotent outbox.</span>
+            <span className="mc-crash__saved">{doneCount} of {STEP_ORDER.length} steps saved. Nothing will be re-run or re-sent.</span>
             {controls?.resume && !controls.autoResume ? (
               <button type="button" className="mc-crash__resume" onClick={() => controls.resume?.()}>Resume from the checkpoint</button>
             ) : (
@@ -230,7 +242,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
 }
 
 // Plain-language chapters so a first-time viewer always knows which part of the job this is.
-function chapterFor(view: 'run' | 'replay', step: StepName | null, status: string, crashed: boolean, gateSent: boolean, hasRows: boolean) {
+function chapterFor(view: 'run' | 'replay', step: StepName | null, status: string, crashed: boolean, gateSent: boolean, hasRows: boolean, mode: string) {
   if (crashed) return { n: null, title: 'Robustness test', sub: 'The engine was killed mid-run. Watch it come back from its last checkpoint without repeating work.' };
   if (view === 'replay') return { n: 5, title: 'Were we right?', sub: 'Clock frozen at 1 Sep with no later facts. Each prediction drops when a dated event proves it.' };
   if (status === 'awaiting_approval' || step === 'approval_gate') return gateSent
@@ -238,7 +250,10 @@ function chapterFor(view: 'run' | 'replay', step: StepName | null, status: strin
     : { n: 4, title: 'Your call', sub: 'Nothing leaves until a person approves. Every claim in the message links to a dated source.' };
   if (step === 'find_deciders' || step === 'warm_paths' || step === 'draft_messages') return { n: 3, title: 'Finding who decides and writing to them', sub: 'One person per account. The message may only say what a dated source says.' };
   if (hasRows || step === 'cascade' || step === 'rank_targets') return { n: 2, title: 'Connecting the dots', sub: 'A change at one company creates a need at another. A link needs two dated sources, or it breaks.' };
-  return { n: 1, title: 'Reading the market', sub: 'Every card is a source pulled from Crustdata just now, with the date it happened.' };
+  const sub = mode === 'live' ? 'Every card is a source pulled from Crustdata just now, with the date it happened.'
+    : mode === 'cache' ? 'Every card is a recorded Crustdata response, with the date it happened.'
+    : 'Every card is a synthetic fixture source, with the date it happened.';
+  return { n: 1, title: mode === 'cache' ? 'Reading recorded Crustdata responses' : 'Reading the market', sub };
 }
 
 function Dominoes() {

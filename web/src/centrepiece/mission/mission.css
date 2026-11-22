@@ -705,3 +705,25 @@
 /* seat C: while the gate is up, give the chain the room; DOMINO's lane reads as the subject */
 .mc.has-gate:not(.gate-sent) .mc-tray, .mc.has-gate:not(.gate-sent) .mc-chains__more, .mc.has-gate:not(.gate-sent) .mc-from { display: none; }
 .mc-lane--domino.mc-lane .mc-lane__track { background: linear-gradient(90deg, rgba(157, 176, 255, 0.07), rgba(157, 176, 255, 0.02)); border-radius: 0.4em; }
+
+/* seat A round 1 */
+.mc-srclist { flex: 1; min-height: 0; max-width: 60em; }
+.mc-srclist__cards { -webkit-mask-image: none; mask-image: none; }
+.mc .mc-hold:disabled { cursor: wait; background: #3a332d; }
+.mc-hold:disabled .mc-hold__label { font-size: 1.35em; }
+.mc-crash__saved { color: var(--ivory) !important; font-size: 1.35em !important; }
+.mc-crash__wait { font-size: 1.35em; color: var(--ivory) !important; }
+.mc-chip--cache { font-weight: 700; border-width: 0.12em; }
+.mc-desk__cards { -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent); mask-image: linear-gradient(to bottom, #000 88%, transparent); }
+.mc-src__claim { font-size: 1.06em; }
+.mc-src__date { font-size: 1.25em; }
+.mc-sig { font-size: 0.95em; }
+.mc-co__name { font-size: 1.4em; }
+.mc-score__verdict { display: flex; flex-direction: column; gap: 0.2em; animation: mc-drop-up 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.mc-score__verdict strong { font-family: 'MC Display', sans-serif; font-weight: 900; font-size: 2.6em; line-height: 0.95; color: var(--stamp-lit); }
+.mc-score__verdict span { font-size: 1.05em; color: var(--ivory); }
+.mc-score__head.is-small .mc-score__date { font-size: 1.6em; }
+.mc--compact .mc-score__verdict strong { font-size: 1.7em; }
+/* the broken link resolves faster and its reason appears once the shards are clear */
+.mc-row.is-live .mc-need--broken .mc-shard { animation-duration: 0.8s; }
+.mc-row.is-live .mc-need--broken .mc-need__ghost { animation: mc-fade 0.35s ease-out calc(var(--d) + 2050ms) both; }

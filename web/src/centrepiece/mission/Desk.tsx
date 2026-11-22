@@ -35,6 +35,18 @@ function Card({ card, live, onSelect }: { card: SourceCard; live: boolean; onSel
   );
 }
 
+/** The dated sources behind one draft, as cards (used at the gate when the recipient has no chain row). */
+export function SourceList({ cards, title, onSelect }: { cards: SourceCard[]; title: string; onSelect: (s: Selection) => void }) {
+  return (
+    <section className="mc-desk__read mc-srclist" aria-label={title}>
+      <header className="mc-desk__head"><span>{title}</span></header>
+      <div className="mc-desk__cards mc-srclist__cards">
+        {cards.map((c) => <Card key={c.id} card={c} live={false} onSelect={onSelect} />)}
+      </div>
+    </section>
+  );
+}
+
 export function Desk({ desk, settledSeq, onSelect }: { desk: DeskView; settledSeq: number; onSelect: (s: Selection) => void }) {
   const cards = desk.cards.slice(-8).reverse();
   return (
