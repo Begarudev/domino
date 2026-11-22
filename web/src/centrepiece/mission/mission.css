@@ -727,3 +727,6 @@
 /* the broken link resolves faster and its reason appears once the shards are clear */
 .mc-row.is-live .mc-need--broken .mc-shard { animation-duration: 0.8s; }
 .mc-row.is-live .mc-need--broken .mc-need__ghost { animation: mc-fade 0.35s ease-out calc(var(--d) + 2050ms) both; }
+
+.mc-crash__text { max-width: 44em; }
+.mc-crash__text .mc-crash__wait { font-size: 1.35em; color: var(--brass) !important; }
