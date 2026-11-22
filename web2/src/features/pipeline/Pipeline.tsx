@@ -43,21 +43,6 @@ function useFunnel() {
 const secs = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : ms < 60_000 ? `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s` : `${Math.round(ms / 60_000)} min`);
 const STATE_WORD: Record<NodeState, string> = { done: 'Done', waiting: 'Waiting on you', empty: 'Not reached' };
 
-// Mini chart: the scan funnel, each stage a bar scaled against stage 1. Hover names the stage and its count.
-function FunnelBars({ stages }: { stages: FunnelStage[] }) {
-  const max = Math.max(1, ...stages.map((s) => s.count));
-  const w = 10; const gap = 3; const h = 24;
-  return (
-    <svg className="pipe-bars" width={stages.length * (w + gap)} height={h} viewBox={`0 0 ${stages.length * (w + gap)} ${h}`} role="img"
-      aria-label={`Scan funnel: ${stages.map((s) => `${s.label} ${s.count}`).join(', ')}`}>
-      {stages.map((s, i) => {
-        const bh = s.count ? Math.max(2, (s.count / max) * h) : 1;
-        return <rect key={s.id} x={i * (w + gap)} y={h - bh} width={w} height={bh} rx={1.5} className={s.count ? 'on' : 'off'}><title>{`${s.label}: ${fmtInt(s.count)}`}</title></rect>;
-      })}
-    </svg>
-  );
-}
-
 export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyId: string; tab: CompanyTab }) {
   const funnel = useFunnel();
   const steps = useRunSel((v) => v.ui.snap?.steps);
@@ -81,7 +66,7 @@ export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyI
 
     const rulesWhy = read == null
       ? 'nothing has been read in this scan yet'
-      : `this company’s moves among the ${fmtInt(read)} read don’t meet Rule O1 (2+ conclusive departures in one role family, 90 days, no replacement)`;
+      : `none of its moves among the ${fmtInt(read)} read met O1 (needs 2+ departures in one role family, 20–5,000 staff)`;
     const list: Node[] = [
       { key: 'read', label: 'Read', does: 'Pull dated job moves from Crustdata', big: read, small: 'moves read', tab: 'reading', tabName: 'Reading log',
         state: st(read), why: read == null ? 'the scan has not read anything yet' : undefined, steps: STEPS.read, scope: 'whole scan' },
@@ -114,54 +99,49 @@ export function Pipeline({ desk, companyId, tab }: { desk: CompanyDesk; companyI
     return end >= start ? secs(end - start) : null;
   };
 
-  const stages = funnel.data?.stages ?? [];
-  const reached = nodes.filter((n) => n.state !== 'empty').length;
+
+  // Where the run stopped: the first step that is waiting on you or was not reached. Its reason is the sentence.
+  const stop = nodes.find((n) => n.state !== 'done');
+  const sent = nodes[nodes.length - 1];
+  const sentence = !stop
+    ? `Delivered once · ${fmtInt(sent.big ?? 0)} ${sent.big === 1 ? 'intro' : 'intros'} approved by you`
+    : stop.state === 'waiting'
+      ? `Waiting on you at ${stop.label}: ${fmtInt(stop.big ?? 0)} ${stop.small}; nothing sends without your approval`
+      : `Stopped at ${stop.label}: ${stop.why ?? 'not reached in this scan'}`;
 
   return (
     <nav className="pipe" aria-label="What’s happening in this run" data-testid="pipeline">
-      <div className="pipe-head">
-        <span className="pipe-h">What’s happening</span>
-        <span className="pipe-sum">{reached} of {nodes.length} steps reached</span>
-        <button type="button" className="pipe-how" aria-expanded={how} onClick={() => setHow((v) => !v)}>How this is computed</button>
-      </div>
-      {how && (
-        <p className="pipe-howtxt">
-          Read counts the whole scan: stage 1 of <code>GET /api/openings/funnel</code> (Crustdata person search, dated). Rules, Verify, Draft,
-          Approve and Sent count this company’s desk: openings fired or held by the O1 rule and its guards, clauses the verifier marked met or
-          can’t verify, and intros by status. Timings come from the run journal. Click a step to open its tab; “trace” opens that phase
-          of <code>GET /api/runs/:id/summary</code>.
-        </p>
-      )}
       <ol>
         {nodes.map((n, i) => {
           const to = { page: 'company', id: companyId, tab: n.tab } as const;
-          const tr = runId ? ({ page: 'trace', id: companyId, runId, phase: n.key } as const) : null;
           const t = timing(n.steps);
+          const tone = n.state === 'empty' ? 'off' : n.state === 'waiting' ? 'wait' : n.key === 'sent' ? 'sent' : 'done';
           return (
-            <li key={n.key} className={`pipe-n pipe-${n.key} is-${n.state}`} style={{ animationDelay: `${i * 50}ms` }} aria-current={tab === n.tab ? 'step' : undefined}>
-              <a className="pipe-main" href={href(to)} onClick={(e) => { e.preventDefault(); if (tab !== n.tab) navigate(to); }} data-testid={`pipe-${n.key}`}
-                title={`${n.label} (${n.scope}). Opens ${n.tabName}.`}>
-                <span className="pipe-top">
-                  <span className="pipe-dot" aria-hidden>{n.state === 'done' ? <svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" /></svg> : null}</span>
-                  <span className="pipe-l">{n.label}</span>
-                  <span className={`pipe-chip is-${n.state}`}>{STATE_WORD[n.state]}</span>
-                  {t && <span className="pipe-t">{t}</span>}
-                </span>
-                <span className="pipe-does">{n.does}</span>
-                <span className="pipe-c">
-                  <b>{n.big == null ? '–' : fmtInt(n.big)}</b> {n.small}
-                  {n.key === 'read' && stages.length > 1 && <FunnelBars stages={stages} />}
-                </span>
-                {n.state !== 'done' && n.why && <span className="pipe-why">{n.state === 'waiting' ? 'Next: ' : 'Because '}{n.why}.</span>}
+            <li key={n.key} className={`pipe-n is-${tone}${stop === n ? ' is-stop' : ''}`} style={{ animationDelay: `${i * 40}ms` }} aria-current={tab === n.tab ? 'step' : undefined}>
+              <a href={href(to)} onClick={(e) => { e.preventDefault(); if (tab !== n.tab) navigate(to); }} data-testid={`pipe-${n.key}`}
+                data-tip={`${n.does}. ${n.big == null ? 'Not read yet' : `${fmtInt(n.big)} ${n.small}`} (${n.scope}) · ${STATE_WORD[n.state]}${t ? ` · ${t}` : ''}. Opens ${n.tabName}.`}
+                aria-label={`${n.label}: ${n.big == null ? 'not read' : `${fmtInt(n.big)} ${n.small}`}, ${STATE_WORD[n.state]}. Opens ${n.tabName}.`}>
+                <span className="pipe-dot" aria-hidden />
+                <span className="pipe-l">{n.label}</span>
+                <span className="pipe-c">{n.big == null ? '–' : fmtInt(n.big)}</span>
               </a>
-              {tr && (
-                <a className="pipe-tr" href={href(tr)} onClick={(e) => { e.preventDefault(); navigate(tr); }} data-testid={`pipe-trace-${n.key}`}
-                  title={`Open the run trace at ${n.label}`}>trace</a>
-              )}
             </li>
           );
         })}
       </ol>
+      <p className="pipe-why" title={sentence}>{sentence}</p>
+      <span className="pipe-info">
+        <button type="button" className="pipe-i" aria-expanded={how} aria-label="How this is computed" onClick={() => setHow((v) => !v)}>i</button>
+        {how && (
+          <span className="pipe-pop" role="dialog" aria-label="How this is computed">
+            <b>How this is computed</b>
+            <span>Read: the whole scan, stage 1 of <code>GET /api/openings/funnel</code> (Crustdata person search, dated records).</span>
+            <span>Rules: this company’s openings fired or held by Rule O1 and its guards. Verify: clauses the verifier marked met or can’t verify.</span>
+            <span>Draft (GPT-6 Luna writes, decides nothing), Approve (by you) and Sent once: this company’s intros by status.</span>
+            <span>The run trace for each phase is <code>GET /api/runs/:id/summary</code>{runId ? <> · <a href={href({ page: 'trace', id: companyId, runId })} onClick={(e) => { e.preventDefault(); navigate({ page: 'trace', id: companyId, runId }); }}>open it</a></> : null}.</span>
+          </span>
+        )}
+      </span>
     </nav>
   );
 }

@@ -1,61 +1,45 @@
-/* "What's happening": six connected step cards under the company page title. Each card: dot + name + state chip,
-   a plain-words line, a big tabular count, and (when not done) the reason. Attio-style: hairlines, 8px radii, calm. */
-.pipe { margin: 0 0 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
-.pipe-head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--rule); }
-.pipe-h { font-size: 13px; font-weight: 600; color: var(--ink); }
-.pipe-sum { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.pipe-how { margin-left: auto; font: inherit; font-size: 12px; color: var(--ink-2); background: none; border: 1px solid var(--rule); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
-.pipe-how:hover, .pipe-how[aria-expanded='true'] { background: var(--hover); color: var(--ink); }
-.pipe-howtxt { margin: 0; padding: 8px 12px; font-size: 12px; line-height: 18px; color: var(--ink-2); border-bottom: 1px solid var(--rule); background: var(--canvas); }
-.pipe-howtxt code { font-family: var(--mono); font-size: 11px; color: var(--ink); }
+/* "What's happening": one slim Attio-style row. Six step pills joined by a hairline, then one sentence saying where
+   the run stopped and why, then an "i" for how it is computed. Tones from colors.css. */
+.pipe { contain: inline-size; box-sizing: border-box; width: 100%; max-width: 100%; position: relative; display: flex; align-items: center; gap: 16px; min-height: 48px; margin: 0 0 16px; padding: 0 8px 0 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+.pipe ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; flex: none; }
+.pipe-n { position: relative; display: flex; align-items: center; opacity: 0; animation: pipe-in 300ms var(--ease) forwards; }
+.pipe-n + .pipe-n { padding-left: 14px; }
+.pipe-n + .pipe-n::before { content: ''; position: absolute; left: 2px; width: 10px; top: 50%; height: 1px; background: var(--rule); }
+.pipe-n:not(.is-off) + .pipe-n:not(.is-off)::before { background: var(--h-green-bd); }
 
-.pipe ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.pipe-n { position: relative; min-width: 0; display: flex; opacity: 0; animation: pipe-in 320ms var(--ease) forwards; }
-.pipe-n + .pipe-n { border-left: 1px solid var(--rule); }
-/* chevron between steps: shows direction of flow */
-.pipe-n + .pipe-n::before { content: ''; position: absolute; left: -5px; top: 20px; width: 8px; height: 8px; border-top: 1px solid var(--rule); border-right: 1px solid var(--rule); background: var(--surface); transform: rotate(45deg); z-index: 1; }
-.pipe-n.is-done + .pipe-n::before { border-color: var(--h-green-bd); }
+.pipe-n a { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 13px; line-height: 16px; white-space: nowrap; transition: background 120ms var(--ease); }
+.pipe-n a:hover { background: var(--hover); }
+.pipe-n.is-stop a, .pipe-n[aria-current='step'] a { background: var(--hover); box-shadow: inset 0 0 0 1px var(--rule); }
+.pipe-n a:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.pipe-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--h-green-dot); }
+.is-wait .pipe-dot { background: var(--h-blue-dot); }
+.is-sent .pipe-dot { background: var(--h-teal-dot); }
+.is-off .pipe-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--h-grey-bd); }
+.pipe-l { font-weight: 500; }
+.pipe-c { color: var(--ink-2); font-variant-numeric: proportional-nums; font-feature-settings: 'tnum' 0; letter-spacing: 0; }
+.is-off a, .is-off .pipe-c { color: var(--ink-3); }
+.is-wait .pipe-c { color: var(--h-blue-fg); }
 
-.pipe-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px 14px; color: inherit; text-decoration: none; transition: background 150ms var(--ease); }
-.pipe-main:hover { background: var(--hover); }
-.pipe-n[aria-current='step'] .pipe-main { background: var(--hover); box-shadow: inset 0 -2px 0 var(--ink); }
-.pipe-main:focus-visible, .pipe-tr:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+/* hover tooltip: the step's plain-words description and its count */
+.pipe-n a[data-tip]:hover::after, .pipe-n a[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: 260px; white-space: normal;
+  padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); color: var(--ink-2);
+  font-size: 12px; line-height: 17px; font-weight: 400; box-shadow: 0 4px 16px rgb(0 0 0 / 0.08); pointer-events: none;
+}
 
-.pipe-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.pipe-dot { flex: none; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--h-grey-bd); background: var(--h-grey-bg); }
-.pipe-dot svg { width: 9px; height: 9px; fill: none; stroke: var(--canvas); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.is-done .pipe-dot { border-color: var(--h-green-dot); background: var(--h-green-dot); }
-.pipe-sent.is-done .pipe-dot { border-color: var(--h-teal-dot); background: var(--h-teal-dot); }
-.is-waiting .pipe-dot { border-color: var(--h-amber-dot); background: var(--h-amber-bg); }
-.pipe-l { font-size: 13px; font-weight: 600; line-height: 16px; color: var(--ink); white-space: nowrap; }
-.pipe-t { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.pipe-why { flex: 1; min-width: 0; margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 
-.pipe-chip { flex: none; font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 4px; border: 1px solid; white-space: nowrap; }
-.pipe-chip.is-done { color: var(--h-green-fg); background: var(--h-green-bg); border-color: var(--h-green-bd); }
-.pipe-sent .pipe-chip.is-done { color: var(--h-teal-fg); background: var(--h-teal-bg); border-color: var(--h-teal-bd); }
-.pipe-chip.is-waiting { color: var(--h-amber-fg); background: var(--h-amber-bg); border-color: var(--h-amber-bd); }
-.pipe-chip.is-empty { color: var(--h-grey-fg); background: var(--h-grey-bg); border-color: var(--h-grey-bd); }
+.pipe-info { position: relative; flex: none; }
+.pipe-i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 600; font-style: italic; cursor: pointer; display: grid; place-items: center; }
+.pipe-i:hover, .pipe-i[aria-expanded='true'] { background: var(--hover); color: var(--ink); }
+.pipe-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 380px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); box-shadow: 0 6px 24px rgb(0 0 0 / 0.1); font-size: 12px; line-height: 17px; color: var(--ink-2); }
+.pipe-pop b { color: var(--ink); font-size: 13px; font-weight: 600; }
+.pipe-pop code { font-family: var(--mono); font-size: 11px; color: var(--ink); }
+.pipe-pop a { color: var(--ink); }
 
-.pipe-does { font-size: 12px; line-height: 16px; color: var(--ink-2); }
-.pipe-c { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--ink-2); }
-.pipe-c b { font-size: 20px; line-height: 22px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
-.is-empty .pipe-c b { color: var(--ink-3); }
-.is-waiting .pipe-c b { color: var(--h-amber-fg); }
-.pipe-why { font-size: 12px; line-height: 16px; color: var(--ink-3); }
-.is-waiting .pipe-why { color: var(--h-amber-fg); }
-
-.pipe-bars { margin-left: auto; flex: none; }
-.pipe-bars rect.on { fill: var(--h-green-dot); opacity: 0.8; transition: opacity 120ms; }
-.pipe-bars rect.on:hover { opacity: 1; }
-.pipe-bars rect.off { fill: var(--h-grey-bd); }
-
-.pipe-tr { position: absolute; right: 8px; bottom: 8px; font-size: 11px; color: var(--ink-3); text-decoration: none; padding: 1px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); opacity: 0; transition: opacity 120ms; }
-.pipe-n:hover .pipe-tr, .pipe-tr:focus-visible { opacity: 1; }
-.pipe-tr:hover { color: var(--ink); background: var(--hover); }
-
-@keyframes pipe-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes pipe-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .pipe-n { animation: none; opacity: 1; } }
-@media (max-width: 1100px) { .pipe ol { grid-template-columns: repeat(3, minmax(0, 1fr)); } .pipe-n:nth-child(4) { border-left: 0; } .pipe-n:nth-child(n+4) { border-top: 1px solid var(--rule); } .pipe-n:nth-child(4)::before { display: none; } }
+@media (max-width: 1200px) { .pipe-why { display: none; } .pipe { justify-content: space-between; } }
 
 /* one quiet "what this shows" line above tabs that draw their own header */
 .co-hint { margin: 0 0 12px; font-size: 13px; line-height: 18px; color: var(--ink-2); }
