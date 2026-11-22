@@ -6,6 +6,7 @@ import type { Route } from './data/router.ts';
 import { runStore } from './data/store.ts';
 import { CandidatePage } from './pages/CandidatePage.tsx';
 import { CompaniesPage, CompanyPage } from './pages/CompanyPage.tsx';
+import { TracePage } from './features/trace/Trace.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { TopBar } from './shell/TopBar.tsx';
 import { LedgerDrawer } from './features/ledger/Ledger.tsx';
@@ -71,6 +72,7 @@ export function App() {
             {route.page === 'candidate' && <CandidatePage route={route} />}
             {route.page === 'companies' && <CompaniesPage />}
             {route.page === 'company' && <CompanyPage route={route} />}
+            {route.page === 'trace' && <TracePage route={route} />}
           </PageFade>
         </main>
       </div>
