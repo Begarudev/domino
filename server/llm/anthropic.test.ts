@@ -1,18 +1,16 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { Store } from '../db.ts';
-import { ToolContext } from '../runtime/tool.ts';
-import { modelClient } from './client.ts';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
-test('Anthropic SDK uses Opus effort and server fallback and discards a final refusal', async t => {
+async function checkAnthropic() {
   const dir = mkdtempSync(join(tmpdir(), 'domino-anthropic-test-'));
-  const previousKey = process.env.ANTHROPIC_API_KEY;
-  process.env.ANTHROPIC_API_KEY = 'mock-anthropic-credential';
   let calls = 0;
-  t.mock.method(globalThis, 'fetch', async (url: string | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (url: string | Request | URL, init?: RequestInit) => {
     const request = url instanceof Request ? url : new Request(url, init);
     assert.match(request.url, /^https:\/\/api\.anthropic\.com\/v1\/messages(?:\?beta=true)?$/);
     assert.match(request.headers.get('anthropic-beta') ?? '', /server-side-fallback-2026-07-01/);
@@ -32,7 +30,10 @@ test('Anthropic SDK uses Opus effort and server fallback and discards a final re
       stop_details: refused ? { type: 'refusal', category: 'general_harms', explanation: 'fixture' } : null,
       usage: { input_tokens: 100, output_tokens: refused ? 0 : 20 },
     });
-  });
+  }) as typeof fetch;
+  const { Store } = await import('../db.ts');
+  const { ToolContext } = await import('../runtime/tool.ts');
+  const { modelClient } = await import('./client.ts');
   const store = new Store(join(dir, 'test.db'));
   try {
     const id = 'anthropic';
@@ -44,9 +45,13 @@ test('Anthropic SDK uses Opus effort and server fallback and discards a final re
     assert.equal(calls, 2);
     assert.deepEqual(store.getLedger(id).map(row => [row.inputTokens, row.outputTokens, row.usd]), [[100, 20, 0.0008], [100, 0, 0]]);
   } finally {
-    if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = previousKey;
     store.sql.close();
     rmSync(dir, { recursive: true, force: true });
   }
+}
+if (process.env.DOMINO_ANTHROPIC_ADAPTER_TEST === '1') await checkAnthropic();
+else test('Anthropic SDK uses Opus effort and server fallback and discards a final refusal', async () => {
+  await promisify(execFile)(process.execPath, [fileURLToPath(import.meta.url)], {
+    env: { ...process.env, DOMINO_ANTHROPIC_ADAPTER_TEST: '1', OPENAI_API_KEY: '', ANTHROPIC_API_KEY: 'mock-anthropic-credential', ANTHROPIC_MODEL: 'claude-opus-5-5' },
+  });
 });
