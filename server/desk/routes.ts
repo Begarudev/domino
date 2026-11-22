@@ -17,6 +17,7 @@ import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
 import { compareOpenings, whyThisTarget } from './why.ts';
+import { servedFrom } from './rules.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
   listCandidateRows, listIntroRows, openingsSnapshot, reconsentCandidate, setCandidateRun, setIntroRun,
@@ -138,7 +139,7 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const runId = latestOpeningsRunId(store);
     const funnel = runId ? store.getOutput<{ funnel?: OpeningsFunnel }>(runId, 'detect_openings')?.funnel : undefined;
     if (!funnel) return c.json({ error: 'No completed openings scan with a funnel yet' }, 404);
-    return c.json(funnel);
+    return c.json({ ...funnel, served: servedFrom(store, runId!) });
   });
 
   // ---------- candidates ----------

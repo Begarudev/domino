@@ -54,7 +54,15 @@ export interface RuleClause {
 
 // Funnel with drill-down: every count opens its rows (role + initial + month for people).
 export interface FunnelStage { id: string; label: string; count: number; rows?: { label: string; detail?: string; evidenceId?: string }[] }
-export interface OpeningsFunnel { runId: string; rule: 'O1'; lockedAt: string; snapshot: string; stages: FunnelStage[] }
+export interface OpeningsFunnel { runId: string; rule: 'O1'; lockedAt: string; snapshot: string; stages: FunnelStage[]; served?: ServedFrom }
+
+// How a run's Crustdata reads were served: live calls vs the recorded cache, and when the data was actually read.
+// e.g. "Live Crustdata read 22 Nov, 14:08–14:17 IST · replayed from the recorded cache (0 credits)"
+export interface ServedFrom {
+  liveCalls: number; cacheHits: number; credits: number;
+  readFrom: string | null; readTo: string | null;   // ISO times of the underlying live reads
+  label: string;
+}
 
 // Rules registry: id, thresholds, lock time and today's live fire counts.
 export interface RuleCard {

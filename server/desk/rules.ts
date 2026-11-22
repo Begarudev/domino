@@ -1,7 +1,7 @@
 // Rules registry: every rule with its statement, thresholds, guards, lock time and today's live fire counts. OWNER: lead.
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { RuleCard } from '../../shared/desk.ts';
+import type { RuleCard, ServedFrom } from '../../shared/desk.ts';
 import type { RunSnapshot } from '../../shared/types.ts';
 import type { Store } from '../db.ts';
 import { root } from '../env.ts';
@@ -17,6 +17,32 @@ function latestAnalysis(store: Store): RunSnapshot | null {
   const row = store.sql.prepare(`SELECT id FROM runs WHERE coalesce(pipeline, 'outbound') = 'outbound'
     AND status IN ('completed', 'awaiting_approval') ORDER BY created_at DESC, rowid DESC LIMIT 1`).get() as { id: string } | undefined;
   return row ? snapshot(store, row.id) : null;
+}
+
+const istTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+const istDay = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+
+/** Live calls vs cache hits for a run, and when the underlying data was read (the ledger's request hash is the cache key). */
+export function servedFrom(store: Store, runId: string): ServedFrom {
+  const counts = store.sql.prepare(`SELECT
+      sum(CASE WHEN mode = 'live' AND status = 'ok' THEN 1 ELSE 0 END) AS live,
+      sum(CASE WHEN status = 'cache_hit' THEN 1 ELSE 0 END) AS hits,
+      coalesce(sum(CASE WHEN mode = 'live' THEN credits END), 0) AS credits
+    FROM ledger WHERE run_id = ? AND provider = 'crustdata'`).get(runId) as { live: number | null; hits: number | null; credits: number };
+  const read = store.sql.prepare(`SELECT min(tool_cache.fetched_at) AS readFrom, max(tool_cache.fetched_at) AS readTo FROM ledger
+    JOIN tool_cache ON tool_cache.key = ledger.request_hash WHERE ledger.run_id = ? AND ledger.provider = 'crustdata'
+      AND ledger.status IN ('ok', 'cache_hit')`).get(runId) as { readFrom: string | null; readTo: string | null };
+  const liveCalls = counts.live ?? 0;
+  const cacheHits = counts.hits ?? 0;
+  const window = read.readFrom && read.readTo
+    ? `${istDay.format(new Date(read.readFrom))}, ${istTime.format(new Date(read.readFrom))}–${istTime.format(new Date(read.readTo))} IST` : null;
+  const mode = store.getRun(runId)?.data_mode;
+  const label = mode === 'fixture' ? 'Fixture: fictional companies, not live results'
+    : liveCalls === 0 && cacheHits > 0 ? `Live Crustdata read${window ? ` ${window}` : ''} · replayed from the recorded cache (0 credits)`
+      : liveCalls > 0 && cacheHits === 0 ? `Read live from Crustdata${window ? ` ${window}` : ''} · ${Math.round(counts.credits * 10) / 10} credits`
+        : liveCalls > 0 ? `${liveCalls} live reads and ${cacheHits} from the recorded cache${window ? `, data read ${window}` : ''}`
+          : 'No Crustdata reads';
+  return { liveCalls, cacheHits, credits: counts.credits, readFrom: read.readFrom, readTo: read.readTo, label };
 }
 
 export function rulesRegistry(store: Store): RuleCard[] {
