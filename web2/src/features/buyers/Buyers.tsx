@@ -182,32 +182,37 @@ function Row({ a, ev, sel, onSel }: { a: Account; ev: Map<string, Evidence>; sel
   const trigEv = a.trigger ? ev.get(a.trigger.evidenceIds[0]) : undefined;
   return (
     <tr className={sel ? 'sel' : undefined} aria-selected={sel} onClick={onSel} data-testid={`buyer-row-${t.companyId}`}>
-      <td className="by-co"><b>{a.name}</b>{a.domain && <span className="mono faint">{a.domain}</span>}</td>
+      <td className="by-co">
+        <span className="by-co-in">
+          <span className="by-logo" aria-hidden>{a.name.replace(/^the\s+/i, '')[0]?.toUpperCase()}</span>
+          <span className="by-co-t"><b title={a.name}>{a.name}</b>{a.domain && <span className="by-dom" title={a.domain}>{a.domain}</span>}</span>
+        </span>
+      </td>
       <td className="by-trig">
         <span className="by-rule-l">
-          <b className="by-rule" title={readableDates(t.whyNow)}>{t.mechanisms.map(ruleWords).join(' + ')}</b>
+          <span className={`by-pill r-${t.mechanisms[0]?.toLowerCase() ?? 'x'}`} title={readableDates(t.whyNow)}><i aria-hidden />{t.mechanisms.map(ruleWords).join(' + ')}</span>
           {a.trigger ? <span className="by-date">{fmtDate(a.trigger.date, true)}</span>
             : t.whyNowDate ? <span className="by-date">{fmtDate(t.whyNowDate, true)}</span> : <span className="cant">No dated trigger</span>}
           {a.trigger?.precision === 'month' && <span className="tag">month-level</span>}
         </span>
         {(() => {
           const what = a.trigger ? readableDates(trigEv ? tidyClaim(trigEv.claim) : a.trigger.summary).replace(/ on \d{1,2} [A-Z][a-z]{2} \d{4}(?=\.?$)/, '') : readableDates(t.whyNow);
-          return <span className="by-clamp" title={what}>{what}</span>;
+          return (
+            <span className="by-l2">
+              <span className="by-ell" title={what}>{what}</span>
+              {trigEv && <button className="srclink" onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{sourceName(trigEv.source.endpoint, trigEv.source.provider)}</button>}
+              {trigEv?.mode === 'fixture' && <span className="tag">fixture</span>}
+            </span>
+          );
         })()}
-        {trigEv && (
-          <span className="by-src">
-            <button className="srclink" onClick={(e) => { e.stopPropagation(); openEvidence(trigEv.id); }}>{sourceName(trigEv.source.endpoint, trigEv.source.provider)}</button>
-            {trigEv.mode === 'fixture' && <span className="tag">fixture</span>}
-          </span>
-        )}
       </td>
-      <td className="by-dec">{t.decider ? deciderLabel(t.decider) : <span className="faint">No decider found</span>}</td>
+      <td className="by-dec"><span className="by-ell" title={t.decider ? deciderLabel(t.decider) : undefined}>{t.decider ? deciderLabel(t.decider) : <span className="faint">No decider found</span>}</span></td>
       <td className={`by-facts num${a.facts.have >= a.facts.need ? ' ok' : ''}`} title={`${a.facts.have} of ${a.facts.need} verified, dated facts needed to draft`}>
         <b>{a.facts.have}</b><span> of {a.facts.need}</span>
       </td>
       <td className="by-st">
-        <span className={`st ${a.status.cls}`}>{a.status.label}</span>
-        {a.status.why && <small className="by-clamp" title={a.status.why}>{a.status.why}</small>}
+        <span className={`by-stp s-${a.status.kind}`} title={a.status.label}><i aria-hidden /><span>{a.status.label}</span></span>
+        {a.status.why && <small className="by-ell by-why" title={a.status.why}>{a.status.why}</small>}
       </td>
     </tr>
   );
