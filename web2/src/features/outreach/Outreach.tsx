@@ -12,7 +12,7 @@ import { useEnterOnce } from '../../lib/motion.ts';
 import { sourceName } from '../../shell/EvidenceDrawer.tsx';
 import { openEvidence } from '../../shell/ui.ts';
 import type { IntroView, StepKey, StepState } from './model.ts';
-import { STEP_LABEL, citationMap, dedupeIntros, draftLabel, isMonthly, markersIn, pieces, tidyClaim } from './model.ts';
+import { STEP_CUR, STEP_LABEL, citationMap, dedupeIntros, draftLabel, isMonthly, markersIn, pieces, tidyClaim } from './model.ts';
 import './outreach.css';
 
 const initialOf = (label: string | null | undefined) => (label?.trim()?.[0] ?? '?').toUpperCase() + '.';
@@ -225,7 +225,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
                 return (
                   <li key={k} className={s} aria-current={s === 'cur' ? 'step' : undefined}>
                     <span className="n">{s === 'done' ? '✓' : i + 1}</span>
-                    <div><b>{STEP_LABEL[k]}</b><small>{stepNote(k, s, { intro, verifiedCount, approvalAt: approval?.decidedAt ?? undefined, receivedAt, draftedAt: mine ? steps.find((x) => x.step === "draft_intro")?.finishedAt ?? null : null })}</small></div>
+                    <div><b>{s === 'cur' ? STEP_CUR[k] : STEP_LABEL[k]}</b><small>{stepNote(k, s, { intro, verifiedCount, approvalAt: approval?.decidedAt ?? undefined, receivedAt, draftedAt: mine ? steps.find((x) => x.step === "draft_intro")?.finishedAt ?? null : null })}</small></div>
                   </li>
                 );
               })}
@@ -259,7 +259,7 @@ function IntroPanel({ intro, desk, routeId }: { intro: IntroView; desk: CompanyD
 
         {intro.runId && !blocked && (
           <section className="panel out-engine" data-testid="engine">
-            <header><h2>Crash test</h2><span className="faint">{mine && engine.alive ? 'engine running' : 'engine idle'}</span></header>
+            <header><h2>Crash test</h2><span className="faint">{resumed ? 'resumed from checkpoint' : crashed ? 'stopped' : mine && engine.alive ? 'engine running' : 'engine idle'}</span></header>
             <div className="pad">
               {crashed && <EngineLine tone="stop" text={dispatchKill && !crashStep
                 ? 'Delivery process stopped after the test inbox accepted (deliberate crash test)'
@@ -344,7 +344,7 @@ function stepNote(k: StepKey, s: StepState, c: { intro: IntroView; verifiedCount
   switch (k) {
     case 'draft': { const at = c.draftedAt ?? (c.intro.status === 'delivered' ? null : c.intro.receivedAt); return s === 'done' ? (at ? `${fmtDate(at)}, ${fmtTime(at)}` : 'Drafted by the intro run') : 'Waiting for the intro run'; }
     case 'verified': return s === 'done' ? `Every claim cites a dated row (${c.verifiedCount} claims)` : 'Each sentence checked against its source';
-    case 'approved': return s === 'done' ? (c.approvalAt ? `You approved, ${fmtTime(c.approvalAt)}` : 'You approved') : s === 'cur' ? 'Waiting for your approval' : 'Your approval';
+    case 'approved': return s === 'done' ? (c.approvalAt ? `You approved, ${fmtTime(c.approvalAt)}` : 'You approved') : s === 'cur' ? 'Nothing is sent until you approve' : 'Your approval';
     case 'delivered': return s === 'done' ? (c.receivedAt ? `Test inbox, ${fmtTime(c.receivedAt)}` : 'Test inbox') : 'Team inbox, at most once';
   }
 }

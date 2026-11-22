@@ -29,7 +29,7 @@
 .fn-btn { border: 0; background: none; color: inherit; font: inherit; width: calc(100% + 12px); cursor: pointer; transition: background 150ms var(--ease); }
 .fn-btn:hover { background: var(--hover); }
 .fn-claim { color: var(--ink); line-height: 1.45; }
-.fn-src { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.fn-src { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
 .fn-src .tag { font-weight: 500; font-size: 11px; line-height: 16px; padding: 0 6px; }
 
 /* not drafted / drafting */
@@ -56,14 +56,14 @@
 .out-count { font-size: 22px; font-weight: 600; line-height: 24px; font-variant-numeric: tabular-nums; }
 .out-none { margin: 0; }
 .out-rc-copy { margin: 10px 0 0; color: var(--ink); font-weight: 500; }
-.out-dup { display: grid; gap: 6px; justify-items: start; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule-2); }
-.out-dup .muted { font-size: 13px; }
+.out-dup { display: grid; gap: 6px; justify-items: start; margin-top: 10px; }
+.out-dup .muted { font-size: 15px; color: var(--ink); }
 
 /* crash test: quiet, translate + opacity only (no strobe or invert) */
 .out-engine .pad { display: grid; gap: 8px; }
 .out-engine .out-actions { margin-top: 2px; }
 .out-engine-p { margin: 0; font-size: 13px; }
-.out-eng { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink); }
+.out-eng { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink); }
 .out-eng i { width: 8px; height: 8px; border-radius: 2px; flex: none; margin-top: 6px; }
 .out-eng.stop i { border: 1.5px solid var(--ink-2); }
 .out-eng.ok i { background: var(--acc); }

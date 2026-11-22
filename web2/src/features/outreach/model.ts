@@ -87,3 +87,4 @@ export const tidyClaim = (claim: string) => claim.replace(/\s*\(month precision\
 export type StepKey = 'draft' | 'verified' | 'approved' | 'delivered';
 export type StepState = 'done' | 'cur' | 'todo' | 'blocked';
 export const STEP_LABEL: Record<StepKey, string> = { draft: 'Draft', verified: 'Verified', approved: 'Approved', delivered: 'Delivered once' };
+export const STEP_CUR: Record<StepKey, string> = { draft: 'Drafting', verified: 'Checking sources', approved: 'Awaiting your approval', delivered: 'Delivering' };
