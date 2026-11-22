@@ -88,7 +88,7 @@ export interface AcquisitionFact {
 
 export interface RestructureFact { companyId: string; date: IsoDate; label: string; evidenceId: string }
 
-export interface Check { checkedAt: IsoDate | null; failed?: boolean; records?: number; scope?: string }
+export interface Check { checkedAt: IsoDate | null; failed?: boolean; records?: number; scope?: string; evidenceId?: string }
 
 export interface O1Input {
   asOf: IsoDate;
@@ -276,7 +276,7 @@ export function detectOpenings(input: O1Input): O1Result {
         text: stale ? `I can't verify no replacement was ${what === 'job search' ? 'posted' : 'hired'}: the ${what} ${check?.failed ? 'failed or timed out' : 'is missing or more than 14 days old'}`
           : `Replacement ${what} ${dayLabel(lastLeftStart)}–${dayLabel(input.asOf)}: 0 records`,
         detail: check?.scope ? `${check.scope}; ${check.records ?? 0} records returned${check.checkedAt ? `, checked ${dayLabel(check.checkedAt)}` : ''}` : undefined,
-        evidenceIds: [] };
+        evidenceIds: !stale && check?.evidenceId ? [check.evidenceId] : [] };
     };
     const jobs = legClause('o1.no_replacement.jobs', 'job search', input.jobChecks[group.companyId]);
     const people = legClause('o1.no_replacement.people', 'person search', input.hireChecks?.[group.companyId] ??
@@ -288,6 +288,7 @@ export function detectOpenings(input: O1Input): O1Result {
       continue;
     }
     const checkedAt = input.jobChecks[group.companyId].checkedAt!;
+    for (const id of [...jobs.evidenceIds, ...people.evidenceIds]) evidenceIds.add(id);
     const closes = shiftDays(lastLeft, REPLACEMENT_DAYS);
     const provisional = closes > input.asOf;
     clauses.push({ id: 'o1.window', state: provisional ? 'open' : 'met',
@@ -295,7 +296,7 @@ export function detectOpenings(input: O1Input): O1Result {
       detail: `As of ${dayLabel(input.asOf)}; latest conclusive departure ${monthLabel(lastLeftStart)} (could be as late as ${dayLabel(lastLeft)}); window = ${REPLACEMENT_DAYS} days after the last possible departure day.`,
       evidenceIds: group.conclusive.map(d => d.evidenceId) });
     reasons.push({
-      kind: 'no_replacement', date: checkedAt, evidenceId: null,
+      kind: 'no_replacement', date: checkedAt, evidenceId: jobs.evidenceIds[0] ?? null,
       label: `No ${familyLabel} job post or hire at ${name} since ${dayLabel(lastLeftStart)} (checked ${dayLabel(checkedAt)})` +
         (provisional ? `; replacement window closes by ${dayLabel(closes)}` : ''),
     });

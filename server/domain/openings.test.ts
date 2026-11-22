@@ -13,7 +13,7 @@ function left(company: string, role: string, end: string, start: string, to: str
 function input(departures: DepartureFact[], extra: Partial<O1Input> = {}): O1Input {
   return { asOf, runId: 'run_t', departures, replacements: [], acquisitions: [],
     companies: [{ id: 'Abacus.AI', name: 'Abacus.AI', headcount: 288 }, { id: 'Poolside', name: 'Poolside', headcount: 302 }],
-    jobChecks: { 'Abacus.AI': { checkedAt: asOf }, Poolside: { checkedAt: asOf } }, ...extra };
+    jobChecks: { 'Abacus.AI': { checkedAt: asOf, evidenceId: 'evcheck' }, Poolside: { checkedAt: asOf } }, ...extra };
 }
 const abacus = () => [
   left('Abacus.AI', 'ML Platform Engineer', '2026-10-01T00:00:00', '2026-10-01T00:00:00', 'Arcfront'),
@@ -55,6 +55,9 @@ test('Abacus.AI: two settled October departures and no replacement yet -> open, 
   assert.match(clause('o1.departures').detail!, /Machine Learning Platform Engineer, Aug 2026 → Patronus AI: not conclusive, month straddles window start/);
   assert.equal(clause('o1.no_replacement.jobs').state, 'met');
   assert.equal(clause('o1.window').state, 'open');
+  assert.deepEqual(clause('o1.no_replacement.jobs').evidenceIds, ['evcheck']);
+  assert.equal(opening.reasons.find(r => r.kind === 'no_replacement')!.evidenceId, 'evcheck');
+  assert.ok(opening.evidenceIds.includes('evcheck'));
   assert.match(clause('o1.window').text, /closes by 30 Nov 2026/);
 });
 
