@@ -296,7 +296,8 @@ export function createApp(store: Store) {
   });
 
   app.all('/api/*', c => c.json({ error: 'API route not found' }, 404));
-  const dist = resolve(root, 'web/dist');
+  // DOMINO_UI=web2 serves the Search Desk app (web2/); the default stays the original app (web/) until the UI freeze.
+  const dist = resolve(root, process.env.DOMINO_UI === 'web2' ? 'web2/dist' : 'web/dist');
   if (existsSync(resolve(dist, 'index.html'))) {
     app.get('*', serveStatic({ root: dist }), serveStatic({ path: resolve(dist, 'index.html') }));
   }

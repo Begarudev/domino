@@ -105,12 +105,13 @@ export const DRAIN_REPLAY_HISTORY_DAYS = 120;
 export const DRAIN_REPLAY_WINDOW_DAYS = 60;
 export const DRAIN_OUTCOME_DAYS = 60;
 export const servingSignalKeywords = ['inference', 'ML platform', 'machine learning platform', 'ML infrastructure', 'machine learning infrastructure', 'ML infra',
-  'serving', 'GPU software', 'GPU cluster', 'GPU', 'LLM serving', 'model serving', 'MLOps', 'LLMOps', 'ML systems',
+  // Bare "serving" matched "Paraeducator role serving Lafayette High School"; only serving-system phrases count.
+  'inference serving', 'serving engineer', 'serving infrastructure', 'serving platform', 'serving systems', 'GPU software', 'GPU cluster', 'GPU', 'LLM serving', 'model serving', 'MLOps', 'LLMOps', 'ML systems',
   'machine learning systems', 'AI infrastructure', 'LLM infrastructure', 'LLM infra', 'distributed training',
   'distributed inference'];
 
 export function servingTitleStatus(title?: string | null): 'serving' | 'unknown' | 'excluded' {
-  if (!title || /\b(?:asic|rtl|physical design|gpu design|hardware design|chip design|semiconductor design|finance|program manager|account manager|account executive|sales|recruit(?:er|ing)|marketing)\b/i.test(title)) {
+  if (!title || /\b(?:asic|rtl|physical design|gpu design|hardware design|chip design|semiconductor design|finance|program manager|account manager|account executive|sales|recruit(?:er|ing)|marketing|co-?founder|founder|ceo|coo|cfo|chief (?:executive|operating|financial) officer|teacher|paraeducator|nurse)\b/i.test(title)) {
     return 'excluded';
   }
   if (servingSignalKeywords.some(keyword => keyword !== 'GPU' && containsPhrase(title, keyword)) ||

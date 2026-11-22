@@ -20,6 +20,7 @@ const header = (value: string, phrase = false) => /^[\x20-\x7e]*$/.test(cleanHea
   ? phrase ? quoteHeader(value) : cleanHeader(value) : encodeHeader(value);
 
 function context(store: Store, approval: Approval) {
+  if ((store.requireRun(approval.runId).pipeline ?? 'outbound') === 'intro') return introContext(store, approval);
   const draftStep = store.getOutput<Outputs['draft_messages']>(approval.runId, 'draft_messages');
   const company = store.getOutput<Outputs['enrich_companies']>(approval.runId, 'enrich_companies')?.companies
     .find(company => company.id === approval.companyId);
@@ -27,6 +28,21 @@ function context(store: Store, approval: Approval) {
   const target = draftStep?.targets.find(row => row.companyId === approval.companyId);
   if (!draft || !company || !target) throw new ApprovalError('Draft details are unavailable');
   if (target.hold) throw new ApprovalError('This target is on hold');
+  return { draft, company, target };
+}
+
+// Search Desk intro runs (pipeline 'intro'): the draft, hiring company and recipient come from draft_intro.
+function introContext(store: Store, approval: Approval) {
+  const intro = store.getOutput<Outputs['draft_intro']>(approval.runId, 'draft_intro');
+  const draft = intro?.draft?.id === approval.draftId ? intro.draft : null;
+  if (!intro || !draft) throw new ApprovalError('Draft details are unavailable');
+  const target: Target = {
+    companyId: intro.company.id, rank: 1, score: 1, confidence: 1, need: intro.need, mechanisms: [], netNew: true,
+    whyNow: intro.roleTitle, whyNowDate: null, path: null, draftId: draft.id, hold: null,
+    decider: { personId: '', name: intro.recipient, title: intro.recipient, reason: 'Intro recipient', evidenceIds: [] },
+  };
+  // A company -> candidate intro reaches the candidate through the desk, not at the hiring company.
+  const company = intro.direction === 'company_to_candidate' ? { ...intro.company, name: 'DOMINO Search Desk' } : intro.company;
   return { draft, company, target };
 }
 
