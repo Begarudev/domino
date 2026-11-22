@@ -8,6 +8,7 @@ import { CandidatePage } from './pages/CandidatePage.tsx';
 import { CompaniesPage, CompanyPage } from './pages/CompanyPage.tsx';
 import { TracePage } from './features/trace/Trace.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
+import { DemoOverlay, DemoStart } from './features/demo/Demo.tsx';
 import { TopBar } from './shell/TopBar.tsx';
 import { LedgerDrawer } from './features/ledger/Ledger.tsx';
 import { EvidenceDrawer } from './shell/EvidenceDrawer.tsx';
@@ -24,7 +25,7 @@ function PageFade({ children }: { children: ReactNode }) {
 
 /** Where a route belongs. Each role only ever sees its own side; anything else goes back to sign-in or home. */
 function guard(route: Route, role: Role | null): Route | null {
-  if (route.page === 'login') return null;
+  if (route.page === 'login' || route.page === 'demo') return null;
   if (!role) return { page: 'login' };
   if (role === 'candidate' && route.page !== 'candidate') return { page: 'candidate', sub: 'dashboard' };
   if (role === 'company' && route.page === 'candidate') {
@@ -55,11 +56,20 @@ export function App() {
   }, []);
 
   if (redirect) return null;
+  if (route.page === 'demo') {
+    return (
+      <div className="app app-login">
+        <TopBar minimal />
+        <main className="main" id="main"><DemoStart /></main>
+      </div>
+    );
+  }
   if (route.page === 'login') {
     return (
       <div className="app app-login">
         <TopBar minimal />
         <main className="main" id="main"><LoginPage /></main>
+        <DemoOverlay />
       </div>
     );
   }
@@ -78,6 +88,7 @@ export function App() {
       </div>
       <LedgerDrawer />
       <EvidenceDrawer />
+      <DemoOverlay />
     </div>
   );
 }

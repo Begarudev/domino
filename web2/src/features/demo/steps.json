@@ -1,0 +1,72 @@
+[
+  {
+    "id": "hook",
+    "start": "0:00",
+    "end": "0:18",
+    "speaker": "A",
+    "line": "Companies pay a search firm 20 to 33 percent of a hire's first-year pay. DOMINO spots the opening before the job is posted. Two ML platform engineers left Abacus.AI in October. No replacement post or hire since. So rule O1 predicts an opening, provisional until 30 November.",
+    "route": "/company/abacus-ai/recruitment",
+    "focus": "Predicted opening card: ML platform engineer, provisional, window closes 30 Nov",
+    "criterion": "Customer value and idea"
+  },
+  {
+    "id": "funnel",
+    "start": "0:18",
+    "end": "0:34",
+    "speaker": "B",
+    "line": "This is a Crustdata read from this afternoon. 1,410 job moves go in. Each step is a fixed rule, down to three company groups: one provisional opening, two held. Dates are month-level, so the August move is struck. That month crosses the window edge.",
+    "route": "/company/abacus-ai/recruitment",
+    "focus": "Funnel 1,410 > 312 > 250 > 95 > 3, then the departures table with the struck Aug row",
+    "criterion": "End-to-end execution"
+  },
+  {
+    "id": "approve",
+    "start": "0:34",
+    "end": "0:56",
+    "speaker": "A",
+    "line": "Asha K. opted in and asked for an intro. The draft has five claims, and each footnote opens its dated row. I approve. We set the delivery process to crash right after the test inbox accepts. Resume. Already delivered, skipped. One delivery, to our test inbox, never a real person.",
+    "route": "/company/abacus-ai/outreach",
+    "focus": "Footnote [1], Approve, crash message, Resume from checkpoint, Deliveries: 1",
+    "criterion": "End-to-end execution"
+  },
+  {
+    "id": "verifier",
+    "start": "0:56",
+    "end": "1:18",
+    "speaker": "B",
+    "line": "The verifier checks each claim against a dated source. No dated source, no claim. Poolside lost two engineers, but a dated report says NVIDIA licensed its tech and hired 109 staff. That's an acqui-hire, so DOMINO holds it. The reading log lists all 125 records it read, and why it dropped 32.",
+    "route": "/company/abacus-ai/verifier",
+    "focus": "Held: acqui-hire card (thenextweb, 21 Aug 2026), then 20 of 26 verified; Reading log: Discarded 32",
+    "criterion": "Facts and verification"
+  },
+  {
+    "id": "replay-ledger",
+    "start": "1:18",
+    "end": "1:38",
+    "speaker": "A",
+    "line": "We replayed the rule on data frozen at 1 September. It made no predictions, and only 6 of 91 companies went on to post or hire. The ledger caps spend. This run had a cap of zero, so its call was blocked before it was sent.",
+    "route": "/company/abacus-ai/replay",
+    "focus": "Replay: O1 picks none, base rate 6 of 91; then Ledger run_2a38d6d8: Blocked before spend, Not dispatched",
+    "criterion": "Robustness and edge cases"
+  },
+  {
+    "id": "architecture",
+    "start": "1:38",
+    "end": "1:54",
+    "speaker": "B",
+    "line": "Each run is its own process with a checkpoint after every step, so a killed run resumes without repeating calls. Every Crustdata call goes through one wrapper: budget check, cache first, retry, schema check, and a ledger row per try. The model only parses and drafts.",
+    "route": "/company/abacus-ai/ledger",
+    "focus": "Ledger: calls table, one row per attempt, caps at the top",
+    "criterion": "Demo and understanding"
+  },
+  {
+    "id": "close",
+    "start": "1:54",
+    "end": "2:00",
+    "speaker": "A",
+    "line": "DOMINO tells a company what it will need next, and every claim has a date.",
+    "route": "/company/abacus-ai/recruitment",
+    "focus": "Back on the predicted opening card",
+    "criterion": "Customer value and idea"
+  }
+]

@@ -26,6 +26,7 @@ const ALIASES: Record<string, CompanyTab> = {
 
 export type Route =
   | { page: 'login' }
+  | { page: 'demo' }
   | { page: 'candidate'; sub: 'onboard' | 'dashboard' }
   | { page: 'companies' }
   | { page: 'company'; id: string; tab: CompanyTab }
@@ -40,6 +41,7 @@ export function parse(pathname: string): Route {
     const tab = (COMPANY_TABS.find((t) => t.id === raw)?.id ?? ALIASES[raw] ?? 'recruitment') as CompanyTab;
     return { page: 'company', id: decodeURIComponent(parts[1]), tab };
   }
+  if (parts[0] === 'demo') return { page: 'demo' };
   if (parts[0] === 'candidate') return { page: 'candidate', sub: parts[1] === 'onboard' ? 'onboard' : 'dashboard' };
   return { page: 'login' };
 }
@@ -48,6 +50,7 @@ export function href(r: Route): string {
   const q = location.search;
   switch (r.page) {
     case 'login': return `/${q}`;
+    case 'demo': return `/demo${q}`;
     case 'candidate': return `/candidate${r.sub === 'onboard' ? '/onboard' : ''}${q}`;
     case 'companies': return `/company${q}`;
     case 'company': return `/company/${encodeURIComponent(r.id)}/${r.tab}${q}`;

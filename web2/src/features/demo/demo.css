@@ -1,0 +1,80 @@
+/* Presenter mode. Light only, sans only, existing tokens. The caption is a teleprompter the room can read:
+   large, calm, one line of copy at a time. The overlay never takes pointer events except its own controls. */
+
+:root.demo-on .main { padding-bottom: 200px; }
+
+.demo-layer { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+
+/* Spotlight: a soft dim around the focus target, a quiet ink ring on it. */
+.demo-spot {
+  position: fixed; top: 50%; left: 50%; width: 0; height: 0; border-radius: var(--r-xl);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 9999px rgba(21, 23, 28, .16);
+  opacity: 0;
+  transition: top 260ms var(--ease), left 260ms var(--ease), width 260ms var(--ease), height 260ms var(--ease), opacity 220ms var(--ease);
+}
+.demo-spot.on { opacity: 1; }
+
+.demo-cap {
+  position: fixed; left: 0; right: 0; bottom: 0; pointer-events: auto;
+  background: var(--surface); border-top: var(--hair);
+  box-shadow: 0 -8px 24px rgba(21, 23, 28, .06);
+  font-family: var(--sans);
+}
+.demo-progress { height: 2px; background: var(--rule-2); }
+.demo-progress span { display: block; height: 100%; background: var(--ink); transition: width 250ms linear; }
+
+.demo-cap-in {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s5); align-items: start;
+  max-width: 1280px; margin: 0 auto; padding: var(--s5) var(--s6) var(--s3);
+}
+.demo-chip {
+  display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-pill);
+  font-size: 18px; font-weight: var(--w-semi); letter-spacing: 0; font-variant-numeric: tabular-nums;
+}
+.demo-chip.sp-A { background: var(--ink); color: var(--on-ink); }
+.demo-chip.sp-B { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.demo-chip.sm { width: 24px; height: 24px; font-size: 12px; margin-right: var(--s2); }
+
+.demo-line {
+  margin: 0; color: var(--ink); font-size: clamp(20px, 1.9vw, 28px); line-height: 1.38; font-weight: var(--w-med);
+  letter-spacing: var(--track-snug); max-width: 62ch; text-wrap: pretty;
+  animation: demo-in 240ms var(--ease) both;
+}
+@keyframes demo-in { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .demo-line { animation: none; } .demo-spot { transition: opacity 200ms; } }
+
+.demo-cue {
+  margin: var(--s3) 0 0; display: inline-flex; gap: var(--s2); align-items: center;
+  font-size: var(--fs-body); line-height: var(--lh-body); color: var(--h-amber-fg);
+  background: var(--h-amber-bg); border: 1px solid var(--h-amber-bd); border-radius: var(--r-ctl); padding: 6px 10px;
+}
+
+.demo-meta { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s2); padding-top: 4px; white-space: nowrap; }
+.demo-clock { font-size: var(--fs-sec); color: var(--ink-3); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.demo-clock b { color: var(--ink); font-weight: var(--w-semi); font-size: 22px; }
+.demo-clock.late b { color: var(--h-amber-fg); }
+.demo-step { font-size: var(--fs-ui); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.demo-crit { font-size: var(--fs-ui); }
+
+.demo-keys { display: flex; gap: var(--s1); justify-content: flex-end; max-width: 1280px; margin: 0 auto; padding: 0 var(--s6) var(--s3); }
+.demo-key {
+  height: 26px; min-width: 26px; padding: 0 8px; border: var(--hair); border-radius: var(--r); background: var(--surface);
+  color: var(--ink-3); font: inherit; font-size: var(--fs-cap); cursor: pointer; transition: color var(--t) var(--ease), background var(--t) var(--ease);
+}
+.demo-key:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.demo-key:disabled { opacity: .4; cursor: default; }
+.demo-key:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* Start card */
+.demo-start { max-width: 720px; margin: 12vh auto 0; padding: 0 var(--s5); font-family: var(--sans); }
+.demo-start h1 { margin: 0; font-size: var(--fs-title); line-height: 1.2; font-weight: var(--w-semi); letter-spacing: var(--track-tight); color: var(--ink); }
+.demo-sub { margin: var(--s3) 0 0; font-size: var(--fs-lead); line-height: 1.5; color: var(--ink-2); max-width: 60ch; }
+.demo-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); margin-top: var(--s7); padding-top: var(--s5); border-top: var(--hair); }
+.demo-cols h2 { margin: 0 0 var(--s3); font-size: var(--fs-ui); font-weight: var(--w-semi); color: var(--ink-3); }
+.demo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); font-size: var(--fs-body); color: var(--ink); }
+.demo-list li { display: flex; align-items: center; }
+.demo-list .faint { margin-left: .35em; }
+.demo-actions { display: flex; gap: var(--s2); margin-top: var(--s7); }
+.demo-actions .btn { height: 40px; padding: 0 16px; font-size: var(--fs-lead); }
+.demo-actions .faint-on { opacity: .6; margin-left: var(--s2); font-weight: 400; }
+.demo-help { margin: var(--s4) 0 0; font-size: var(--fs-ui); color: var(--ink-3); }
