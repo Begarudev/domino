@@ -1,6 +1,6 @@
 // All organizations, people, records, and evidence in this dataset are fictional.
 import type { IsoDate } from '../../../shared/types.ts';
-import { daysBetween } from '../../domain/facts.ts';
+import { daysBetween, stableId } from '../../domain/facts.ts';
 
 type Round = [IsoDate, string, number];
 type Point = [IsoDate, number];
@@ -65,7 +65,29 @@ const lumen: Firm = {
   staff: [['2026-10-16', 74], ['2026-11-15', 77]],
 };
 
-export const firms = [orbital, kestrel, nimbus, quill, tessera, coaching, research, mica, dhow, marigold, peregrine, ironbark, lumen];
+const saffron: Firm = {
+  id: 801114, name: 'Saffron Stack', domain: 'saffron-stack.example', country: 'India', city: 'Pune',
+  sector: 'AI Hardware', staff: [['2026-10-16', 36], ['2026-11-15', 33]],
+};
+const pylon: Firm = {
+  id: 801115, name: 'Pylon Signals', domain: 'pylon-signals.example', country: 'India', city: 'Mumbai',
+  sector: 'AI Hardware', staff: [['2026-10-16', 73], ['2026-11-15', 76]],
+};
+
+const vela: Firm = {
+  id: 801116, name: 'Vela Patterns', domain: 'vela-patterns.example', country: 'India', city: 'Pune',
+  sector: 'Predictive Analytics', staff: [['2026-10-16', 105], ['2026-11-15', 102]],
+};
+const morrow: Firm = {
+  id: 801117, name: 'Morrow Stack', domain: 'morrow-stack.example', country: 'India', city: 'Mumbai',
+  sector: 'Workflow Automation AI', staff: [['2026-10-16', 89], ['2026-11-15', 92]],
+};
+const banyan: Firm = {
+  id: 801118, name: 'Banyan Enterprise Grid', domain: 'banyan-enterprise-grid.example', country: 'India', city: 'Bengaluru',
+  sector: 'Enterprise Computing', staff: [['2026-10-16', 13_900], ['2026-11-15', 14_000]],
+};
+
+export const firms = [orbital, kestrel, nimbus, quill, tessera, coaching, research, mica, dhow, marigold, peregrine, ironbark, lumen, saffron, pylon, vela, morrow, banyan];
 export const TODAY = '2026-11-22';
 
 const companyUrl = (firm: Firm) => 'https://www.linkedin.com/company/domino-fiction-' + firm.id;
@@ -99,7 +121,9 @@ export function companyRow(firm: Firm, asOf: IsoDate, enrich: boolean) {
     },
     locations: { country: firm.country, headquarters: headquarters(firm) },
     funding: { last_fundraise_date: round?.[0] ?? null, last_round_type: round?.[1] ?? firm.undatedRound ?? null,
-      last_round_amount_usd: round?.[2] ?? null },
+      last_round_amount_usd: round?.[2] ?? null,
+      ...(enrich ? { milestones: firm.rounds?.map(([funding_date, round_type, amount_usd]) => ({ funding_date, round_type, amount_usd })) ?? [] } : {}),
+    },
     ...(enrich ? { competitors: { all_domains: firm.competitors ?? [], paid_seo: [], organic_seo: [] } } : {}),
   };
 }
@@ -139,7 +163,7 @@ export const jobs = [
 
 function role(firm: Firm, title: string, start: IsoDate, end?: IsoDate) {
   return {
-    position_id: `${firm.id}-${start}-${title.toLowerCase().replaceAll(' ', '-')}`,
+    position_id: Number.parseInt(stableId('', firm.id, start, title).slice(0, 12), 16),
     name: firm.name, title, start_date: start, end_date: end ?? null, is_default: !end,
     crustdata_company_id: firm.id, company_website: 'https://' + firm.domain,
     company_professional_network_profile_url: companyUrl(firm), company_professional_network_industry: firm.sector,
@@ -186,4 +210,26 @@ export const profiles = [
     role(marigold, 'ML Infrastructure Engineer', '2023-01-07', '2026-09-04')),
   profile(901016, 'Ani Kelvar', role(kestrel, 'GPU Reliability Engineer', '2026-08-24'),
     role(orbital, 'ML Infrastructure Engineer', '2023-10-07', '2026-08-22')),
+  profile(901017, 'Iven Raval', role(kestrel, 'Inference Engineer', '2026-08-02'),
+    role(orbital, 'Inference Engineer', '2024-04-10', '2026-07-30')),
+  profile(901018, 'Jeni Nalvek', role(orbital, 'Inference Reliability Engineer', '2026-09-18'),
+    role(marigold, 'Inference Engineer', '2024-05-14', '2026-09-12')),
+  profile(901019, 'Tiven Aalek', role(pylon, 'GPU Engineer', '2026-11-05'),
+    role(saffron, 'Inference Engineer', '2024-06-01', '2026-11-03')),
+  profile(901020, 'Maela Entor', role(pylon, 'ML Infrastructure Engineer', '2026-11-07'),
+    role(saffron, 'Model Serving Engineer', '2024-09-08', '2026-11-04')),
+  profile(901021, 'Sorin Halvek', role(pylon, 'Inference Engineer', '2026-11-09'),
+    role(saffron, 'GPU Engineer', '2024-02-01', '2026-11-06')),
+  profile(901022, 'Jorin Tarvek', role(morrow, 'Inference Engineer', '2026-10-01T00:00:00'),
+    role(vela, 'LLM Serving Engineer', '2023-08-15', '2026-09-01T00:00:00')),
+  profile(901023, 'Rena Dalmir', role(morrow, 'Inference Engineer', '2026-11-01T00:00:00'),
+    role(vela, 'ML Infrastructure Engineer', '2024-08-15', '2026-10-25')),
+  profile(901024, 'Uri Kesvan', role(morrow, 'GPU Software Engineer', '2026-11-12'),
+    role(vela, 'GPU Cluster Engineer', '2024-09-14', '2026-11-08')),
+  profile(901025, 'Lira Nolvai', role(kestrel, 'Inference Engineer', '2026-11-05'),
+    role(banyan, 'LLM Infrastructure Engineer', '2023-05-17', '2026-11-03')),
+  profile(901026, 'Ami Vorlen', role(kestrel, 'ML Platform Engineer', '2026-11-08'),
+    role(banyan, 'Distributed Inference Engineer', '2024-04-09', '2026-11-04')),
+  profile(901027, 'Tej Brinal', role(kestrel, 'Model Serving Engineer', '2026-11-11'),
+    role(banyan, 'MLOps Engineer', '2024-11-07', '2026-11-10')),
 ];
