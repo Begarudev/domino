@@ -162,3 +162,9 @@
 .by-evbtn:hover { text-decoration-color: var(--ink-3); color: var(--ink); }
 .by-evbtn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 2px; }
 .by-l2 .tag { margin-right: 6px; }
+/* g6 act-check: proportional digits per house rule, numbers never clip, one chip size across columns */
+.by-count b, .by-date, .by-facts, .by-req-meta .mono, .by-meta .mono { font-variant-numeric: normal; }
+.by-count b, .by-facts, .by-facts b { white-space: nowrap; overflow: visible; }
+.by-counts { flex-wrap: wrap; justify-content: flex-end; }
+.by-head { flex-wrap: wrap; }
+.by-trig .tag, .by-l2 .tag, .by-trig .by-rule-l .tag { font-size: var(--fs-cap); line-height: 16px; }
