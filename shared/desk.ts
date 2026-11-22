@@ -35,6 +35,7 @@ export interface Candidate {
   evidenceIds: string[];            // the person-enrich evidence rows behind the profile
   runId: string;                    // the candidate pipeline run (stream its events at /api/runs/:runId/stream)
   parsedBy: 'llm' | 'rules';
+  fieldSource?: string;             // "Filled by GPT-6 Luna · confirm each field" (llm) or "Read by rules from your profile · confirm each field"
   fixture?: boolean;                // labelled fictional demo candidate
 }
 
@@ -113,6 +114,7 @@ export interface IntroRequest {
   runId: string | null;             // intro pipeline run: draft, approval, outbox (send once)
   approvalId?: string | null;       // POST /api/approvals/:id with this id to approve or reject the send
   evidenceIds?: string[];           // rows the message cites
+  receipt?: { idempotencyKey: string; receivedAt: IsoDateTime } | null; // from the test-inbox receiver (inbox_received); set once delivered
   receivedAt: IsoDateTime;
 }
 
@@ -160,4 +162,15 @@ export interface CompanyDossier {
   openings: Opening[];              // Search Desk openings for this company (latest openings scan), if any
   outreach: DossierOutreach[];
   evidence: Evidence[];
+}
+
+// GET /api/candidates/:id/intros/preview?openingId= : exactly what an intro would share, before the candidate consents.
+export interface IntroPreviewField { field: string; label: string; value: string; evidenceId?: string }
+export interface IntroPreview {
+  candidateId: string;
+  openingId: string;
+  companyName: string;
+  roleTitle: string;
+  shared: IntroPreviewField[];      // fields the intro message will contain, given the current consent
+  withheld: { field: string; label: string; reason: string }[]; // never or not shared, and why
 }

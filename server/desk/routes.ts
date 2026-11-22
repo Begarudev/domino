@@ -4,9 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Company, Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
-import type { Candidate, CompanySummary, CompanyView, IntroRequest, Opening } from '../../shared/desk.ts';
+import type {
+  Candidate, CompanySummary, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
+} from '../../shared/desk.ts';
 import type { Store } from '../db.ts';
 import { linkedinProfileUrl } from '../crustdata/person-enrich.ts';
+import { introSharedFields } from '../engine/candidate-steps.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
@@ -39,6 +42,14 @@ const pick = (evidence: Evidence[], ids: Iterable<string>) => {
   const wanted = new Set(ids);
   return evidence.filter(row => wanted.has(row.id));
 };
+// Anti-wrapper rule 4: no bare scores leave the API. Ranking uses them internally; the UI shows clauses and fit reasons.
+function publicOpening<T extends Opening>(opening: T): Omit<T, 'confidence' | 'matchScore'> {
+  const { confidence: _confidence, matchScore: _matchScore, ...rest } = opening as T & { matchScore?: number };
+  return rest;
+}
+function publicMatch({ score: _score, ...rest }: Match): Omit<Match, 'score'> {
+  return rest;
+}
 const shortId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
 export function deskRoutes({ store, launch }: DeskDeps) {
@@ -50,14 +61,17 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const drafted = row.runId ? store.getOutput<CandidateOutputs['draft_intro']>(row.runId, 'draft_intro') : undefined;
     const approval = row.runId ? store.getApprovals(row.runId)[0] : undefined;
     const delivered = Boolean(row.runId && approval && store.getOutbox(row.runId).some(action => action.approvalId === approval.id));
-    const status: IntroRequest['status'] = delivered ? 'delivered' : approval?.status === 'rejected' ? 'declined'
+    const received = approval && store.sql.prepare('SELECT received_at FROM inbox_received WHERE idempotency_key = ?')
+      .get(approval.idempotencyKey) as { received_at: string } | undefined;
+    const receipt = received ? { idempotencyKey: approval!.idempotencyKey, receivedAt: received.received_at } : null;
+    const status: IntroRequest['status'] = delivered || receipt ? 'delivered' : approval?.status === 'rejected' ? 'declined'
       : approval?.status === 'pending' ? 'awaiting_approval' : 'new';
     return {
       id: row.id, direction: row.direction, candidateId: row.candidateId, companyId: row.companyId,
       companyName: opening?.companyName ?? drafted?.company.name ?? row.companyId, openingId: row.openingId,
       roleTitle: opening?.roleTitle ?? drafted?.roleTitle ?? '', message: drafted?.draft?.body ?? '', status, runId: row.runId,
       approvalId: approval?.id ?? null, evidenceIds: drafted?.draft?.citations.map(item => item.evidenceId) ?? [],
-      receivedAt: row.createdAt,
+      receipt, receivedAt: receipt?.receivedAt ?? row.createdAt,
     };
   };
 
@@ -88,6 +102,13 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     // A full cohort pull is 8–13 person-search pages paced for the rate limit (about 4 minutes and 300–600 credits).
     const runId = launch('openings', request, { limits: { maxCredits: 1500, maxSeconds: asOf ? 1200 : 900 } });
     return c.json({ runId }, 201);
+  });
+
+  api.get('/openings/funnel', c => {
+    const runId = latestOpeningsRunId(store);
+    const funnel = runId ? store.getOutput<{ funnel?: OpeningsFunnel }>(runId, 'detect_openings')?.funnel : undefined;
+    if (!funnel) return c.json({ error: 'No completed openings scan with a funnel yet' }, 404);
+    return c.json(funnel);
   });
 
   // ---------- candidates ----------
@@ -132,13 +153,40 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
     const snapshot = openingsSnapshot(store);
     if (candidate.status !== 'ready' || !snapshot) return c.json([]);
-    return c.json(openingsForCandidate(candidate, snapshot.openings, snapshot.evidence));
+    const ranked: OpeningForCandidate[] = openingsForCandidate(candidate, snapshot.openings, snapshot.evidence);
+    return c.json(ranked.map(publicOpening));
   });
 
   api.get('/candidates/:id/inbox', c => {
     const id = c.req.param('id');
     if (!getCandidateRow(store, id)) return c.json({ error: 'Candidate not found' }, 404);
-    return c.json(listIntroRows(store, { candidateId: id }).filter(row => row.direction === 'company_to_candidate').map(introView));
+    // Fed only by the send-once outbox: an intro appears here once the test-inbox receiver has accepted it.
+    return c.json(listIntroRows(store, { candidateId: id }).filter(row => row.direction === 'company_to_candidate')
+      .map(introView).filter(intro => intro.receipt));
+  });
+
+  api.get('/candidates/:id/intros/preview', c => {
+    const candidate = loadCandidate(c.req.param('id'));
+    if (!candidate) return c.json({ error: 'Candidate not found' }, 404);
+    if (candidate.status !== 'ready') return c.json({ error: 'The profile is not ready yet' }, 409);
+    const opening = openingsSnapshot(store)?.openings.find(item => item.id === c.req.query('openingId'));
+    if (!opening) return c.json({ error: 'Opening not found in the latest scan' }, 404);
+    const shared = introSharedFields(candidate, candidateEvidence(store, candidate));
+    const preview: IntroPreview = {
+      candidateId: candidate.id, openingId: opening.id, companyName: opening.companyName, roleTitle: opening.roleTitle,
+      shared: [{ field: 'displayName', label: 'Name', value: candidate.displayName },
+        ...shared.map(({ field, label, value, evidenceId }) => ({ field, label, value, evidenceId }))],
+      withheld: [
+        { field: 'fullName', label: 'Full name', reason: 'Never shared: first name and last initial only' },
+        { field: 'contact', label: 'Email, phone, profile URL', reason: 'Never in the intro: replies go through the desk' },
+        ...(!candidate.consent.shareSkills ? [{ field: 'skills', label: 'Skills', reason: 'You did not share skills' }] : []),
+        ...(!candidate.consent.shareHistory ? [{ field: 'history', label: 'Work history', reason: 'You did not share work history' }] : []),
+        ...(candidate.consent.shareHistory ? [{ field: 'pastRoles', label: 'Past roles', reason: 'Only the current role goes into an intro' }] : []),
+        { field: 'samples', label: 'Work samples', reason: 'Not included in intros' },
+        { field: 'headline', label: 'Headline', reason: 'Not included in intros' },
+      ],
+    };
+    return c.json(preview);
   });
 
   api.get('/candidates/:id/intros', c => {
@@ -197,7 +245,10 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       ...company.evidenceIds, ...openings.flatMap(opening => opening.evidenceIds), ...departures.map(departure => departure.evidenceId),
       ...matches.flatMap(match => match.fit.flatMap(reason => reason.evidenceId ?? [])),
     ];
-    const view: CompanyView = { company, departures, openings, matches, intros, runId: snapshot.runId, replay, evidence: pick(snapshot.evidence, cited) };
+    const view: CompanyView = {
+      company, departures, openings: openings.map(publicOpening), matches: matches.map(publicMatch), intros, runId: snapshot.runId, replay,
+      evidence: pick(snapshot.evidence, cited),
+    };
     return c.json(view);
   });
 
