@@ -39,3 +39,6 @@
 @media (max-width: 900px) { .lg-caps { grid-template-columns: 1fr; } }
 /* Schibsted tabular figures space "." and "," wide ("3. 50"); keep proportional figures, right-aligned. */
 .ledger .num, .ledger [data-num], .lg-line b { font-variant-numeric: normal; }
+.ledger .panel > header h2 { font-size: 15px; }
+.lg-table td.lg-step { max-width: 380px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-table tbody td { padding-top: 7px; padding-bottom: 7px; }

@@ -153,7 +153,7 @@ function Row({ r }: { r: LedgerEntry }) {
   return (
     <tr ref={ref} data-testid="ledger-row" className={r.status === 'budget_blocked' ? 'blocked-row' : undefined}>
       <td className="mono">{fmtTime(r.ts)}</td>
-      <td>{stepName(r)}</td>
+      <td className="lg-step" title={stepName(r)}>{stepName(r)}</td>
       <td className="mono" title={ENDPOINT_NOUN[r.endpoint] ?? r.endpoint}>{r.endpoint}</td>
       <td>{r.injected ? <span className="st held">Injected fault</span> : modeLabel(r)}</td>
       <td className={bad ? 'lg-bad' : undefined}>{STATUS[r.status]}{r.attempt > 1 ? ` · try ${r.attempt}` : ''}</td>

@@ -32,3 +32,6 @@
 .rp-ghost { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 14px; display: grid; gap: 6px; }
 @media (prefers-reduced-motion: reduce) { .rp-summary { animation: none; } .rp-ev { transition: none; } }
 .replay .num, .replay [data-num] { font-variant-numeric: normal; }
+.replay .panel > header h2 { font-size: 15px; }
+.rp-ghost-t td { color: var(--ink-2); }
+.ghost-bar { display: inline-block; width: 36px; height: 10px; border-radius: 2px; background: var(--rule-2); vertical-align: middle; }

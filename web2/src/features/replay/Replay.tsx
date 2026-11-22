@@ -110,7 +110,7 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
             <div className="rp-ticks">{ticks.map((m) => <span key={m.label} style={{ left: `${((m.at - start) / span) * 100}%` }}>{m.label}</span>)}</div>
           </div>
           <div className="rp-now">
-            <b className="mono">{fmtDate(iso(cursor), true)}</b>
+            <b>{fmtDate(iso(cursor), true)}</b>
             <span>{plural(seen.length, 'company', 'companies')} with a dated post or hire so far</span>
           </div>
         </div>
@@ -149,7 +149,17 @@ function ReplayCard({ score, locked }: { score: Score; locked: string | null }) 
         </section>
       ) : (
         <section className="panel rp-held" aria-live="polite">
-          <div className="pad faint">The scorecard appears when the replay reaches {fmtDate(score.horizonEnd, true)}. Outcomes before then are dots on the track.</div>
+          <header><h2>Scorecard</h2><span className="faint">Counts appear when the replay reaches {fmtDate(score.horizonEnd, true)}</span></header>
+          <div className="pad">
+            <table className="t rp-table rp-ghost-t" aria-label="Scorecard, withheld until the end">
+              <thead><tr><th>Selector</th><th className="num">Selected</th><th className="num">Had the outcome</th><th className="num">Median lead</th></tr></thead>
+              <tbody>
+                {['O1 (locked rule)', 'Job-post baseline', 'Whole cohort (base rate)'].map((l) => (
+                  <tr key={l}><td>{l}</td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td><td className="num"><i className="ghost-bar" /></td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>
