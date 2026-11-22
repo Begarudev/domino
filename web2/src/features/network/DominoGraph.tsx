@@ -97,14 +97,14 @@ export function DominoGraph({ desk, dossier, checkedAt }: { desk: CompanyDesk; d
           <p className="dg-sum">{summary}</p>
         </div>
         <div className="dg-kpis">
-          <span className="kpi counted"><b>{counted}</b>counted</span>
-          <span className="kpi held"><b>{held}</b>held</span>
+          {!band && <span className="kpi counted"><b>{counted}</b>counted</span>}
+          {held > 0 && <span className="kpi held"><b>{held}</b>held</span>}
           <span className="kpi not"><b>{not}</b>not counted</span>
           {joined.length > 0 && <span className="kpi in"><b>{joined.length}</b>joined</span>}
         </div>
       </header>
       <p className="dg-legend">
-        {(['counted', 'held', 'not'] as Kind[]).map((k) => <span key={k}><i className={`sw ${k}`} />{KIND_LABEL[k]}</span>)}
+        {(['counted', 'held', 'not'] as Kind[]).filter((k) => count(k) > 0).map((k) => <span key={k}><i className={`sw ${k}`} />{KIND_LABEL[k]}</span>)}
         <span className="dg-hint">Hover a move for its reason; click to open the dated source.</span>
       </p>
       <div className="dg-table" role="table" aria-label={`Where ${name}'s people went`}>
