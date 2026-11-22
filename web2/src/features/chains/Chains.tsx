@@ -16,6 +16,7 @@ import {
   useDossier, useHeldExample, useRules, watchCount,
 } from './model.ts';
 import './chains.css';
+import { HowComputed } from '../buyers/HowComputed.tsx';
 import { DominoGraph } from '../network/DominoGraph.tsx';
 
 export function Chains({ desk }: { desk: CompanyDesk }) {
@@ -52,7 +53,9 @@ export function Chains({ desk }: { desk: CompanyDesk }) {
       {dq.error && !dossier && <p className="src-note reg-wide">No company file for {desk.company.name} yet ({dq.error}), so the per-company rows are left out.</p>}
       {dossier && dossier.rules.length > 0 && (
         <div className="reg-wide verdict" data-testid="chains-verdict">
-          <b>{desk.company.name}</b>
+          <b>{desk.company.name}<HowComputed endpoint="GET /api/rules and GET /api/companies/:id/dossier"
+            rule="Rules are pre-registered with thresholds and a lock time; each chip is that rule’s state for this company (met, not met with have-of-need, or held by a false-drain guard)."
+            source="Crustdata person search (departures), company enrich (headcount) and job search (replacement posts), via the evidence ledger." /></b>
           {dossier.rules.map((r) => {
             const c = r.id === 'R1' && r1Held ? { cls: 'ctag tone-held', label: r1Held } : ruleStateChip(r.state);
             const w = r.id === 'R1' && !r1Held ? watchCount(r) : null;

@@ -15,6 +15,7 @@ import type { ClaimRow, ClaimState } from '../chains/model.ts';
 import '../chains/chains.css';
 import './verifier.css';
 import './verifier-color.css';
+import { HowComputed } from '../buyers/HowComputed.tsx';
 
 const ORDER: ClaimState[] = ['verified', 'open', 'not_met', 'guard', 'cant', 'removed', 'not_evaluated'];
 const MARK: Record<ClaimState, string> = { verified: '✓', open: '○', not_met: '×', guard: '×', cant: '×', removed: '×', not_evaluated: '–' };
@@ -34,7 +35,9 @@ export function Needs({ desk }: { desk: CompanyDesk }) {
     <div className="ver" ref={enter}>
       <GuardCard held={held} />
       <aside className="panel ver-sum" aria-label="Claims checked">
-        <header><h2>Claims checked · {desk.company.name}</h2><span className="faint" data-num>{verified} of {all.length} verified</span></header>
+        <header><h2>Claims checked · {desk.company.name}<HowComputed endpoint="GET /api/companies/:id and GET /api/companies/:id/dossier"
+          rule="Every clause of every rule run on this company (O1, R1, guards) is checked against a dated record: verified, open, not met, guard matched, or I can’t verify (timed out or no source)."
+          source={`Crustdata person search, company enrich, job search and news, as recorded in the evidence ledger${desk.checkedAt ? `; checked ${desk.checkedAt.slice(0, 10)}` : ''}.`} /></h2><span className="faint" data-num>{verified} of {all.length} verified</span></header>
         <div className="ver-tally" role="group" aria-label="Filter claims by result">
           {tally.map(({ s, n }) => (
             <button key={s} className={`vt vt-${s}`} aria-pressed={filter === s} onClick={() => setFilter((f) => (f === s ? null : s))}>
