@@ -21,6 +21,7 @@ export function predictionEvidence(evidence: Evidence[], intent: Intent): Eviden
 const specs = [
   deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
   deps.jobSearchOutcomes, deps.personSearchOutcomes,
+  deps.newsSearch, deps.newsFetch,
 ];
 
 export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, SourceResult>, input: I, time: SourceTime) {
@@ -50,7 +51,7 @@ export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, Sour
 
   return {
     evidence, sources, mentions: withIds(raw.mentions), people: withIds(raw.people), triggers: withIds(raw.triggers),
-    observation, endpoint: spec.name, path: spec.path, input, time,
+    observation, endpoint: spec.name, path: spec.path, input, time, readSummary: raw.readSummary,
   };
 }
 

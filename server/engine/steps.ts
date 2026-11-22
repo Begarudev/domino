@@ -169,8 +169,8 @@ function guardBatch(batch: TriggerBatch, intent: Intent): TriggerBatch {
 type TriggerSource<I> = EndpointSpec<I, TriggerBatch>;
 async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpoints): Promise<StepResult<'pull_triggers'>> {
   const output = emptyBatch();
-  for (const spec of [deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth] satisfies TriggerSource<{ intent: Intent }>[]) {
-    const batch = await readSource(ctx, spec, { intent: intent! }, intent!);
+  const summaries: string[] = [];
+  const publish = (batch: Awaited<ReturnType<typeof readSource>>) => {
     const kept = guardBatch(batch, intent!);
     ctx.store.transaction(() => {
       publishSource(ctx, batch, kept.evidence, kept.triggers.flatMap(trigger => trigger.evidenceIds));
@@ -180,10 +180,30 @@ async function pullTriggers(ctx: ToolContext, { parse_request: intent }: Checkpo
     output.people.push(...kept.people);
     output.triggers.push(...kept.triggers);
     output.evidence.push(...kept.evidence);
+    if (batch.readSummary) summaries.push(batch.readSummary);
+    return kept;
+  };
+  for (const spec of [deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth] satisfies TriggerSource<{ intent: Intent }>[]) {
+    publish(await readSource(ctx, spec, { intent: intent! }, intent!));
+  }
+  if (intent!.runKind === 'replay') {
+    summaries.push('Skipped news search and article fetch in replay: web search has no as-of-safe dating');
+  } else {
+    const events = deps.activeNewsEvents(seller.displacementEvents, intent!, ctx.mode);
+    if (events.length) {
+      // Keep the news calls spaced even when the preceding source used another endpoint's rate-limit slot.
+      if (ctx.mode === 'live') await ctx.wait(3000);
+      const search = publish(await readSource(ctx, deps.newsSearch, { intent: intent!, events }, intent!));
+      const urls = deps.newsFetchUrls(events, search);
+      if (urls.length) {
+        if (ctx.mode === 'live') await ctx.wait(3000);
+        publish(await readSource(ctx, deps.newsFetch, { intent: intent!, urls, events }, intent!));
+      } else summaries.push('No direct publisher URLs available for article fetch');
+    }
   }
   output.evidence = byId(output.evidence);
   output.triggers = byId(output.triggers);
-  return { output, summary: `${output.triggers.length} triggers from ${output.evidence.length} evidence rows` };
+  return { output, summary: [`${output.triggers.length} triggers from ${output.evidence.length} evidence rows`, ...summaries].join('; ') };
 }
 
 function resolveBatch(batch: TriggerBatch): Resolved {
