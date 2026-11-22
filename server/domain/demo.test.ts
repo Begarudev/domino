@@ -71,6 +71,13 @@ test('fixture demo runs the full data and outreach pipeline', () => {
   assert.equal(held.draftId, null);
   assert.ok(!graph.edges.some(edge => edge.to === held.companyId && edge.mechanism === 'TALENT_DRAIN'));
   assert.equal(buildClaims(held, byName('Saffron Stack'), triggers, evidence, graph).length, 0);
+  const marigold = byName('Marigold Compute');
+  const watch = targets.find(row => row.companyId === marigold.id)!;
+  assert.match(watch.watch!.reason, /2 of 3 serving departures seen/);
+  assert.ok(targets.filter(row => !row.watch && !row.hold).every(row => row.rank < watch.rank));
+  const suppressedClaims = buildClaims(watch, marigold, triggers, evidence, graph);
+  assert.deepEqual(suppressedClaims, []);
+  assert.equal(templateDraft(watch, null, suppressedClaims, seller).body, '');
   const ambiguous = targets.find(item => item.companyId === byName('Vela Patterns').id)!;
   assert.deepEqual(ambiguous.hold?.reasons, ['month-only dates cannot settle the 30-day window']);
   assert.ok(evidence.some(row => /at Morrow Stack in Oct 2026 \(month precision\)/.test(row.claim)));
@@ -119,7 +126,7 @@ test('fixture demo runs the full data and outreach pipeline', () => {
 
   console.table(targets.map(row => ({
     rank: row.rank, company: byId.get(row.companyId)?.name, score: row.score, mechanism: row.mechanisms.join(', '),
-    netNew: row.netNew, status: row.hold ? 'Hold' : 'Actionable',
+    netNew: row.netNew, status: row.hold ? 'Hold' : row.watch ? 'Watchlist' : 'Actionable',
   })));
   console.log(draft.subject + '\n\n' + verified.body);
 });

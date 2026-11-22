@@ -28,7 +28,7 @@ export function scoreReplay(intent: Intent, targets: Target[], baseline: { first
   }
 
   const late = targets.filter(target => target.whyNowDate && target.whyNowDate > intent.asOf);
-  const actionable = targets.filter(target => !target.hold && !late.includes(target));
+  const actionable = targets.filter(target => !target.hold && !target.watch && !late.includes(target));
   // Pre-registered protocol (README "Replay protocol"): the DOMINO arm is the accounts flagged by a CROSS-COMPANY rule;
   // first-order DIRECT picks belong to the hiring-filter baseline. Every arm uses the same outcome: a dated
   // serving/infra/ML-platform job post or hire within 60 days of the as-of date (capped at today).

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Company, Intent } from '../../shared/types.ts';
+import { Store } from '../db.ts';
 import { parseIntentRules } from '../domain/index.ts';
+import { canonicalJson, hash, ToolContext } from '../runtime/tool.ts';
 import type { ParseMeta } from '../domain/types.ts';
-import { endpoints, fixtureFor, NonsenseError } from './index.ts';
+import { endpoints, fixtureFor, movesPageLimit, NonsenseError, readMovesPages } from './index.ts';
 import type { EndpointSpec } from './spec.ts';
 
 const today = '2026-11-22';
@@ -63,6 +65,86 @@ test('person search records month precision and looks back 120–30 days in repl
   assert.match(JSON.stringify(historical.body), /"field":"experience.employment_details.current.start_date","type":"<","value":"2026-08-03"/);
   assert.deepEqual(historical.parsed.triggers.filter(row => row.kind === 'hire').map(row => row.date).sort(),
     ['2026-07-29', '2026-07-31', '2026-08-02']);
+});
+
+test('live moves search on the past role and keep both sides of a departure even when the new job is non-infra', () => {
+  const input = { intent };
+  const { body, meta } = evaluate(endpoints.person_recent_moves, input);
+  assert.match(JSON.stringify(body), /"field":"experience.employment_details.past.title","type":"\[\.\]","value":"inference"/);
+  assert.match(JSON.stringify(body), /"field":"experience.employment_details.current.start_date","type":"=>","value":"2026-08-24"/);
+  assert.doesNotMatch(JSON.stringify(body), /"sorts"|"field":"experience.employment_details.current.title"/);
+  assert.equal((body as { limit: number }).limit, 200);
+  assert.equal(endpoints.person_recent_moves.estimateCredits(null, input), 46);
+  const raw = {
+    profiles: [{
+      crustdata_person_id: 100, basic_profile: { name: 'Navi Ember' },
+      experience: { employment_details: {
+        current: [{ name: 'Slate Grid', title: 'Developer Advocate', start_date: '2026-08-24', company_headquarters_country: 'United States' }],
+        past: [{ name: 'Reed Signals', title: 'Inference Engineer', start_date: '2021-01-01', end_date: '2026-08-22',
+          company_headquarters_country: 'India' }],
+      } },
+    }],
+    next_cursor: 'opaque+/=',
+  };
+  const page = endpoints.person_recent_moves.parse(raw, input, meta);
+  assert.equal(page.nextCursor, 'opaque+/=');
+  assert.deepEqual(page.triggers.map(trigger => trigger.kind), ['hire', 'departure']);
+  assert.match(page.triggers[0].summary, /Developer Advocate/);
+  assert.ok(page.triggers[1].evidenceIds.some(id => page.evidence.find(row => row.id === id)?.value === 'Inference Engineer'));
+  assert.equal(page.mentions.find(company => company.key === page.triggers[1].companyId)?.name, 'Reed Signals');
+});
+
+test('moves pagination sends opaque cursors unchanged and stops at the budgeted page count or a repeated cursor', async () => {
+  assert.equal(movesPageLimit(''), 2);
+  assert.equal(movesPageLimit('invalid'), 2);
+  assert.equal(movesPageLimit('3'), 3);
+  const spec = endpoints.person_recent_moves;
+  const bodies: { cursor?: string; limit: number }[] = [];
+  const pages = readMovesPages(intent, async input => {
+    const body = spec.build(input) as { cursor?: string; limit: number };
+    bodies.push(body);
+    return { nextCursor: 'opaque+/=' };
+  }, 4);
+  for await (const _ of pages) { /* Read all available pages. */ }
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[1], { ...bodies[0], cursor: 'opaque+/=' });
+
+  const fixtureBodies: unknown[] = [];
+  for await (const page of readMovesPages(intent, async input => {
+    const body = spec.build(input) as Record<string, unknown>;
+    fixtureBodies.push(body);
+    const raw = fixtureFor(spec.name, { ...body, limit: 1 });
+    return spec.parse(raw, input, { mode: 'fixture', asOf: today, windowDays: 30, endpoint: spec.path, retrievedAt: today + 'T12:00:00Z' });
+  }, 1)) {
+    assert.equal(page.people.length, 1);
+    assert.equal(page.nextCursor, 'fixture_profiles:1');
+  }
+  assert.equal(fixtureBodies.length, 1);
+});
+
+test('each cursor page is served from its own cache entry without spending credits', async () => {
+  const store = new Store(':memory:');
+  const spec = endpoints.person_recent_moves;
+  const runId = 'cached-departure-pages';
+  try {
+    store.createRun(runId, 'Cached move search', 'cache', 'template', {
+      maxCredits: 0, maxSeconds: 10, maxModelUsd: 0,
+    }, {});
+    for (const [cursor, next] of [[undefined, 'opaque+/='], ['opaque+/=', null]] as const) {
+      const request = canonicalJson(spec.build({ intent, cursor }));
+      store.writeCache(hash(spec.path + request), 'crustdata', spec.path, request, { profiles: [], next_cursor: next });
+    }
+    const ctx = new ToolContext(store, runId, 'pull_triggers');
+    const cursors: (string | null)[] = [];
+    for await (const page of readMovesPages(intent, input => ctx.crust(spec, input, intent, fixtureFor,
+      () => ({ evidence: [], mentions: [], people: [], triggers: [], nextCursor: null })), 2)) {
+      cursors.push(page.nextCursor);
+    }
+    assert.deepEqual(cursors, ['opaque+/=', null]);
+    assert.deepEqual(store.getLedger(runId).map(row => [row.status, row.credits]), [['cache_hit', 0], ['cache_hit', 0]]);
+  } finally {
+    store.sql.close();
+  }
 });
 
 test('company_growth uses the provider snapshot date and preserves the legal alias', () => {
@@ -131,7 +213,34 @@ test('permissive parsing retains an undated matching fact as unverifiable withou
   const item = payload.job_listings.find(job => job.crustdata_job_id === 900001)!;
   const parsed = endpoints.job_search.parse({ job_listings: [{ ...item, metadata: {}, extra: 'allowed' }] }, { intent }, meta);
   assert.equal(parsed.triggers.length, 0);
-  assert.equal(parsed.evidence.length, 1);
-  assert.equal(parsed.evidence[0].observedAt, null);
-  assert.equal(parsed.evidence[0].verifiable, false);
+  assert.ok(parsed.evidence.some(row => row.source.field === '$.job_details.title'));
+  assert.ok(parsed.evidence.every(row => row.observedAt === null && row.verifiable === false));
+});
+
+test('job triggers are title-only and omit client postings from recruiter accounts', () => {
+  const { body, meta } = evaluate(endpoints.job_search, { intent });
+  assert.match(JSON.stringify(body), /"field":"job_details.title","type":"\[\.\]","value":"inference"/);
+  assert.doesNotMatch(JSON.stringify(body), /"field":"content.description","type":"\[\.\]","value":"inference"/);
+  const posting = (id: number, title: string, name: string, industry: string, description = 'Build GPU infrastructure and inference.') => ({
+    crustdata_job_id: id,
+    job_details: { title, url: 'https://sample.example/jobs/' + id },
+    company: { basic_info: { name, industries: [industry] } },
+    content: { description },
+    metadata: { date_added: '2026-11-14' },
+  });
+  const raw = { job_listings: [
+    posting(1, 'Technical Product Manager', 'Juniper Lattice', 'Artificial Intelligence'),
+    posting(2, 'AI Engineer', 'Juniper Lattice', 'Artificial Intelligence'),
+    posting(3, 'LLM Infra Engineer', 'Juniper Lattice', 'Artificial Intelligence', ''),
+    posting(4, 'Inference Engineer', 'Fonzi AI', 'Artificial Intelligence'),
+    posting(5, 'ML Platform Engineer', 'Flexiple', 'Software Development'),
+    posting(6, 'Serving Engineer', 'RemoteHunter', 'Software Development'),
+    posting(7, 'GPU Software Engineer', 'Toptal', 'Software Development'),
+    posting(8, 'MLOps Engineer', 'Spruce Match', 'Staffing and Recruiting'),
+  ] };
+  const parsed = endpoints.job_search.parse(raw, { intent }, meta);
+  assert.equal(parsed.triggers.filter(trigger => trigger.kind === 'job_post').length, 1);
+  assert.match(parsed.triggers[0].summary, /LLM Infra Engineer/);
+  assert.deepEqual(parsed.evidence.filter(row => row.source.field === '$.content.description').map(row => row.source.recordId), ['1', '2']);
+  assert.ok(parsed.mentions.every(mention => mention.name === 'Juniper Lattice'));
 });

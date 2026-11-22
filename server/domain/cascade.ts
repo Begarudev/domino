@@ -1,8 +1,10 @@
 import sellerJson from '../../config/seller.json' with { type: 'json' };
 import type { CascadeGraph, Company, Evidence, GraphEdge, Intent, Mechanism, Target, Trigger } from '../../shared/types.ts';
+import { companySegments, isGiant, isIcp, isRecruiter, isServicesCompany, looksLikeAiCompany } from './company-fit.ts';
 import {
-  companyNameKey, daysBetween, DRAIN_HISTORY_DAYS, DRAIN_REPLAY_HISTORY_DAYS, DRAIN_REPLAY_WINDOW_DAYS, DRAIN_WINDOW_DAYS, formatDay, formatMonth, inWindow, normalizeDomain,
-  relatedDomains, servingTitleStatus, shiftDays, stableId,
+  companyNameKey, daysBetween, DRAIN_HISTORY_DAYS, DRAIN_REPLAY_HISTORY_DAYS, DRAIN_REPLAY_WINDOW_DAYS,
+  DRAIN_WINDOW_DAYS, formatDay, formatMonth, inWindow, normalizeDomain, normalizeName, relatedDomains,
+  servingTitleStatus, shiftDays, stableId,
 } from './facts.ts';
 import { evidenceKnownAt, PROFILE_LAG_DAYS } from './replay-guard.ts';
 import type { MoveTrigger, ReasonedNode, ResolvedCompany, SellerProfile } from './types.ts';
@@ -35,6 +37,8 @@ type Rule = keyof typeof mechanisms;
 const unique = <T>(items: T[]): T[] => [...new Set(items)];
 const round = (n: number) => Math.round(n * 100) / 100;
 const isMove = (trigger: Trigger) => trigger.kind === 'hire' || trigger.kind === 'departure';
+const broadSegments = new Set(['ai', 'ml', 'artificial intelligence', 'machine learning', 'software development',
+  'technology information and internet', 'information technology', 'information technology and services', 'technology']);
 
 function currentTriggers(intent: Intent, triggers: Trigger[]) {
   const after = shiftDays(intent.asOf, -intent.windowDays);
@@ -43,19 +47,31 @@ function currentTriggers(intent: Intent, triggers: Trigger[]) {
     (intent.runKind !== 'replay' || !isMove(trigger) || trigger.date <= profileCutoff));
 }
 
-function peerReason(a: Company, b: Company): string | null {
-  const competitors = a.competitorIds?.includes(b.id) || b.competitorIds?.includes(a.id);
-  if (!a.industry || !b.industry || !a.headcount || !b.headcount ||
-    companyNameKey(a.industry) !== companyNameKey(b.industry) ||
-    Math.max(a.headcount, b.headcount) > 3 * Math.min(a.headcount, b.headcount)) {
-    return competitors ? 'listed competitor' : null;
-  }
-  const min = Math.min(a.headcount, b.headcount);
-  const max = Math.max(a.headcount, b.headcount);
+function peerMatch(source: Company, peer: Company) {
+  const listed = Number(Boolean(source.competitorIds?.includes(peer.id))) * 2 +
+    Number(Boolean(peer.competitorIds?.includes(source.id)));
+  const sameIndustry = Boolean(source.industry && peer.industry && normalizeName(source.industry) === normalizeName(peer.industry));
+  const segments = new Set(companySegments(source));
+  // A broad taxonomy tag alone cannot bridge otherwise different industries.
+  const sharedSegments = [...new Set(companySegments(peer))].filter(segment => segments.has(segment) && !broadSegments.has(segment)).length;
+  const min = Math.min(source.headcount ?? 0, peer.headcount ?? 0);
+  const max = Math.max(source.headcount ?? 0, peer.headcount ?? 0);
+  const sizeRatio = min > 0 ? max / min : Infinity;
+  if (!listed && ((!sameIndustry && !sharedSegments) || sizeRatio > 2)) return null;
   const step = min < 100 ? 25 : 100;
   const lower = Math.floor(min / step) * step;
   const upper = Math.max(lower + step, Math.ceil(max / step) * step);
-  return `same segment, ${lower}–${upper} staff`;
+  const reason = listed ? 'listed competitor'
+    : `${sameIndustry ? 'same segment' : 'shared category'}, ${lower}–${upper} staff`;
+  return { listed, sameIndustry: Number(sameIndustry), sharedSegments, sizeRatio, reason };
+}
+
+function technicalRole(title: string): 'serving' | 'infra' | null {
+  const status = servingTitleStatus(title);
+  if (status === 'serving' || (status === 'unknown' && /\bgpus?\b/i.test(title))) return 'serving';
+  if ((status === 'unknown' && /\b(?:infrastructure|infra|site reliability|platform engineer(?:ing)?)\b/i.test(title)) ||
+    /^(?:senior |staff |principal )?sre$/i.test(title.trim())) return 'infra';
+  return null;
 }
 
 function identifies(company: Company, ref: string, id?: number | string | null) {
@@ -91,16 +107,37 @@ type Supporting = {
 type Candidate = {
   trigger: Trigger; person: string; hirer: Company; loser: Company; month: boolean; ambiguousDate: boolean;
   unknownTitle: boolean; conclusive: boolean; firstStart: string; lastStart: string;
+  departedAt: string | null;
 };
 
 export function buildCascade(intent: Intent, triggers: Trigger[], companies: Company[], evidence: Evidence[]): CascadeGraph {
   const byId = new Map(companies.map(company => [company.id, company]));
   const rowById = new Map(evidence.filter(row => row.verifiable && row.observedAt && row.observedAt <= intent.asOf &&
     (intent.runKind !== 'replay' || evidenceKnownAt(row, intent.asOf))).map(row => [row.id, row]));
-  const valid = currentTriggers(intent, triggers).filter(trigger => byId.has(trigger.companyId));
+  const valid = currentTriggers(intent, triggers).filter(trigger => {
+    const company = byId.get(trigger.companyId);
+    return company && (trigger.kind !== 'job_post' || !isRecruiter(company));
+  });
   const datedIds = (ids: string[]) => unique(ids.filter(id => rowById.has(id)));
   const hasDatedFact = (trigger: Trigger) => trigger.evidenceIds.some(id => rowById.has(id));
   const jobCompanies = new Set(valid.filter(trigger => trigger.kind === 'job_post' && hasDatedFact(trigger)).map(trigger => trigger.companyId));
+  function technicalSignal(trigger: Trigger) {
+    if (trigger.kind !== 'job_post' && trigger.kind !== 'hire') return null;
+    const row = trigger.evidenceIds.map(id => rowById.get(id)).find(item =>
+      item?.observedAt === trigger.date && (trigger.kind === 'job_post'
+        ? item.source.field === '$.job_details.title' : item.source.field?.endsWith('.start_date')));
+    if (!row) return null;
+    const move = (trigger as MoveTrigger).move;
+    const title = trigger.kind === 'hire' ? move?.currentTitle ?? row.value : row.value;
+    if (typeof title !== 'string') return null;
+    const kind = technicalRole(title);
+    if (!kind) return null;
+    const key = trigger.kind === 'hire' && trigger.personId ? 'hire:' + trigger.personId : row.id;
+    return { trigger, kind, key };
+  }
+
+  const infrastructureJobCompanies = new Set(valid.filter(trigger => trigger.kind === 'job_post' && technicalSignal(trigger))
+    .map(trigger => trigger.companyId));
   const triggered = new Map<string, Trigger[]>();
   for (const trigger of valid) {
     const group = triggered.get(trigger.companyId) ?? [];
@@ -145,13 +182,14 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
   const windowStart = shiftDays(intent.asOf, -(replay ? DRAIN_REPLAY_WINDOW_DAYS : DRAIN_WINDOW_DAYS));
   const profileCutoff = shiftDays(intent.asOf, -PROFILE_LAG_DAYS);
   const historyStart = shiftDays(intent.asOf, -(replay ? DRAIN_REPLAY_HISTORY_DAYS : DRAIN_HISTORY_DAYS));
+  const afterHistory = replay ? historyStart : shiftDays(historyStart, -1);
   const movesByPair = new Map<string, Map<string, Candidate>>();
   for (const trigger of triggers) {
-    if (!isMove(trigger) || !trigger.relatedCompanyId || !inWindow(trigger.date, historyStart, intent.asOf) ||
+    if (!isMove(trigger) || !trigger.relatedCompanyId || !inWindow(trigger.date, afterHistory, intent.asOf) ||
       (intent.runKind === 'replay' && trigger.date > profileCutoff)) continue;
     const hirer = byId.get(trigger.kind === 'hire' ? trigger.companyId : trigger.relatedCompanyId);
     const loser = byId.get(trigger.kind === 'hire' ? trigger.relatedCompanyId : trigger.companyId);
-    if (!hirer || !loser || (loser.headcount ?? 0) > 5_000) continue;
+    if (!hirer || !loser || isGiant(loser)) continue;
     const rows = trigger.evidenceIds.flatMap(id => rowById.get(id) ?? []);
     const currentRole = rows.find(row => row.source.field?.endsWith('.start_date'));
     const previousRole = rows.find(row => row.source.field?.endsWith('.end_date'));
@@ -167,28 +205,34 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
     const ambiguousDate = month && (!detail?.startInterval || (firstStart <= windowStart && lastStart > windowStart) ||
       (firstStart <= historyStart && lastStart > historyStart));
     const earliestEnd = detail?.previousEndInterval?.[0] ?? previousRole?.observedAt;
-    // Dates on month-granular evidence record the latest plausible day, while the interval governs eligibility.
-    const conclusive = !ambiguousDate && !unknownTitle && currentRole?.observedAt === lastStart && Boolean(earliestEnd &&
-      previousRole?.observedAt && earliestEnd <= lastStart && daysBetween(earliestEnd, lastStart) <= 60);
+    // Month-granular evidence records the latest plausible day. Window eligibility uses the interval.
+    const datedMove = currentRole?.observedAt === lastStart && Boolean(earliestEnd && previousRole?.observedAt &&
+      earliestEnd <= lastStart && daysBetween(earliestEnd, lastStart) <= 60);
+    const qualifyingRole = datedMove && !unknownTitle;
+    const conclusive = qualifyingRole && !ambiguousDate;
+    const departedAt = qualifyingRole && firstStart >= historyStart && earliestEnd && earliestEnd >= historyStart
+      ? previousRole?.observedAt ?? null : null;
 
     const person = trigger.personId || currentRole?.source.recordId || trigger.evidenceIds.join('|');
     if (!person) continue;
     const key = hirer.id + '|' + loser.id;
     const pair = movesByPair.get(key) ?? new Map<string, Candidate>();
-    if (!pair.has(person) || trigger.kind === 'hire') pair.set(person, { hirer, loser, person, trigger, month, ambiguousDate, unknownTitle, conclusive, firstStart, lastStart });
+    if (!pair.has(person) || trigger.kind === 'hire') {
+      pair.set(person, { hirer, loser, person, trigger, month, ambiguousDate, unknownTitle, conclusive, firstStart, lastStart, departedAt });
+    }
     movesByPair.set(key, pair);
   }
 
   const lostPeople = new Map<string, Set<string>>();
   for (const pair of movesByPair.values()) for (const move of pair.values()) {
-    if (!move.conclusive || sameCompanyIdentity(move.hirer, move.loser) || relatedDomains(move.hirer.domain, move.loser.domain)) continue;
+    if (!move.conclusive || move.trigger.date <= historyStart || sameCompanyIdentity(move.hirer, move.loser) || relatedDomains(move.hirer.domain, move.loser.domain)) continue;
     const people = lostPeople.get(move.loser.id) ?? new Set<string>();
     people.add(move.person);
     lostPeople.set(move.loser.id, people);
   }
 
   for (const pair of movesByPair.values()) {
-    const moves = [...pair.values()].sort((a, b) => a.trigger.date.localeCompare(b.trigger.date));
+    const moves = [...pair.values()].filter(move => move.trigger.date > historyStart).sort((a, b) => a.trigger.date.localeCompare(b.trigger.date));
     if (moves.length < 3) continue;
     const { hirer, loser } = moves[0];
     const confirmed = moves.filter(move => move.conclusive);
@@ -219,6 +263,30 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
     add('TALENT_DRAIN', hirer.id, loser.id, `${confirmed.length} serving engineers left for ${hirer.name}, ${when}`, confirmed.map(move => move.trigger));
   }
 
+  const watchByCompany = new Map<string, { reason: string; date: string; triggers: Trigger[] }>();
+  if (!replay) {
+    const confirmedDrains = new Set(edges.filter(edge => edge.mechanism === 'TALENT_DRAIN').map(edge => edge.to));
+    const byLoser = new Map<string, Map<string, { date: string; trigger: Trigger }>>();
+    for (const pair of movesByPair.values()) for (const move of pair.values()) {
+      if (!move.departedAt || !isIcp(move.loser) || held.has(move.loser.id) || confirmedDrains.has(move.loser.id)) continue;
+      const fixture = move.trigger.evidenceIds.some(id => rowById.get(id)?.mode === 'fixture');
+      if (relationshipReasons(move.hirer, move.loser, move.lastStart, intent.asOf, fixture).length) continue;
+      const people = byLoser.get(move.loser.id) ?? new Map<string, { date: string; trigger: Trigger }>();
+      const prior = people.get(move.person);
+      if (!prior || move.departedAt > prior.date) people.set(move.person, { date: move.departedAt, trigger: move.trigger });
+      byLoser.set(move.loser.id, people);
+    }
+    for (const [id, people] of byLoser) {
+      if (people.size !== 2) continue;
+      const departures = [...people.values()].sort((a, b) => a.date.localeCompare(b.date));
+      const months = unique(departures.map(move => formatMonth(move.date))).join(', ');
+      watchByCompany.set(id, {
+        reason: `2 of 3 serving departures seen (${months}); the card fires on the 3rd`,
+        date: departures[1].date, triggers: departures.map(move => move.trigger),
+      });
+    }
+  }
+
   for (const [companyId, group] of triggered) {
     const posts = group.filter(trigger => trigger.kind === 'job_post' && hasDatedFact(trigger));
     if (posts.length) roots.add(companyId);
@@ -241,21 +309,36 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
           row.observedAt === configured.date && product?.value === configured.product));
       if (provider && product && event && !held.has(companyId)) add('DISPLACEMENT', provider.id, companyId, post.summary, [post], [], post.id);
     }
-    const technical = [...posts, ...hires];
-    if (technical.length < 2) continue;
+    if (isGiant(source) || isServicesCompany(source) || !looksLikeAiCompany(source)) continue;
+    const technical = [...new Map([...posts, ...hires].flatMap(trigger => {
+      const signal = technicalSignal(trigger);
+      return signal ? [[signal.key, signal] as const] : [];
+    })).values()];
+    if (technical.length < 2 || !technical.some(signal => signal.kind === 'serving')) continue;
+    const candidates = companies.flatMap(peer => {
+      if (peer.id === companyId || held.has(peer.id) || infrastructureJobCompanies.has(peer.id) ||
+        !isIcp(peer) || isServicesCompany(peer) || relatedDomains(source.domain, peer.domain)) return [];
+      const similarity = peerMatch(source, peer);
+      return similarity ? [{ peer, ...similarity }] : [];
+    });
+    const listedPeers = candidates.filter(match => match.listed);
+    const peers = (listedPeers.length ? listedPeers : candidates).sort((a, b) => b.listed - a.listed ||
+      b.sameIndustry - a.sameIndustry || b.sharedSegments - a.sharedSegments || a.sizeRatio - b.sizeRatio ||
+      a.peer.name.localeCompare(b.peer.name) || a.peer.id.localeCompare(b.peer.id)).slice(0, 3);
     const funding = fundingByCompany.get(companyId);
     const fundingLabel = funding && source.lastFunding?.round
       ? ` and raised a ${source.lastFunding.round} on ${formatDay(funding.date)}` : '';
-    const roleFamily = intent.signalKeywords.includes('inference') ? 'inference or ML infrastructure'
-      : intent.signalKeywords.slice(0, 2).join(' or ') || 'the requested field';
-    const jobLabel = posts.length ? `posted ${posts.length} ${posts.length === 1 ? 'role' : 'roles'} in ${roleFamily}`
-      : `recorded ${hires.length} relevant hires`;
-    for (const peer of companies) {
-      if (peer.id === companyId || held.has(peer.id) || jobCompanies.has(peer.id) || relatedDomains(source.domain, peer.domain)) continue;
-      const relation = peerReason(source, peer);
-      if (relation) add('CONTAGION', companyId, peer.id,
-        `Peer of ${source.name} (${relation}): ${source.name} ${jobLabel}${fundingLabel}; no matching job posts found for ${peer.name}`,
-        technical, fundingLabel && funding ? [funding] : []);
+    const postCount = technical.filter(signal => signal.trigger.kind === 'job_post').length;
+    const roleCount = technical.length - postCount;
+    const activities = [
+      ...(postCount ? [`posted ${postCount} serving or infrastructure ${postCount === 1 ? 'role' : 'roles'}`] : []),
+      ...(roleCount ? [`made ${roleCount} serving or infrastructure ${roleCount === 1 ? 'hire' : 'hires'}`] : []),
+    ];
+    const activity = activities.join(' and ');
+    for (const { peer, reason } of peers) {
+      add('CONTAGION', companyId, peer.id,
+        `Peer of ${source.name} (${reason}): ${source.name} ${activity}${fundingLabel}; no serving or infrastructure posts found for ${peer.name}`,
+        technical.map(signal => signal.trigger), fundingLabel && funding ? [funding] : []);
     }
   }
 
@@ -270,7 +353,7 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
   for (const id of queue) distances.set(id, 0);
   const ordered: GraphEdge[] = [];
   for (const id of queue) {
-    const outbound = (bySource.get(id) ?? []).sort((a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id));
+    const outbound = bySource.get(id) ?? [];
     for (const edge of outbound) {
       ordered.push({ ...edge, order: ordered.length });
       if (distances.has(edge.to)) continue;
@@ -285,28 +368,32 @@ export function buildCascade(intent: Intent, triggers: Trigger[], companies: Com
     const incoming = edges.filter(edge => edge.to === company.id);
     const directSignal = direct.get(company.id);
     const hold = held.get(company.id);
-    if (!group.length && !distances.has(company.id) && !hold) continue;
+    const watch = watchByCompany.get(company.id);
+    if (!group.length && !distances.has(company.id) && !hold && !watch) continue;
     const top = [...incoming, ...(directSignal ? [{ ...directSignal, mechanism: 'DIRECT' as const }] : [])]
       .sort((a, b) => b.confidence - a.confidence)[0];
     const nodeMechanisms: Mechanism[] = [
       ...incoming.map(edge => edge.mechanism),
       ...(jobCompanies.has(company.id) ? ['DIRECT' as const] : []),
       ...(fundingByCompany.has(company.id) ? ['CAPITAL' as const] : []),
-      ...(hold ? ['TALENT_DRAIN' as const] : []),
+      ...(hold || watch ? ['TALENT_DRAIN' as const] : []),
     ];
     nodes.push({
       id: company.id, name: company.name, tier: distances.get(company.id) ?? 0,
-      need: top ? mechanisms[top.mechanism as Rule].need : hold ? mechanisms.TALENT_DRAIN.need : null,
-      confidence: hold ? null : top?.confidence ?? null,
-      whyNow: hold?.label ?? top?.label, whyNowDate: hold ? hold.triggers.filter(trigger => (trigger as MoveTrigger).move?.datePrecision !== 'month' && hasDatedFact(trigger))
-        .map(trigger => trigger.date).sort().at(-1) ?? null : top?.observedAt,
+      need: watch ? 'Watchlist for serving staffing changes'
+        : top ? mechanisms[top.mechanism as Rule].need : hold ? mechanisms.TALENT_DRAIN.need : null,
+      confidence: hold ? null : watch ? round(0.35 * 2 ** (-daysBetween(watch.date, intent.asOf) / 30)) : top?.confidence ?? null,
+      whyNow: hold?.label ?? watch?.reason ?? top?.label,
+      whyNowDate: hold ? hold.triggers.filter(trigger => (trigger as MoveTrigger).move?.datePrecision !== 'month' && hasDatedFact(trigger))
+        .map(trigger => trigger.date).sort().at(-1) ?? null : watch?.date ?? top?.observedAt,
       hold: hold ? { reasons: hold.reasons } : undefined,
+      watch: watch ? { reason: watch.reason } : undefined,
       mechanisms: unique(nodeMechanisms), netNew: !jobCompanies.has(company.id),
-      triggerIds: unique([...group, ...(hold?.triggers ?? [])].map(trigger => trigger.id)),
+      triggerIds: unique([...group, ...(hold?.triggers ?? []), ...(watch?.triggers ?? [])].map(trigger => trigger.id)),
       evidenceIds: unique([...company.evidenceIds, ...group.flatMap(trigger => trigger.evidenceIds), ...incoming.flatMap(edge => edge.evidenceIds),
-        ...(hold?.triggers.flatMap(trigger => trigger.evidenceIds) ?? []), ...(directSignal?.evidenceIds ?? [])])
+        ...[...(hold?.triggers ?? []), ...(watch?.triggers ?? [])].flatMap(trigger => trigger.evidenceIds), ...(directSignal?.evidenceIds ?? [])])
         .filter(id => intent.runKind !== 'replay' || rowById.has(id)),
-      status: top && !hold ? 'hypothesis' : 'unverifiable',
+      status: (top || watch) && !hold ? 'hypothesis' : 'unverifiable',
     });
   }
   nodes.sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
@@ -321,9 +408,11 @@ export function rankTargets(intent: Intent, graph: CascadeGraph, companies: Comp
   for (const company of companies) {
     if ([company.name, ...company.aliases].some(name => excludedNames.has(companyNameKey(name)))) excluded.add(company.id);
   }
-  const byCompany = new Map(companies.filter(company => !excluded.has(company.id)).map(company => [company.id, company]));
-  const hiringFilterCompanyIds = unique(currentTriggers(intent, triggers).filter(trigger => trigger.kind === 'job_post' &&
-    trigger.evidenceIds.length && byCompany.has(trigger.companyId)).map(trigger => trigger.companyId)).sort();
+  const byCompany = new Map(companies.filter(company => !excluded.has(company.id) && isIcp(company)).map(company => [company.id, company]));
+  const hiringFilterCompanyIds = unique(currentTriggers(intent, triggers).flatMap(trigger => {
+    const company = byCompany.get(trigger.companyId);
+    return trigger.kind === 'job_post' && trigger.evidenceIds.length && company && !isRecruiter(company) ? [company.id] : [];
+  })).sort();
   const baseline = new Set(hiringFilterCompanyIds);
   const ranked = (graph.nodes as ReasonedNode[]).flatMap(node => {
     const company = byCompany.get(node.id);
@@ -331,19 +420,18 @@ export function rankTargets(intent: Intent, graph: CascadeGraph, companies: Comp
     const edge = graph.edges.filter(edge => edge.to === node.id).sort((a, b) => b.confidence - a.confidence || a.order - b.order)[0];
     const date = node.whyNowDate ?? edge?.observedAt ?? null;
     const age = date ? Math.max(0, daysBetween(date, intent.asOf)) : 90;
-    const knownAI = /\b(?:ai|ml|artificial intelligence|machine learning|voice technology|data infrastructure)\b/i.test(company.industry ?? '');
-    const industryFit = knownAI ? 1 : company.industry ? 0.5 : 0.7;
-    const sizeFit = company.headcount != null ? company.headcount >= 20 && company.headcount <= 2000 ? 1 : 0.4 : 0.75;
-    const score = (node.confidence ?? 0) * industryFit * sizeFit * 2 ** (-age / 45);
+    const industryFit = looksLikeAiCompany(company) ? 1 : company.industry ? 0.5 : 0.7;
+    const score = (node.confidence ?? 0) * industryFit * 2 ** (-age / 45);
     return [{ score, node, company, date, label: node.whyNow ?? edge?.label ?? node.need }];
   }).sort((a, b) => b.score - a.score || a.company.name.localeCompare(b.company.name));
 
-  const actionable = ranked.filter(item => !item.node.hold).slice(0, intent.maxTargets);
+  const actionable = ranked.filter(item => !item.node.hold && !item.node.watch).slice(0, intent.maxTargets);
+  const watchlist = ranked.filter(item => item.node.watch).slice(0, intent.maxTargets);
   const holds = ranked.filter(item => item.node.hold).slice(0, intent.maxTargets);
-  const targets = [...actionable, ...holds].map(({ score, node, company, date, label }, index): Target => ({
+  const targets = [...actionable, ...watchlist, ...holds].map(({ score, node, company, date, label }, index): Target => ({
     companyId: node.id, rank: index + 1, score: round(score), confidence: node.confidence ?? 0,
-    need: node.need!, mechanisms: node.mechanisms, netNew: !baseline.has(node.id), hold: node.hold,
-    testedClaim: node.mechanisms.includes('TALENT_DRAIN') && !node.hold
+    need: node.need!, mechanisms: node.mechanisms, netNew: !baseline.has(node.id), hold: node.hold, watch: node.watch,
+    testedClaim: node.mechanisms.includes('TALENT_DRAIN') && !node.hold && !node.watch
       ? `serving staffing activity at ${company.name} within 60 days (a dated hire or job post)` : undefined,
     whyNow: label, whyNowDate: date, decider: null, path: null, draftId: null,
   }));

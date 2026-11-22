@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import sellerJson from '../../config/seller.json' with { type: 'json' };
 import type { Intent, IsoDate } from '../../shared/types.ts';
+import { isRecruiter } from '../domain/company-fit.ts';
 import { containsPhrase, inWindow, isoDay, matchesSignal, shiftDays, stableId } from '../domain/facts.ts';
 import type { CompanyMention, ParseMeta, SellerProfile, TriggerBatch } from '../domain/types.ts';
 import {
@@ -42,10 +43,9 @@ function activeEvents(after: IsoDate, through: IsoDate) {
 export function buildJobs(intent: Intent, after: IsoDate, through: IsoDate, company?: Filter, displacement = false) {
   const fields = ['job_details.title', 'job_details.url', 'company.basic_info', 'company.locations',
     'company.headcount.total', 'location.country', 'content.description', JOB_DATE];
-  const titleFields = ['job_details.title', 'content.description'];
   const keywords = [...new Set(intent.signalKeywords.filter(keyword => keyword.trim()))];
   if (keywords.some(keyword => containsPhrase('GPU', keyword))) keywords.push('GPUs');
-  const signalFilters = titleFields.flatMap(field => keywords.map(keyword => condition(field, '[.]', keyword)));
+  const signalFilters = keywords.map(keyword => condition('job_details.title', '[.]', keyword));
   const productFilters = displacement ? activeEvents(after, through)
     .map(event => condition('content.description', '[.]', event.product)) : [];
   const signal = [...signalFilters, ...productFilters];
@@ -70,6 +70,7 @@ function jobCompany(row: Job, key: string, historical: boolean): CompanyMention 
     key, name, domain: basic.primary_domain || basic.website,
     linkedinUrl: basic.professional_network_id ? 'https://www.linkedin.com/company/' + basic.professional_network_id : null,
     crustdataId: basic.crustdata_company_id, industry: historical ? undefined : basic.industries?.[0],
+    categories: historical ? undefined : basic.industries ?? undefined,
     headcount: historical ? undefined : row.company?.headcount?.total,
     hq: [row.company?.locations?.city, row.company?.locations?.country].filter(Boolean).join(', ') || null,
     evidenceIds: [],
@@ -87,13 +88,14 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
     const day = isoDay(row.metadata?.date_added);
     if (day && !inWindow(day, after, through)) continue;
     const description = row.content?.description ?? '';
-    const infra = matchesSignal(title, intent.signalKeywords) || matchesSignal(description, intent.signalKeywords);
+    const titleMatches = matchesSignal(title, intent.signalKeywords);
+    const descriptionMatches = [...new Set(intent.signalKeywords.filter(keyword => matchesSignal(description, [keyword])))];
     const products = events.filter(event => containsPhrase(description, event.product));
-    if (!infra && !products.length) continue;
+    if (!titleMatches && !descriptionMatches.length && !products.length) continue;
     const recordId = String(row.crustdata_job_id ?? row.job_details?.job_id ??
       stableId('job_', row.job_details?.url || '', row.company?.basic_info?.name || '', title, day || ''));
     const company = jobCompany(row, 'job_search:' + recordId + ':company', intent.runKind === 'replay');
-    if (!company || seen.has(recordId)) continue;
+    if (!company || seen.has(recordId) || isRecruiter({ name: company.name, categories: row.company?.basic_info?.industries ?? [] })) continue;
     seen.add(recordId);
 
     const url = row.job_details?.url;
@@ -102,10 +104,18 @@ export function parseJobs(raw: unknown, intent: Intent, meta: ParseMeta, after: 
     batch.evidence.push(titleFact);
     company.evidenceIds.push(titleFact.id);
     batch.mentions.push(company);
-    if (day && infra) batch.triggers.push({
+    if (day && titleMatches) batch.triggers.push({
       id: stableId('tr_', 'job_post', recordId), companyId: company.key, kind: 'job_post', date: day,
       summary: `posted “${title}” on ${day}`, evidenceIds: [titleFact.id],
     });
+
+    if (descriptionMatches.length && !products.length) {
+      const matchText = descriptionMatches.join(', ');
+      const descriptionFact = evidenceRow(meta, recordId, '$.content.description',
+        `${company.name} mentioned ${matchText} in the posting for “${title}”.`, day, matchText, url);
+      batch.evidence.push(descriptionFact);
+      company.evidenceIds.push(descriptionFact.id);
+    }
 
     for (const event of products) {
       const productFact = evidenceRow(meta, recordId, '$.content.description',

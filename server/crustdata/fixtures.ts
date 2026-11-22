@@ -2,7 +2,7 @@ import { containsPhrase, isoDay, normalizeDomain, normalizeName, shiftDays } fro
 import type { Filter } from './common.ts';
 import { companyRow, firms, jobs, profiles, TODAY } from './fixtures/world.ts';
 
-type Request = { filters?: Filter; limit?: number; crustdata_company_ids?: number[]; domains?: string[]; names?: string[] };
+type Request = { filters?: Filter; limit?: number; cursor?: string; crustdata_company_ids?: number[]; domains?: string[]; names?: string[] };
 
 function indexedValues(value: unknown, path: string[]): unknown[] {
   if (Array.isArray(value)) return value.flatMap(item => indexedValues(item, path));
@@ -77,7 +77,10 @@ export function fixtureFor(name: string, body: unknown): unknown {
     case 'person_deciders':
     case '/person/search': {
       const rows = profiles.filter(row => applyFilter(row, request.filters));
-      return { profiles: rows.slice(0, limit), next_cursor: null, total_count: rows.length, remarks: [] };
+      const offset = Number(request.cursor?.match(/^fixture_profiles:(\d+)$/)?.[1] ?? 0);
+      const next = offset + limit;
+      return { profiles: rows.slice(offset, next), next_cursor: next < rows.length ? 'fixture_profiles:' + next : null,
+        total_count: rows.length, remarks: [] };
     }
     case 'company_growth':
     case 'company_cohort':
