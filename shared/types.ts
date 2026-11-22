@@ -145,10 +145,12 @@ export interface GraphEdge {
   mechanism: Mechanism;
   label: string;                    // short edge text shown on the canvas
   rationale: string;                // one paragraph, why this edge implies the need
+  alternative?: string | null;      // the competing explanation we could not rule out ("hiring may be cost-cutting")
   confidence: number;               // 0..1
   observedAt: IsoDate | null;       // latest dated evidence on this edge
   evidenceIds: string[];
   order: number;                    // animation order in the cascade (0 first)
+  alternative?: string | null;      // the competing explanation we could not rule out ("hiring may be cost-cutting")
 }
 
 export interface CascadeGraph { nodes: GraphNode[]; edges: GraphEdge[] }
@@ -185,6 +187,12 @@ export interface Target {
   decider: Decider | null;          // null => "no decider found, I can't verify who decides"
   path: WarmPath | null;
   draftId: string | null;
+  // False-drain guards. Any reason => the account is put on Hold: shown with its reasons, never drafted or sent.
+  // Reasons: acquisition/acqui-hire, shared parent, >40% of headcount moving, ambiguous company id,
+  // month-only dates that cannot settle the window, unrecognised titles.
+  hold?: { reasons: string[] } | null;
+  // What the replay tests for this account: e.g. "serving staffing activity at Orbital Voice within 60 days".
+  testedClaim?: string | null;
 }
 
 export interface DraftSentenceCheck {
@@ -224,6 +232,14 @@ export interface Approval {
   createdAt: IsoDateTime;
   decidedAt?: IsoDateTime | null;
   decidedBy?: string | null;
+}
+
+export interface DeliveryReceipt {
+  // The test-inbox receiver keeps its own UNIQUE index on the send key, so even a sender that crashed after the
+  // receiver accepted (and before recording it) cannot deliver twice: the retry gets 'already_delivered'.
+  idempotencyKey: string;
+  status: 'delivered' | 'already_delivered';
+  receivedAt: IsoDateTime;
 }
 
 export interface OutboxAction {
@@ -364,6 +380,8 @@ export type RunEvent =
   | { type: 'approval.decided'; approvalId: string; status: ApprovalStatus }
   | { type: 'action.executed'; action: OutboxAction }
   | { type: 'action.duplicate_blocked'; idempotencyKey: string; approvalId: string; note: string }
+  | { type: 'delivery.receipt'; receipt: DeliveryReceipt; approvalId: string }
+  | { type: 'target.held'; companyId: string; reasons: string[] }
   | { type: 'engine.started'; pid: number; resume: boolean }
   | { type: 'engine.crashed'; pid: number; atStep: StepName | null; signal: string | null }
   | { type: 'engine.resumed'; fromStep: StepName; skipped: StepName[] }
@@ -391,6 +409,8 @@ export interface ReplayScore {
   baselineHeadcount: { predicted: number; hits: number; precision: number; medianLeadDays: number | null };
   outcomes: ReplayOutcome[];
   note: string;                     // honest one-liner, including when DOMINO loses to a baseline
+  snapshotLabel: string;            // "Not point-in-time: today's Crustdata index, filtered to facts dated on or before 1 Sep"
+  outcomeDefinition: string;        // frozen before outcomes were looked at (see README "Replay protocol")
 }
 
 export interface StoredEvent { seq: number; runId: string; ts: IsoDateTime; event: RunEvent }
