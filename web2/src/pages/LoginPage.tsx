@@ -1,5 +1,5 @@
-// "/": the only screen where both roles appear (design mock screen 1). Choose once; the app then behaves fully as
-// that role. Switching later means signing out from the account menu.
+// "/": the only screen where both roles appear. An app sign-in, not a cover: one line of pitch, the live numbers
+// behind it, and a single panel. Choose once; switching later means signing out from the account menu.
 import { useMemo, useState } from 'react';
 import { deskApi, useQuery } from '../data/query.ts';
 import { navigate, slug } from '../data/router.ts';
@@ -18,37 +18,37 @@ export function LoginPage() {
     const ok = r && r.ok && (r.headers.get('content-type') ?? '').includes('json');
     return { data: ok ? (await r.json()) as FunnelLite : null, source: 'live', evidence: [] };
   });
-  const scan = useQuery('companies:hero', () => deskApi.company((companies.data ?? []).find((c) => c.openings)?.id ?? 'abacus-ai'));
+  const hero = (companies.data ?? []).find((c) => c.openings)?.id ?? null;
+  const scan = useQuery(hero ? `company:${hero}` : null, () => deskApi.company(hero!));
 
-  const proof = useMemo(() => {
+  const stats = useMemo(() => {
     const stages = funnel.data?.stages ?? [];
-    const first = stages[0];
+    const out: { big: string; small: string }[] = [];
+    if (stages[0]) out.push({ big: fmtInt(stages[0].count), small: 'job moves read' });
     const conclusive = stages.find((s) => /conclusive/i.test(s.label));
-    const decided = (companies.data ?? []).reduce((n, c) => n + c.openings, 0);
-    const out: { big: string; small: string; mono?: boolean }[] = [];
-    if (first) out.push({ big: fmtInt(first.count), small: first.label });
-    else if (companies.data?.length) out.push({ big: fmtInt(companies.data.length), small: 'companies in the last scan' });
-    if (conclusive) out.push({ big: fmtInt(conclusive.count), small: conclusive.label });
-    if (companies.data) out.push({ big: fmtInt(decided), small: decided === 1 ? 'predicted opening today' : 'predicted openings today' });
-    const runId = funnel.data?.runId ?? scan.data?.runId;
-    const at = scan.data?.checkedAt ?? null;
-    if (runId) out.push({ big: at ? fmtTime(at) : 'Latest', small: at ? `latest scan, ${fmtDate(at, true)} IST` : 'latest scan run' });
+    if (conclusive) out.push({ big: fmtInt(conclusive.count), small: 'conclusive, dated departures' });
+    if (companies.data) {
+      const decided = companies.data.reduce((n, c) => n + c.openings, 0);
+      out.push({ big: fmtInt(decided), small: decided === 1 ? 'predicted opening' : 'predicted openings' });
+      out.push({ big: fmtInt(companies.data.length), small: 'companies scanned' });
+    }
     return out;
-  }, [funnel.data, companies.data, scan.data]);
+  }, [funnel.data, companies.data]);
+  const at = scan.data?.checkedAt ?? null;
 
   return (
-    <div className="login" data-testid="login">
-      <section className="login-l">
-        <p className="muted" style={{ fontSize: 15, margin: 0 }}>One company’s move is another company’s need.</p>
-        <h1 className="login-h">DOMINO predicts what a company needs next from the domino effects between companies, and helps it act: hire the right people and reach the right buyers, with proof.</h1>
-        <p className="login-p">Rules decide. Every claim has a dated source. The language model is labelled where it’s used: parsing a profile, refining a request, drafting a message.</p>
-        {proof.length > 0 && (
-          <div className="login-proof">
-            {proof.map((p) => <div key={p.small}><b className={p.mono ? 'mono' : undefined} style={p.mono ? { fontSize: 15, lineHeight: '30px' } : undefined}>{p.big}</b><span>{p.small}</span></div>)}
-          </div>
+    <div className="signin" data-testid="login">
+      <header className="signin-head">
+        <h1>Predict what a company needs next, from moves at other companies.</h1>
+        <p>Rules decide. Every claim has a dated source. The model is labelled where it’s used: parsing a profile, refining a request, drafting a message.</p>
+        {stats.length > 0 && (
+          <dl className="signin-stats">
+            {stats.map((s) => <div key={s.small}><dt>{s.small}</dt><dd data-num>{s.big}</dd></div>)}
+          </dl>
         )}
-      </section>
-      <section className="login-r" aria-label="Sign in">
+        {at && <p className="signin-at">Latest scan {fmtDate(at, true)}, {fmtTime(at)} IST</p>}
+      </header>
+      <section className="signin-panel panel" aria-label="Sign in">
         <h2>Sign in as</h2>
         <button className="role" aria-pressed={choice === 'candidate'} onClick={() => setChoice('candidate')} data-testid="signin-candidate">
           <span className="rad" /><span><b>Candidate</b><p>See companies likely to need you, before they post.</p></span>
@@ -57,12 +57,10 @@ export function LoginPage() {
           <span className="rad" /><span><b>Company</b><p>See what you’ll need next, and act on it with proof.</p></span>
         </button>
         {choice === 'company' ? <CompanyPick /> : (
-          <div className="login-actions">
-            <button className="btn pri" style={{ width: '100%', height: 38 }} data-testid="signin-continue"
-              onClick={() => { signInCandidate(); navigate({ page: 'candidate', sub: 'onboard' }); }}>Continue</button>
-          </div>
+          <button className="btn pri signin-go" data-testid="signin-continue"
+            onClick={() => { signInCandidate(); navigate({ page: 'candidate', sub: 'onboard' }); }}>Continue</button>
         )}
-        <p className="login-legal">Demo sign-in, no password. To switch sides later, sign out from the account menu.</p>
+        <p className="login-legal">Demo sign-in, no password. To switch sides, sign out from the account menu.</p>
       </section>
     </div>
   );
@@ -76,7 +74,7 @@ function CompanyPick() {
   return (
     <div className="login-field">
       <label htmlFor="co-search">Your company</label>
-      <input id="co-search" className="field" placeholder="Search companies" value={term} onChange={(e) => setTerm(e.target.value)} data-testid="company-search" />
+      <input id="co-search" className="field" placeholder="Search 200+ companies" value={term} onChange={(e) => setTerm(e.target.value)} data-testid="company-search" />
       <div className="pick" role="listbox" aria-label="Companies">
         {q.loading && !q.data && <p className="pick-note">Loading companies…</p>}
         {q.error && <p className="pick-note bad-text">Couldn’t load companies: {q.error}</p>}
