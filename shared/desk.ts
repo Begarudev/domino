@@ -61,6 +61,17 @@ export interface RuleCard {
   sourceRunId: string | null;
 }
 
+// "Why this target?": the exact eligibility (O1 clauses) and the ranking rules that placed an opening. No score is used.
+export interface RankPlacement { position: number; of: number; rule: string; because: string[] }
+export interface WhyThisTarget {
+  rule: 'O1';
+  statement: string;                // the pre-registered O1 rule text
+  verdict: string;                  // "Open: every O1 clause met" | "Open, provisional: ..." | "Watch: ..." | "Held: ..."
+  eligibility: RuleClause[];        // the opening's clauses (met / open / failed / cant_verify), with sources
+  ranking: RankPlacement;           // place among all openings in the scan
+  companyRanking: RankPlacement;    // the company's place in GET /api/companies
+}
+
 export type OpeningReasonKind = 'talent_drain' | 'no_replacement' | 'funding' | 'news' | 'headcount';
 export interface OpeningReason { kind: OpeningReasonKind; label: string; date: IsoDate | null; evidenceId: string | null }
 
@@ -81,6 +92,7 @@ export interface Opening {
   watch?: { have: number; need: number; reason?: string }; // status 'watch' (e.g. stale job data: can't verify no replacement)
   provisional?: boolean;            // open, but the 30-day no-replacement leg is not settled yet (month-level dates)
   windowClosesBy?: IsoDate | null;  // provisional: the date by which the replacement window closes ("closes by 30 Nov")
+  why?: WhyThisTarget;              // CompanyView only: the O1 eligibility clauses and the ranking rule that placed it
   evidenceIds: string[];
   runId: string;                    // the openings scan run that produced it
 }
@@ -110,7 +122,8 @@ export interface IntroRequest {
   openingId: string;
   roleTitle: string;
   message: string;                  // the verified intro draft
-  status: 'new' | 'awaiting_approval' | 'accepted' | 'declined' | 'delivered';
+  status: 'new' | 'awaiting_approval' | 'accepted' | 'declined' | 'delivered' | 'not_drafted';
+  blockedReason?: string | null;    // status 'not_drafted': fewer than 2 verified, dated, cited facts, no opening fact, or no named role
   runId: string | null;             // intro pipeline run: draft, approval, outbox (send once)
   approvalId?: string | null;       // POST /api/approvals/:id with this id to approve or reject the send
   evidenceIds?: string[];           // rows the message cites

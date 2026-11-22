@@ -13,6 +13,7 @@ import { introSharedFields } from '../engine/candidate-steps.ts';
 import type { CandidateOutputs } from '../engine/candidate-steps.ts';
 import { sanitize } from '../runtime/tool.ts';
 import { matchesFor, openingsForCandidate } from './match.ts';
+import { compareCompanies, compareOpenings, whyThisTarget } from './why.ts';
 import {
   candidateEvidence, candidateView, confirmCandidate, getCandidateRow, insertCandidate, insertIntro, latestOpeningsRunId,
   listCandidateRows, listIntroRows, openingsSnapshot, setCandidateRun, setIntroRun,
@@ -64,14 +65,15 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const received = approval && store.sql.prepare('SELECT received_at FROM inbox_received WHERE idempotency_key = ?')
       .get(approval.idempotencyKey) as { received_at: string } | undefined;
     const receipt = received ? { idempotencyKey: approval!.idempotencyKey, receivedAt: received.received_at } : null;
-    const status: IntroRequest['status'] = delivered || receipt ? 'delivered' : approval?.status === 'rejected' ? 'declined'
+    const blocked = drafted?.draft?.status === 'not_drafted' ? drafted.draft.blockedReason ?? 'Not drafted' : null;
+    const status: IntroRequest['status'] = blocked ? 'not_drafted' : delivered || receipt ? 'delivered' : approval?.status === 'rejected' ? 'declined'
       : approval?.status === 'pending' ? 'awaiting_approval' : 'new';
     return {
       id: row.id, direction: row.direction, candidateId: row.candidateId, companyId: row.companyId,
       companyName: opening?.companyName ?? drafted?.company.name ?? row.companyId, openingId: row.openingId,
       roleTitle: opening?.roleTitle ?? drafted?.roleTitle ?? '', message: drafted?.draft?.body ?? '', status, runId: row.runId,
       approvalId: approval?.id ?? null, evidenceIds: drafted?.draft?.citations.map(item => item.evidenceId) ?? [],
-      receipt, receivedAt: receipt?.receivedAt ?? row.createdAt,
+      receipt, ...(blocked && { blockedReason: blocked }), receivedAt: receipt?.receivedAt ?? row.createdAt,
     };
   };
 
@@ -218,16 +220,15 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     ...snapshot.openings.map(opening => ({ id: opening.companyId, name: opening.companyName, aliases: [], evidenceIds: [] })),
   ]);
 
-  api.get('/companies', c => {
-    const snapshot = openingsSnapshot(store);
-    if (!snapshot) return c.json([]);
-    const rows: CompanySummary[] = companiesOf(snapshot).map(company => ({
+  const companySummaries = (snapshot: OpeningsSnapshot): CompanySummary[] => companiesOf(snapshot).map(company => ({
       id: company.id, name: company.name, domain: company.domain ?? null, headcount: company.headcount ?? null,
       openings: snapshot.openings.filter(opening => opening.companyId === company.id && opening.status === 'open').length,
       departures90d: snapshot.departures.filter(departure => departure.companyId === company.id).length,
-    })).filter(row => row.departures90d || snapshot.openings.some(opening => opening.companyId === row.id));
-    rows.sort((a, b) => b.openings - a.openings || b.departures90d - a.departures90d || a.name.localeCompare(b.name));
-    return c.json(rows);
+  })).filter(row => row.departures90d || snapshot.openings.some(opening => opening.companyId === row.id)).sort(compareCompanies);
+
+  api.get('/companies', c => {
+    const snapshot = openingsSnapshot(store);
+    return c.json(snapshot ? companySummaries(snapshot) : []);
   });
 
   api.get('/companies/:id', c => {
@@ -238,7 +239,8 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     const company = snapshot && companiesOf(snapshot).find(item => item.id === id || slug(item.name) === slug(id));
     if (!snapshot || !company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
     if (company.id !== id) return c.redirect(`/api/companies/${company.id}`, 302);
-    const openings = snapshot.openings.filter(opening => opening.companyId === id);
+    const openings = snapshot.openings.filter(opening => opening.companyId === id).sort(compareOpenings);
+    const summaries = companySummaries(snapshot);
     const departures = snapshot.departures.filter(departure => departure.companyId === id);
     const candidates = listCandidateRows(store).map(row => candidateView(store, row))
       .filter(candidate => candidate.status === 'ready' && candidate.consent.discoverable);
@@ -251,7 +253,7 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       ...matches.flatMap(match => match.fit.flatMap(reason => reason.evidenceId ?? [])),
     ];
     const view: CompanyView = {
-      company, departures, openings: openings.map(publicOpening), matches: matches.map(publicMatch), intros, runId: snapshot.runId, replay,
+      company, departures, openings: openings.map(opening => ({ ...publicOpening(opening), why: whyThisTarget(opening, snapshot.openings, summaries) })), matches: matches.map(publicMatch), intros, runId: snapshot.runId, replay,
       evidence: pick(snapshot.evidence, cited),
     };
     return c.json(view);
