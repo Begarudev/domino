@@ -165,3 +165,15 @@ tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
 .rd-dec-tag::before { display: inline-block; margin-right: 6px; vertical-align: middle; }
 .rd-dom { font-family: var(--sans); font-size: var(--fs-ui); letter-spacing: 0; }
 
+
+/* g1 readability: proportional sans digits everywhere (no spaced mono), date and domain truncate instead of overlapping,
+   the clause checklist as one chip, the selected stage as a quiet fill rather than an outline. */
+.rd-table .c-date { width: 150px; }
+.rd-table .c-dom { width: 150px; }
+.rd-date, .rd-dom { font-family: var(--sans) !important; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.funnel b, .rd-showing, .rd-chart { font-family: var(--sans); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.rd-why-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--surface); color: var(--ink-2); font: inherit; font-size: var(--fs-cap); font-variant-numeric: tabular-nums; cursor: pointer; white-space: nowrap; }
+.rd-why-chip:hover { background: var(--row-hover); }
+.rd-why-chip span { color: var(--ink-3); font-size: 10px; }
+.rd-why-list { margin-top: 6px; }
+.rd-funnel > div.on { outline: none !important; box-shadow: none !important; border-color: var(--rule-2) !important; background: var(--hover); }

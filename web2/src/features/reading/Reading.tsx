@@ -168,8 +168,8 @@ function FunnelStrip({ funnel, view, onPick }: { funnel: OpeningsFunnel; view: s
           plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '62%', distributed: true } },
           colors: steps.map((s) => (view === (s.rows?.length ? s.id : READS) ? '#2e6be6' : '#12a594')),
           legend: { show: false }, grid: { borderColor: '#ebecef', strokeDashArray: 3, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
-          dataLabels: { enabled: true, offsetX: 6, textAnchor: 'start', formatter: (v: number) => fmtInt(v), style: { fontSize: '12px', fontWeight: 600, colors: ['#1f2328'] } },
-          xaxis: { categories: steps.map((s) => shortLabel(s)), labels: { formatter: (v: string) => fmtInt(Number(v)), style: { colors: '#8a8f98', fontSize: '11px' } } },
+          dataLabels: { enabled: false },
+          xaxis: { categories: steps.map((s) => `${shortLabel(s)} · ${fmtInt(s.count)}`), labels: { formatter: (v: string) => fmtInt(Number(v)), style: { colors: '#8a8f98', fontSize: '11px' } } },
           yaxis: { labels: { maxWidth: 240, style: { colors: '#4b5059', fontSize: '12px' } } },
           tooltip: { y: { formatter: (v: number) => `${fmtInt(v)} · ${Math.round((v / top) * 1000) / 10}% of the first step · click to list these rows` } },
           states: { active: { filter: { type: 'none' } } },
@@ -331,12 +331,29 @@ const Row = memo(function Row({ r, settled }: { r: LogRow; settled: boolean }) {
       <td className="rd-src"><span className={`ctag ${srcClass(r.source)}`}>{r.source}</span></td>
       <td className="rd-title" title={r.title}>{r.title}</td>
       <td className="rd-date" title={r.monthLevel ? 'month-level date' : undefined}>{r.date}</td>
-      <td className={r.domain ? 'mono rd-dom' : 'faint'} title={r.domain ?? 'no domain on record'}>{r.domain ?? '–'}</td>
+      <td className={r.domain ? 'rd-dom' : 'faint'} title={r.domain ?? 'no domain on record'}>{r.domain ?? '–'}</td>
       <td className="rd-dec"><DecisionMark d={r.decision} why={r.why[0]} /></td>
-      <td className="muted rd-why">{r.why.map((w, i) => <Clause key={i} text={w} />)}</td>
+      <td className="muted rd-why"><Why lines={r.why} /></td>
     </tr>
   );
 });
+
+/** A company decision's clause checklist collapses to one chip ("6 of 7 clauses met · 1 open"); click expands it. */
+function Why({ lines }: { lines: string[] }) {
+  const [open, setOpen] = useState(false);
+  const met = lines.filter((w) => w.startsWith('✓ ')).length;
+  const pending = lines.filter((w) => w.startsWith('⏳')).length;
+  if (lines.length < 3 || met + pending === 0) return <>{lines.map((w, i) => <Clause key={i} text={w} />)}</>;
+  const label = `${met} of ${lines.length} clauses met${pending ? ` · ${pending} open` : ''}`;
+  return (
+    <>
+      <button type="button" className="rd-why-chip" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
+        {label}<span aria-hidden>{open ? '▴' : '▾'}</span>
+      </button>
+      {open && <div className="rd-why-list">{lines.map((w, i) => <Clause key={i} text={w} />)}</div>}
+    </>
+  );
+}
 
 /** A rule clause line. The engine marks met clauses "✓" and open ones "⏳": show them as text marks, not emoji. */
 function Clause({ text }: { text: string }) {
