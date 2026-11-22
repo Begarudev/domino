@@ -398,7 +398,7 @@ export class ToolContext {
       if (mode === 'live' && !injected && failure.retry === 'nonsense') maxAttempts = Math.min(maxAttempts, attempt + 1);
       if (!failure.retry || attempt >= maxAttempts || (mode === 'cache' && !injected)) throw failure;
       const newsRateLimit = mode === 'live' && !injected && failure.retry === 'rate_limit' &&
-        (call.endpoint === 'news_search' || call.endpoint === 'news_fetch');
+        call.endpoint.startsWith('news_');
       const backoffMs = Math.max(newsRateLimit ? 20_000 : 0, failure.retryAfterMs ?? 0,
         180 * 2 ** (attempt - 1) + Math.floor(Math.random() * 100));
       this.store.appendEvent(this.runId, {

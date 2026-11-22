@@ -51,6 +51,9 @@ function querySummary(endpoint: string, path: string, request: unknown, input: u
   switch (endpoint) {
     case 'news_search': return 'Reading news — Crustdata Web Search (news)';
     case 'news_fetch': return 'Reading articles — Crustdata Web Fetch (publication dates)';
+    case 'news_acquihire_search': return 'Checking acqui-hire guard — Crustdata News Search';
+    case 'news_acquihire_resolve': return 'Finding publisher URL — Crustdata Web Search';
+    case 'news_acquihire_fetch': return 'Verifying acqui-hire report — Crustdata Web Fetch';
     case 'job_search': return `${terms} job posts${market}, ${range()}`;
     case 'person_recent_moves': return `${terms} hiring and employer moves${market}, ${range()}`;
     case 'company_growth': return `Company growth and funding${market}, ${range()}`;
@@ -92,7 +95,7 @@ export function describeRead(
   const matched = (ids: string[]) => ids.some(id => matchedIds.has(id));
   const items: SourceItem[] = [];
 
-  if (endpoint === 'news_search' || endpoint === 'news_fetch') {
+  if (endpoint.startsWith('news_')) {
     for (const row of batch.evidence) {
       const company = batch.mentions.find(mention => mention.evidenceIds.includes(row.id));
       items.push({ kind: 'news', title: typeof row.value === 'string' ? row.value : row.claim,
