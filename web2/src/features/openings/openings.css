@@ -250,7 +250,7 @@
 @keyframes rec-pop { from { opacity: 0; transform: translateY(-2px); } }
 
 /* funnel: bars grow once on enter, tabular counts */
-.rec-fun b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.rec-fun b { font-variant-numeric: lining-nums proportional-nums; font-weight: 600; }
 .rec-fun-bar { height: 8px; border-radius: 4px; background: var(--h-grey-bg); }
 .rec-fun-bar i { background: var(--h-teal-dot); border-radius: 4px; transform-origin: left; animation: rec-grow 450ms var(--ease) both; }
 .rec-fun li:nth-child(2) .rec-fun-bar i { animation-delay: 60ms; }
@@ -261,3 +261,8 @@
 @keyframes rec-grow { from { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .rec-fun-bar i, .rec-how-pop { animation: none; } }
 .rec-apex { padding: 4px 8px 0; } .rec-apex .apexcharts-bar-area { cursor: pointer; } .rec-funnel .rec-fun-bar { display: none; }
+
+/* integrator 17:53: the status column was clipped at the panel edge; let long chips wrap inside the cell instead */
+.rec-dep table.t td:first-child { min-width: 0; }
+.rec-dep table.t td:last-child { min-width: 0; white-space: normal; }
+.rec-dep table.t td:last-child .ctag, .rec-dep table.t td:last-child .st { white-space: normal; max-width: 100%; }
