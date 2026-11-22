@@ -304,7 +304,11 @@ function EmptyRun({ snap, running }: { snap: RunSnapshot; running: boolean }) {
           <rect key={i} x={30 + i * 78} y={20} width={46} height={92} rx={6} className={`ghost-tile${running ? ' is-waiting' : ''}`} style={{ animationDelay: `${i * 160}ms` }} />
         ))}
       </svg>
-      <p>{running ? `${step?.label ?? 'Working'}. Tiles stand up here as the cascade is built.` : 'Run a request. Each company DOMINO finds stands here as a tile, and dated changes knock the next one over.'}</p>
+      <p>{running
+        ? `${step?.label ?? 'Working'}. Tiles stand up here as the cascade is built.`
+        : snap.steps.find((s) => s.step === 'cascade')?.status === 'done'
+          ? 'No cross-company cascade in this run: no change had two dated sources linking it to another company.'
+          : 'Run a request. Each company DOMINO finds stands here as a tile, and dated changes knock the next one over.'}</p>
     </div>
   );
 }
