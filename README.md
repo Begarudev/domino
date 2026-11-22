@@ -644,6 +644,18 @@ beat hiring. We report it anyway.
 - **Late profile updates.** People change their profiles weeks after they move, so live windows miss some moves and
   replay adds a 30-day lag. Month-level dates are treated as intervals: a drain that may fall outside its window is
   held, and an unsettled no-replacement window is shown as provisional with its closing date, never as certain.
+- **R1's size check is looser than O1's.** R1 was locked at 13:40 IST as "A ≤ 5,000 staff". Its main edge enforces that
+  by excluding giants (`server/domain/cascade.ts`), so a company with no headcount on record, or with fewer than 20
+  staff, isn't excluded. The watchlist and the other cascade paths use the 20–5,000 band. We left the locked threshold
+  as it was rather than tighten it after seeing results. R1 fired on 0 accounts live, so no result here depends on it.
+- **Spend guards, and where they stop.**
+  - A live run (`POST /api/runs`) or live openings scan starts only with `confirmLive: true`, and a run's credit cap is
+    clamped to 600.
+  - Two paths still read live without asking: candidate onboarding (one person enrich, at most 1 credit, served from
+    the cache when the profile was read before) and an evidence recheck.
+  - An expensive call that times out is not retried, but one that gets a 5xx error still is.
+  - The replacement check's pre-spend estimate is low (about a tenth of its real cost). Every call is still recorded
+    in the ledger with its actual credits, and the run cap applies to what was actually spent.
 - **Replacements we can't see.** A replacement hired through a referral, or a role filled internally, may not show up
   in public data, so O1 could predict an opening that was already filled.
 - **Thin signal.** Drains of several people in one role family are rare in public data. Live today: 1 provisional

@@ -39,7 +39,10 @@ const runSchema = z.object({
   limits: limitsSchema.optional(), chaos: chaosSchema.optional(),
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
   pipeline: z.enum(['outbound', 'openings', 'candidate', 'intro']).optional(),
+  confirmLive: z.boolean().optional(),
 });
+// A run never spends more than this, whatever limits it asks for.
+const MAX_RUN_CREDITS = 600;
 const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>The UI is not built yet: run <code>bun start</code> (it builds the UI), or <code>bun run build:web2</code>.</p></html>';
 
 export function createApp(store: Store) {
@@ -176,8 +179,14 @@ export function createApp(store: Store) {
   app.post('/api/runs', async c => {
     const body = runSchema.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: 'Expected a request and valid optional limits, chaos, and dataMode' }, 400);
-    const { request, dataMode, limits, chaos, pipeline } = body.data;
-    return c.json({ id: launch(pipeline ?? 'outbound', request, { dataMode, limits, chaos }) }, 201);
+    const { request, dataMode, limits, chaos, pipeline, confirmLive } = body.data;
+    // A live run spends Crustdata credits: it starts only when the caller says so (a stray click replays nothing live).
+    if ((dataMode ?? config.dataMode) === 'live' && confirmLive !== true) {
+      return c.json({ error: 'A live run reads Crustdata and spends credits (up to its cap). Send confirmLive: true to run it ' +
+        'live, or dataMode "cache" to replay recorded reads for 0 credits.', code: 'confirm_live' }, 409);
+    }
+    const capped = limits?.maxCredits === undefined ? limits : { ...limits, maxCredits: Math.min(limits.maxCredits, MAX_RUN_CREDITS) };
+    return c.json({ id: launch(pipeline ?? 'outbound', request, { dataMode, limits: capped, chaos }) }, 201);
   });
 
   // Full company analysis for one company (lead-owned; see docs/CONTRACT.md "Company dossier").
