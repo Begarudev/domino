@@ -110,6 +110,10 @@ test('fixture demo runs the full data and outreach pipeline', () => {
   assert.doesNotMatch(verified.body, /2026-\d{2}-\d{2}/);
   assert.doesNotMatch(verified.body, /Kestrel|departures?|engineers left|Veena|Rian|Neya|seed/i);
   assert.ok(verified.body.trim().split(/\s+/).length <= 110);
+  // Humane numbers: no raw floats or negative growth in a customer-facing message, no unformatted dollar amounts.
+  assert.doesNotMatch(verified.body, /\d+\.\d{2,}%|-\d+(?:\.\d+)?%/);
+  assert.doesNotMatch(verified.body, /\$\d{1,3}(?:,\d{3}){2,}/);
+  for (const claim of claims) assert.doesNotMatch(claim.text, /\d+\.\d{2,}%/, `raw float in claim: ${claim.text}`);
   assert.equal(draft.meeting.durationMin, 20);
   assert.deepEqual(draft.meeting.proposedSlots, seller.meeting.slots);
 
