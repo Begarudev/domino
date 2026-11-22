@@ -21,7 +21,7 @@ export function predictionEvidence(evidence: Evidence[], intent: Intent): Eviden
 }
 
 const specs = [
-  deps.jobSearch, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
+  deps.jobSearch, deps.jobSearchDisplacement, deps.personSearchRecentMoves, deps.companySearchGrowth, deps.companyEnrich, deps.personSearchDeciders,
   deps.jobSearchOutcomes, deps.personSearchOutcomes,
 ];
 

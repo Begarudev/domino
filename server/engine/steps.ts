@@ -185,6 +185,7 @@ async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): P
     output.evidence.push(...kept.evidence);
   };
   append(await readSource(ctx, deps.jobSearch, input, intent));
+  append(await readSource(ctx, deps.jobSearchDisplacement, input, intent));
   for await (const page of deps.readMovesPages(intent, request => readSource(ctx, deps.personSearchRecentMoves, request, intent))) {
     append(page);
   }

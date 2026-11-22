@@ -68,6 +68,7 @@ export function fixtureFor(name: string, body: unknown): unknown {
     case 'outcome_check':
       return fixtureFor(outcomePeople ? '/person/search' : '/job/search', body);
     case 'job_search':
+    case 'job_search_displacement':
     case '/job/search': {
       const rows = jobs.filter(row => applyFilter(row, request.filters)).sort((a, b) => b.metadata.date_added.localeCompare(a.metadata.date_added));
       return { job_listings: rows.slice(0, limit), next_cursor: null, total_count: rows.length };
