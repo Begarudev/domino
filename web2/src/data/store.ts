@@ -5,7 +5,7 @@
 //  - sample playback is paced by a rAF clock (real gaps compressed), never by setTimeout per event;
 //  - feeds (activity cards, narration) are folded incrementally and append-only.
 // Components subscribe with useRunSel(selector), so a panel re-renders only when its slice changes.
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import type { RunLimits, RunSnapshot, StoredEvent } from '../../../shared/types.ts';
 import type { Backend, Health } from '../../../web/src/api.ts';
 import { mockBackend, realBackend } from '../../../web/src/api.ts';
@@ -137,6 +137,12 @@ export class RunStore {
     this.scriptIdx = 0;
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
+  }
+
+  /** Forget the current run (the rail goes back to its empty state). */
+  clear() {
+    this.detach();
+    this.set({ runId: null, ui: initialState(emptySnapshot('', '')), feeds: emptyFeeds(), pending: 0, playing: false, catchingUp: false });
   }
 
   async startRun(request: string, limits?: Partial<RunLimits>) {
@@ -271,3 +277,17 @@ export function useRunSel<T>(sel: (v: RunView) => T): T {
 }
 
 export const useSnap = () => useRunSel((v) => v.ui.snap);
+
+/**
+ * Scope the activity rail and the meters to the run behind the page in view (the candidate's enrich run, the
+ * company's latest scan). null clears them, so a page never shows an unrelated run's activity. Sample and mock
+ * sessions keep their own run.
+ */
+export function useRunScope(runId: string | null | undefined) {
+  useEffect(() => {
+    const v = runStore.get();
+    if (v.mode !== 'live') return;
+    if (!runId) { if (v.runId) runStore.clear(); return; }
+    if (v.runId !== runId) void runStore.attach(runId);
+  }, [runId]);
+}

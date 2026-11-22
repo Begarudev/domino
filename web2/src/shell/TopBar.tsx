@@ -1,58 +1,75 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as RPointerEvent } from 'react';
-import { navigate, useRoute } from '../data/router.ts';
-import { useSourcesVersion } from '../data/query.ts';
+import { navigate } from '../data/router.ts';
 import { runStore, useRunSel } from '../data/store.ts';
 import { Count } from '../lib/motion.ts';
-import { fmtClock, fmtCredits, fmtInt, fmtUsd } from '../lib/format.ts';
-import { openLedger } from './ui.ts';
+import { fmtClock, fmtCredits, fmtDate, fmtInt, fmtTime, fmtUsd } from '../lib/format.ts';
+import { openLedger, signOut, useShell } from './ui.ts';
 
-export function TopBar() {
-  const route = useRoute();
-  const persona = route.page === 'candidate' ? 'candidate' : 'company';
+export function TopBar({ minimal = false }: { minimal?: boolean }) {
+  const role = useShell((s) => s.role);
+  const home = () => navigate(role === 'company' ? { page: 'companies' } : role === 'candidate' ? { page: 'candidate', sub: 'dashboard' } : { page: 'login' });
   return (
     <header className="bar" data-testid="topbar">
-      <a className="mark" href="/candidate" onClick={(e) => { e.preventDefault(); navigate({ page: 'candidate', sub: 'dashboard' }); }}>
+      <a className="mark" href="/" onClick={(e) => { e.preventDefault(); home(); }}>
         <span className="mark-tile" aria-hidden />
         <span className="mark-word">DOMINO</span>
-        <span className="mark-sub">Search Desk</span>
       </a>
-      <div className="persona" role="group" aria-label="View as">
-        <button aria-pressed={persona === 'candidate'} data-testid="persona-candidate"
-          onClick={() => navigate({ page: 'candidate', sub: 'dashboard' })}>Candidate</button>
-        <button aria-pressed={persona === 'company'} data-testid="persona-company"
-          onClick={() => navigate(route.page === 'company' ? route : { page: 'companies' })}>Company</button>
-      </div>
       <div className="bar-spacer" />
-      <DataPill />
-      <CreditMeter />
-      <TimeMeter />
-      <LedgerTotal />
+      {!minimal && role === 'company' && <><DataPill /><CreditMeter /><TimeMeter /><LedgerTotal /></>}
+      {!minimal && role === 'candidate' && <DataPill />}
+      {!minimal && <Account />}
     </header>
   );
 }
 
-/** One truthful data-source state: where the numbers on screen actually came from. */
+/** Signed-in identity and the only way to change role: sign out. */
+function Account() {
+  const s = useShell((x) => x);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    window.addEventListener('mousedown', off);
+    return () => window.removeEventListener('mousedown', off);
+  }, [open]);
+  if (!s.role) return null;
+  const who = s.role === 'company' ? s.companyName ?? 'Company' : s.candidateLabel ?? 'Candidate';
+  const initial = who.trim()[0]?.toUpperCase() ?? '?';
+  return (
+    <div className="acct" ref={ref}>
+      <button className="acct-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="account">
+        <span className="acct-av" aria-hidden>{initial}</span>
+        <span className="acct-who">{who}</span>
+      </button>
+      {open && (
+        <div className="acct-menu" role="menu">
+          <div className="acct-line">Signed in as <b>{who}</b></div>
+          <button role="menuitem" className="acct-item" data-testid="sign-out" onClick={() => { setOpen(false); signOut(); runStore.detach(); navigate({ page: 'login' }); }}>Sign out</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One truthful data-source state for the page in view. */
 function DataPill() {
   const mode = useRunSel((v) => v.mode);
   const health = useRunSel((v) => v.health);
-  const connected = useRunSel((v) => v.connected);
   const err = useRunSel((v) => v.error);
-  const ledger = useRunSel((v) => v.ui.snap.ledger);
-  const fallbacks = useRunSel((v) => v.ui.fallbacks);
-  const deskSources = useSourcesVersion();
-  const cached = ledger.filter((l) => l.status === 'cache_hit' || l.mode === 'cache').length + fallbacks;
-  const fixtures = deskSources.filter((s) => s === 'fixture').length;
-
+  const page = useShell((s) => s.pageSource);
+  const runMode = useRunSel((v) => (v.runId ? v.ui.snap.dataMode : null));
+  const created = useRunSel((v) => (v.runId ? v.ui.snap.createdAt : null));
+  const runAt = created ? `${fmtDate(created)} ${fmtTime(created)}` : null;
   let cls = 'live';
   let text = 'Live Crustdata';
-  let title = 'Every number on screen came from a live Crustdata call made by this run.';
-  if (mode === 'sample') { cls = 'sample'; text = 'Recorded run, 22 Nov'; title = 'Playing docs/sample-run-events.json: a real run on live Crustdata data, recorded 22 Nov 2026. Nothing here is live.'; }
-  else if (mode === 'mock') { cls = 'mock'; text = 'Mock data, synthetic'; title = 'Synthetic events from the in-browser mock. No real company data.'; }
+  let title = 'The facts on this page came from live Crustdata calls.';
+  if (mode === 'sample') { cls = 'sample'; text = 'Recorded run, 22 Nov'; title = 'A recorded run on live Crustdata data (docs/sample-run-events.json). Nothing here is live.'; }
+  else if (mode === 'mock') { cls = 'mock'; text = 'Mock data'; title = 'Synthetic events from the in-browser mock. No real company data.'; }
   else if (err || !health) { cls = 'down'; text = 'Server offline'; title = err ?? 'Waiting for /api/health'; }
-  else if (!connected) { cls = 'down'; text = 'Reconnecting'; title = 'The event stream dropped; reconnecting from the last event.'; }
-  else if (fixtures) { cls = 'fixture'; text = cached ? `Live Crustdata, ${cached} cached, some fixture` : 'Live run, desk on fixtures'; title = `${fixtures} desk panels use labelled fixtures until their API lands. Run events are live.`; }
-  else if (cached) { cls = 'cache'; text = `Live Crustdata, ${fmtInt(cached)} cached ${cached === 1 ? 'call' : 'calls'}`; title = 'Some calls reused a cached live response (shown per call in the ledger).'; }
+  else if (page === 'fixture') { cls = 'fixture'; text = 'Snapshot of today’s live scan'; title = 'This page shows fixture rows built from today’s live O1 scan (22 Nov) while its endpoint is finished.'; }
+  else if (page === 'cache' || runMode === 'cache') { cls = 'cache'; text = `Cached live scan${runAt ? `, ${runAt}` : ''}`; title = 'Facts on this page came from live Crustdata responses cached at the time shown; no credits were spent re-reading them.'; }
   return <span className={`pill ${cls}`} title={title} data-testid="data-pill"><span className="dot" />{text}</span>;
 }
 
@@ -70,7 +87,6 @@ function CreditMeter() {
   const frac = Math.min(1, used / scale);
   const editable = !!runId && mode !== 'sample' && (status === 'running' || status === 'queued' || status === 'awaiting_input');
   const tone = budget.exhausted === 'credits' ? 'bad' : used / Math.max(cap, 1) > 0.8 ? 'warn' : '';
-
   const valueAt = (clientX: number) => {
     const r = track.current!.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
@@ -89,11 +105,11 @@ function CreditMeter() {
     if (v < budget.limits.maxCredits) void runStore.setLimits({ maxCredits: v });
   };
   return (
-    <div className={`meter ${tone}`} data-testid="credit-meter" title={editable ? 'Drag the handle left to lower the credit cap for this run' : 'Crustdata credits used against this run’s cap'}>
+    <div className={`meter ${tone}`} data-testid="credit-meter" title={editable ? 'Drag the handle left to lower this run’s credit cap' : 'Crustdata credits used against this run’s cap'}>
       <div className="meter-top"><span>Credits</span><span><Count value={used} format={fmtCredits} /> of <b data-num>{fmtInt(cap)}</b></span></div>
       <div className="meter-track" ref={track}>
         <div className="meter-fill" style={{ transform: `scaleX(${frac})` }} />
-        <button className="meter-cap" aria-label={`Credit cap ${fmtInt(cap)}. Use arrow keys to lower it.`} disabled={!editable}
+        <button className="meter-cap" aria-label={`Credit cap ${fmtInt(cap)}. Arrow left lowers it.`} disabled={!editable}
           style={{ left: `${(cap / scale) * 100}%` }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
           onKeyDown={(e) => { if (e.key === 'ArrowLeft' && editable) void runStore.setLimits({ maxCredits: Math.max(Math.ceil(used), budget.limits.maxCredits - 10) }); }} />
       </div>
@@ -101,7 +117,6 @@ function CreditMeter() {
   );
 }
 
-/** Time left on the run's wall-clock cap. Ticks locally between budget updates while the run is running. */
 function TimeMeter() {
   const budget = useRunSel((v) => v.ui.snap.budget);
   const status = useRunSel((v) => v.ui.snap.status);
@@ -131,7 +146,7 @@ function LedgerTotal() {
   const calls = useRunSel((v) => v.ui.snap.ledger.length);
   return (
     <button className="ledger-total" data-testid="ledger-open" onClick={openLedger} title="Open the cost ledger">
-      <span>{fmtInt(calls)} {calls === 1 ? 'call' : 'calls'} spent</span>
+      <span>{fmtInt(calls)} paid {calls === 1 ? 'call' : 'calls'}</span>
       <b data-num>{fmtCredits(used.credits)} credits + {fmtUsd(used.modelUsd)}</b>
     </button>
   );
