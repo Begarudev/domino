@@ -56,6 +56,8 @@ export async function readSource<I>(ctx: ToolContext, spec: EndpointSpec<I, Sour
     evidence, sources, mentions: withIds(raw.mentions), people: withIds(raw.people), triggers: withIds(raw.triggers),
     observation, endpoint: spec.name, path: spec.path, input, time, nextCursor: raw.nextCursor, readSummary: raw.readSummary,
     acquisitionLeads: withIds(raw.acquisitionLeads), acquisitions: raw.acquisitions ?? [],
+    // Typed outputs that cite evidence ids (e.g. openings departures) map them through `remap` to run-scoped ids.
+    parsed: raw, remap: (id: string) => ids.get(id) ?? id,
   };
 }
 
