@@ -28,12 +28,14 @@ export type Route =
   | { page: 'login' }
   | { page: 'candidate'; sub: 'onboard' | 'dashboard' }
   | { page: 'companies' }
-  | { page: 'company'; id: string; tab: CompanyTab };
+  | { page: 'company'; id: string; tab: CompanyTab }
+  | { page: 'trace'; id: string; runId: string; phase?: string };
 
 export function parse(pathname: string): Route {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
   if (parts[0] === 'company') {
     if (!parts[1]) return { page: 'companies' };
+    if (parts[2] === 'trace') return { page: 'trace', id: decodeURIComponent(parts[1]), runId: decodeURIComponent(parts[3] ?? ''), phase: new URLSearchParams(location.search).get('phase') ?? undefined };
     const raw = parts[2] ?? 'recruitment';
     const tab = (COMPANY_TABS.find((t) => t.id === raw)?.id ?? ALIASES[raw] ?? 'recruitment') as CompanyTab;
     return { page: 'company', id: decodeURIComponent(parts[1]), tab };
@@ -49,6 +51,7 @@ export function href(r: Route): string {
     case 'candidate': return `/candidate${r.sub === 'onboard' ? '/onboard' : ''}${q}`;
     case 'companies': return `/company${q}`;
     case 'company': return `/company/${encodeURIComponent(r.id)}/${r.tab}${q}`;
+    case 'trace': { const sp = new URLSearchParams(location.search); if (r.phase) sp.set('phase', r.phase); else sp.delete('phase'); const qs = sp.toString(); return `/company/${encodeURIComponent(r.id)}/trace/${encodeURIComponent(r.runId)}${qs ? `?${qs}` : ''}`; }
   }
 }
 
