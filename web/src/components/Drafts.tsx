@@ -31,7 +31,7 @@ function Body(props: { text: string; draft: Draft; onHover: (id: string | null) 
   );
 }
 
-function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][string]; receipt?: DeliveryReceipt; onDecide: (id: string, d: 'approve' | 'reject') => void; busy: boolean }) {
+function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][string]; receipt?: DeliveryReceipt; onDecide: (id: string, d: 'approve' | 'reject') => void; busy: boolean; blocked?: string }) {
   const { ap, note } = props;
   const isMsg = ap.kind === 'send_message';
   const label = isMsg ? 'Approve and send to test inbox' : 'Approve meeting hold (test mode)';
@@ -40,10 +40,11 @@ function ApprovalControls(props: { ap: Approval; note?: UIState['actionNotes'][s
       <span className="approval-kind">{isMsg ? 'First message' : 'Meeting hold'}</span>
       {ap.status === 'pending' && (
         <div className="approval-btns">
-          <button type="button" className="btn btn-primary btn-sm" disabled={props.busy} onClick={() => props.onDecide(ap.id, 'approve')}>{label}</button>
+          <button type="button" className="btn btn-primary btn-sm" disabled={props.busy || !!props.blocked} title={props.blocked} onClick={() => props.onDecide(ap.id, 'approve')}>{label}</button>
           <button type="button" className="btn btn-quiet btn-sm" disabled={props.busy} onClick={() => props.onDecide(ap.id, 'reject')}>Reject</button>
         </div>
       )}
+      {ap.status === 'pending' && props.blocked && <p className="approval-note is-dup">{props.blocked}</p>}
       {ap.status === 'rejected' && <p className="approval-note">Rejected. Nothing was sent.</p>}
       {ap.status === 'approved' && (
         <div className="approval-done">
@@ -150,7 +151,7 @@ export function DraftsTab(props: {
           <div className="approvals">
             {approvals.length === 0 && <p className="muted">Approvals are created at the approval gate.</p>}
             {approvals.map((ap) => (
-              <ApprovalControls key={ap.id} ap={ap} note={actionNotes[ap.id]} receipt={props.state.receipts[ap.id]} onDecide={props.onDecide} busy={props.busy === ap.id} />
+              <ApprovalControls key={ap.id} ap={ap} note={actionNotes[ap.id]} receipt={props.state.receipts[ap.id]} blocked={current.decider ? undefined : 'No decision-maker found, so this cannot be sent. Reject it or re-run.'} onDecide={props.onDecide} busy={props.busy === ap.id} />
             ))}
           </div>
         </aside>
