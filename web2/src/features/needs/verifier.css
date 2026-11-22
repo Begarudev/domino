@@ -80,10 +80,10 @@
 .ver .panel, .guard { border-radius: var(--r-lg); }
 .ver-sum header h2, .ver-claims header h2 { font-size: var(--fs-body); font-weight: 600; letter-spacing: var(--track-snug); }
 .ver-t thead th { height: var(--head-h); padding: 0 var(--cell-x); }
-.ver-t td { font-size: var(--fs-ui); line-height: 18px; vertical-align: middle; }
-.ver-t td:first-child { vertical-align: middle; }
+.ver-t td { font-size: var(--fs-ui); line-height: 18px; vertical-align: top; }
+.ver-t td:first-child { vertical-align: top; padding-top: 12px; }
 .ver-reason { font-size: var(--fs-cap); color: var(--ink-3); line-height: 16px; }
-.ver-stp { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r); font-size: var(--fs-cap); font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.ver-stp { margin-top: -2px; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r); font-size: var(--fs-cap); font-weight: 500; color: var(--ink-2); white-space: nowrap; }
 .ver-stp i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); flex: none; }
 .ver-stp.s-verified { color: var(--ink); font-weight: 500; }
 .ver-stp.s-verified i { background: var(--acc); }
