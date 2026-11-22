@@ -43,3 +43,48 @@
 .lg-table td.lg-step { max-width: 380px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lg-table tbody td { padding-top: 7px; padding-bottom: 7px; }
 .lg-sum { font-weight: 600; font-size: 14px; }
+/* p4 polish: section heading + one-line description, scrolling data grid with a sticky header, 4px-grid cells */
+.lg-sec-h { display: grid; gap: 2px; }
+.lg-sec-h h2 { font-size: 15px; font-weight: 600; margin: 0; color: var(--ink); }
+.lg-sec-h span { font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.lg-strip .lg-line { font-size: 16px; }
+.lg-scroll { max-height: 560px; overflow: auto; }
+.lg-scroll:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.lg-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--ink-2); box-shadow: inset 0 -1px 0 var(--rule); border-bottom: 0; }
+.lg-table tbody td, .lg-table tfoot td { padding: 8px 16px; vertical-align: middle; }
+.lg-table tfoot td { position: sticky; bottom: 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--rule); border-top: 0; }
+.lg-table td.lg-time { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; font-size: 13px; }
+.lg-table td.mono { color: var(--ink-2); }
+.ledger .panel > header { align-items: flex-start; }
+.lg-note { white-space: nowrap; padding-top: 2px; }
+.lg-table tbody td:not(.lg-step) { white-space: nowrap; }
+
+/* Attio pass (17:05 note): flat hairline cards r10, compact 38px grid rows, 12px muted headers, pill status with state dot, 8px-step spacing */
+.ledger { gap: 24px; max-width: 1200px; }
+.ledger .panel, .ledger .blocked { border-radius: 10px; border-color: var(--rule); box-shadow: none; }
+.ledger .panel > header { padding: 14px 16px; }
+.lg-sec-h h2 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.lg-table thead th { height: 36px; padding: 0 16px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--ink-3); background: var(--surface); }
+.lg-table tbody tr { height: 38px; }
+.lg-table tbody td { padding: 0 16px; font-size: 13.5px; height: 38px; }
+.lg-table tbody tr:hover td { background: var(--row-hover); }
+.lg-table td.lg-step { color: var(--ink); font-weight: 500; }
+.lg-pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--ink-2); background: var(--surface); }
+.lg-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); }
+.lg-pill.ok i { background: var(--acc); }
+.lg-pill.bad { color: var(--err); border-color: color-mix(in srgb, var(--err) 35%, var(--rule)); }
+.lg-pill.bad i { background: var(--err); }
+.lg-run { gap: 8px; font-size: 13px; }
+.lg-run .st.mono { border-radius: 6px; }
+.lg-line { font-size: 15px; gap: 8px; }
+.lg-line b { font-size: 15px; }
+.lg-cap-h { font-size: 13px; color: var(--ink-2); }
+.lg-cap-h b { color: var(--ink); }
+.capbar { height: 6px; border-radius: 3px; }
+.lg-cap-n { font-size: 12px; color: var(--ink-3); }
+.lg-strip { padding: 16px; gap: 16px; }
+.lg-lower { padding-top: 12px; }
+.blocked { padding: 12px 16px; font-size: 14px; }
+.lg-lower input, .ledger .btn { border-radius: 8px; }
+.ledger { max-width: none; grid-template-columns: minmax(0, 1fr); }
+.lg-table thead th, .lg-table tbody td, .lg-table tfoot td { padding-left: 12px; padding-right: 12px; } .lg-table th:first-child, .lg-table td:first-child { padding-left: 16px; } .lg-table th:last-child, .lg-table td:last-child { padding-right: 16px; } .lg-table td.lg-step { max-width: 300px; }

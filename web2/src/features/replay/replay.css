@@ -39,3 +39,37 @@
 .rp-head { position: absolute; top: -6px; width: 2px; height: 20px; margin-left: -1px; background: var(--ink); }
 .rp-src { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--ink-2); border-bottom: 1px solid var(--rule-2); }
 .rp-lock { color: var(--ink); font-weight: 600; }
+/* p4 polish: data-grid rhythm, sub-headings, cohort header row */
+.rp-table th { font-size: 12px; font-weight: 500; color: var(--ink-2); padding: 10px 16px; }
+.rp-table td { padding: 10px 16px; vertical-align: middle; white-space: nowrap; }
+.rp-table td:first-child { white-space: normal; }
+.rp-sub { margin: 16px 0 2px; font-size: 14px; font-weight: 600; }
+.rp-subline { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); max-width: 760px; }
+.rp-empty .rp-table { margin-bottom: 12px; border: 1px solid var(--rule-2); border-radius: 4px; border-collapse: separate; border-spacing: 0; }
+.rp-cohort li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-cohort li > span:last-child { text-align: right; }
+.rp-cohort li.rp-cohort-h { position: sticky; top: 0; background: var(--surface); font-size: 12px; font-weight: 500; color: var(--ink-2); padding-top: 8px; padding-bottom: 8px; }
+.rp-cohort li { padding: 8px 12px; align-items: center; }
+.rp-date { font-variant-numeric: tabular-nums; }
+
+/* Attio pass (17:05 note): hairline r10 cards, compact grid, display lead with tight tracking, 8px controls */
+.replay { gap: 24px; max-width: 1200px; }
+.replay .panel { border-radius: 10px; border-color: var(--rule); box-shadow: none; }
+.replay .panel > header { padding: 14px 16px; }
+.replay .panel > header h2 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.replay .btn { border-radius: 8px; }
+.rp-play > .btn { height: 34px; }
+.rp-lead { font-size: 22px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 16px; }
+.rp-table { border: 1px solid var(--rule); border-radius: 8px; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.rp-table th { height: 36px; padding: 0 16px; font-size: 12px; font-weight: 500; color: var(--ink-3); background: var(--surface); }
+.rp-table td { height: 38px; padding: 0 16px; font-size: 14px; }
+.rp-table tbody tr:hover td { background: var(--row-hover); }
+.rp-empty .rp-table { border-color: var(--rule); border-radius: 8px; }
+.rp-cohort { border-color: var(--rule); border-radius: 8px; }
+.rp-cohort li { min-height: 36px; padding: 0 12px; }
+.rp-cohort li.rp-cohort-h { color: var(--ink-3); min-height: 34px; }
+.rp-cohort li:not(.rp-cohort-h):hover { background: var(--row-hover); }
+.rp-src { padding: 8px 16px; font-size: 12px; color: var(--ink-3); }
+.rp-sub { font-size: 14px; letter-spacing: -.01em; }
+.rp-drawer { padding: 16px; font-size: 13.5px; }
+.rp-drawer dt { font-weight: 500; color: var(--ink-3); }
