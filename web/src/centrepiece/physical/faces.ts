@@ -63,7 +63,7 @@ function draw(spec: TileSpec, width: number, layer: Layer): HTMLCanvasElement {
   ctx.fillStyle = ink;
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
-  const nameSize = Math.round(Math.min(74, cw * 0.15));
+  const nameSize = Math.round(Math.min(88, cw * 0.175));
   ctx.font = `600 ${nameSize}px ${TEXT}`;
   const lines = wrap(ctx, spec.name, cw - pad * 2, 3);
   let y = pad * 1.05;

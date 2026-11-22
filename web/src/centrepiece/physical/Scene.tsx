@@ -228,14 +228,26 @@ function Cards({ layout, hud, snap }: { layout: TableLayout; hud: Hud; snap: Run
       {layout.tiles.map((t) => {
         const st = status[t.key] ?? 'standing';
         const show = st === 'hit' || st === 'falling-hit' || st === 'miss' || st === 'hypothesis'
-          || (t.role === 'trigger' && (phase === 'predict' || st === 'fallen') && phase !== 'score' && phase !== 'done')
+          || (t.role === 'trigger' && phase === 'predict')
           || t.key === focus;
         if (!show) return null;
         if (t.role === 'baseline' && st !== 'hit' && st !== 'falling-hit' && t.key !== focus) return null;
-        const compact = (phase === 'score' || phase === 'done' || t.role === 'baseline') && t.key !== focus;
+        const compact = t.key !== focus && (phase === 'score' || phase === 'done' || t.role === 'baseline' || (phase === 'replay' && t.role === 'target'));
         return <EvidenceCard key={t.key} spec={t} status={st} snap={snap} ev={ev} compact={compact} selected={false} />;
       })}
     </>
+  );
+}
+
+function RowLabel({ layout, hud }: { layout: TableLayout; hud: Hud }) {
+  const phase = useHud(hud, (s) => s.phase);
+  const base = layout.tiles.filter((t) => t.role === 'baseline');
+  if (!base.length || phase === 'idle') return null;
+  const x = Math.max(...base.map((t) => t.pos[0])) + 1.0;
+  return (
+    <Html position={[x, 0.2, base[0].pos[1]]} center={false} zIndexRange={[10, 0]} style={{ pointerEvents: 'none', transform: 'translate(0, -50%)' }}>
+      <div className="dp-row" style={{ textAlign: 'left' }}>Hiring filter's picks<br /><span>no chain, only their own job posts</span></div>
+    </Html>
   );
 }
 
@@ -365,9 +377,9 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
 
     // ---- replay clock: reality decides which predicted tiles fall
     if (H.phase === 'replay' && playing) {
-      const anyFalling = [...tiles.current.values()].some((h) => h.releasedAt != null && now - h.releasedAt < 1.1);
-      const baseRate = layout.horizonDays / (reducedMotion ? 3 : 12.5);
-      const rate = baseRate * (anyFalling ? 0.22 : 1);
+      const anyFalling = [...tiles.current.values()].some((h) => h.spec.role === 'target' && h.releasedAt != null && now - h.releasedAt < 0.9);
+      const baseRate = layout.horizonDays / (reducedMotion ? 3 : 9.5);
+      const rate = baseRate * (anyFalling ? 0.3 : 1);
       const day = Math.min(layout.horizonDays, H.day + delta * rate);
       for (const tl of [...targets, ...baselineTiles]) {
         if (tl.outcomeDay != null && tl.outcomeDay <= day && !tiles.current.get(tl.key)?.releasedAt) release(tl.key, 'falling-hit');
@@ -408,7 +420,7 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
       else if (stt === 'hypothesis') { col = COLORS.amber; glow = 1.2; pool = 0.4; }
       else if (stt === 'falling-hit' || stt === 'hit') { col = COLORS.jade; glow = stt === 'falling-hit' ? 2.6 : 1.5; pool = 0.6; }
       else if (stt === 'miss') { col = COLORS.ash; glow = 0; pool = 0; tint = 0.52; }
-      else if (stt === 'fallen' && h.spec.role === 'trigger') { col = COLORS.amber; glow = 0.55; pool = 0.12; }
+      else if (stt === 'fallen' && h.spec.role === 'trigger') { col = COLORS.amber; glow = 0.28; pool = 0.12; }
       if (h.spec.role === 'baseline' && stt === 'predicted') { col = COLORS.ivory; glow = 0.35; pool = 0.12; }
       if (dim) { tint *= 0.35; glow *= 0.2; pool *= 0.2; }
       if (sel) { glow = Math.max(glow, 1.4); pool = Math.max(pool, 0.4); }
@@ -432,9 +444,14 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
   function release(key: string, as: TileStatus) {
     const h = tiles.current.get(key); if (!h?.rb || h.releasedAt != null) return;
     h.rb.setBodyType(DYNAMIC, true);
+    h.rb.recomputeMassPropertiesFromColliders();
+    h.rb.wakeUp();
     h.releasedAt = t.current;
-    const k = h.spec.role === 'baseline' ? 1.0 : 1.3;
-    tip(h.rb, h.spec.dir, TILE.h, k);
+    // tip it toward its fall direction: angular velocity about (up x dir)
+    const [dx, dz] = h.spec.dir;
+    const w = h.spec.role === 'baseline' ? 2.6 : 3.0;
+    h.rb.setAngvel({ x: dz * w, y: 0, z: -dx * w }, true);
+    tip(h.rb, h.spec.dir, TILE.h, 1.1);
     setStatus(key, as);
   }
 
@@ -444,10 +461,18 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
     const spanX = layout.bounds.maxX - layout.bounds.minX;
     const spanZ = layout.bounds.maxZ - layout.bounds.minZ;
     const wantPos = tmp.v; const wantLook = tmp.w;
-    const overviewDist = Math.max(spanX / aspect * 1.25, spanZ * 0.95) + 6;
+    const overviewDist = Math.max(spanX / aspect * 1.6, spanZ * 1.05) + 6;
     if (H.phase === 'score' || H.phase === 'done' || reducedMotion) {
-      wantLook.set(cx + 0.4, 0, cz + 0.6);
-      wantPos.set(cx - 1.5, overviewDist * 0.95, cz + overviewDist * 0.62);
+      // fit the table into the left ~66% of the frame; the score column owns the rest
+      const tanH = Math.tan(THREE.MathUtils.degToRad(17));
+      const usable = 0.64;
+      const dist = Math.max((spanZ * 0.5 * 0.94) / (tanH * 0.8), (spanX * 0.5) / (tanH * aspect * usable)) * 1.05;
+      const visW = 2 * dist * tanH * aspect;
+      const shift = visW * (0.5 - usable / 2) * 0.92;
+      const elev = THREE.MathUtils.degToRad(64);
+      const down = 2 * dist * tanH * 0.05; // the clock owns the top of the frame
+      wantLook.set(cx + shift, 0, cz - down);
+      wantPos.set(cx + shift - 0.8, dist * Math.sin(elev), cz - down + dist * Math.cos(elev));
       focusTarget.lerp(wantLook, 0.05);
     } else if (H.phase === 'idle') {
       const trig = tileList.filter((x) => x.role === 'trigger');
@@ -475,8 +500,8 @@ function Director({ layout, hud, tiles, spacers, reducedMotion, hiringFilterView
     } else {
       const fk = H.focusKey ? tileList.find((x) => x.key === H.focusKey) : null;
       const fx = fk ? fk.pos[0] : cx; const fz = fk ? fk.pos[1] : cz;
-      wantLook.set(fx - 0.5, 0.9, fz);
-      wantPos.set(fx - 6.8, 5.2, fz + 7.8);
+      wantLook.set(fx - 1.2, 0.6, fz * 0.75 + 0.6);
+      wantPos.set(fx - 9.5, 8.2, fz * 0.75 + 11.5);
       focusTarget.lerp(new THREE.Vector3(fx, 1.0, fz), 0.06);
     }
     if (!st.init) { st.camPos.copy(wantPos); st.camLook.copy(wantLook); st.init = true; }
@@ -520,7 +545,7 @@ export function TableScene({ layout, hud, snap, reducedMotion, hiringFilterView,
   const tiles = useRef(new Map<string, TileHandle>());
   const spacers = useRef<RapierRigidBody[] | null>(null);
   const focusTarget = useMemo(() => new THREE.Vector3(-6, 1, 0), []);
-  const register = useMemo(() => (h: TileHandle) => { tiles.current.set(h.spec.key, h); }, []);
+  const register = useMemo(() => (h: TileHandle) => { tiles.current.set(h.spec.key, h); (window as unknown as { __dpTiles?: unknown }).__dpTiles = tiles.current; }, []);
   const onPick = (t: TileSpec) => onSelect({ kind: 'node', id: t.companyId });
   const onPickEdge = (id: string) => onSelect({ kind: 'edge', id });
   const cx = (layout.bounds.minX + layout.bounds.maxX) / 2;
@@ -561,6 +586,7 @@ export function TableScene({ layout, hud, snap, reducedMotion, hiringFilterView,
 
       <Cards layout={layout} hud={hud} snap={snap} />
       <LaneLabels layout={layout} hud={hud} />
+      <RowLabel layout={layout} hud={hud} />
 
       <EffectComposer multisampling={4}>
         <DepthOfField target={focusTarget} worldFocusRange={dofRange} bokehScale={reducedMotion ? 0 : 2.6} />

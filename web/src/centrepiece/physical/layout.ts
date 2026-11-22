@@ -238,15 +238,15 @@ export function buildLayout(snap: RunSnapshot): TableLayout {
   let baselineZ: number | null = null;
   if (snap.baseline.hiringFilterCompanyIds.length && isReplay) {
     const ids = snap.baseline.hiringFilterCompanyIds;
-    baselineZ = targetZSpread / 2 + 4.2;
-    const n = ids.length; const gap = 2.1;
+    baselineZ = -targetZSpread / 2 - 2.0;
+    const n = ids.length; const gap = 1.85;
     ids.forEach((cid, i) => {
       const c = snap.companies.find((x) => x.id === cid);
       const oc = outcomeFor(cid, 'baseline');
       const day = oc && oc.hit && oc.outcomeDate ? Math.max(0, dayDiff(asOf, oc.outcomeDate)) : null;
       tiles.push({
         key: 'b:' + cid, companyId: cid, name: c?.name ?? cid, role: 'baseline',
-        pos: [(-(n - 1) / 2 + i) * gap - 0.4, baselineZ!], dir: [0, -1], width: TILE.w * 0.92,
+        pos: [triggerX - 1.6 + i * gap, baselineZ!], dir: [0, -1], width: TILE.w * 0.92,
         keyNumber: 'filter', keyCaption: 'is hiring', mechanism: 'DIRECT', confidence: null, netNew: false, alsoBaseline: true,
         outcome: oc, outcomeDay: day, evidenceIds: c?.evidenceIds ?? [], incomingEdgeIds: [],
       });

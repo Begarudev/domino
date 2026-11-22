@@ -70,6 +70,7 @@ export function PhysicalCentrepiece(props: CentrepieceProps): JSX.Element {
           gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
           camera={{ fov: 34, near: 0.1, far: 120, position: [-14, 4, 9] }}
           onPointerMissed={() => onSelect(null)}
+          style={{ position: 'absolute', inset: 0, zIndex: 0 }}
         >
           <TableScene
             layout={layout} hud={hud} snap={snapshot} reducedMotion={reducedMotion} hiringFilterView={hiringFilterView}
@@ -110,7 +111,7 @@ function Hud({ hud, layout, snapshot, onReplay }: { hud: Hud; layout: TableLayou
   const frac = layout.horizonDays ? exactDay / layout.horizonDays : 0;
 
   const caption = !layout.isReplay
-    ? (phase === 'idle' ? 'Live run. Press play to tip the trigger.' : phase === 'predict' ? 'The change runs downstream.' : 'Every standing amber tile is a hypothesis with dated evidence.')
+    ? (phase === 'idle' ? 'Live run. Press play to tip the trigger.' : phase === 'predict' ? 'The change runs downstream.' : 'Each amber tile is a hypothesis resting on dated evidence. Click one for its sources.')
     : phase === 'idle' ? `Clock frozen. Predictions use ${replay?.factsAfterAsOfUsed ?? 0} facts dated after ${fmtDay(layout.asOf)}.`
       : phase === 'predict' ? `DOMINO predicts on ${fmtDay(layout.asOf)}. The chain leans on every company it expects to move.`
         : phase === 'replay' ? 'Now the real record: a tile falls only on a dated event.'
