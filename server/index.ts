@@ -306,6 +306,13 @@ export function createApp(store: Store) {
   });
 
   app.all('/api/*', c => c.json({ error: 'API route not found' }, 404));
+  // The original run view, built with base /classic/ (bun run build:classic), stays reachable at /classic.
+  const classic = resolve(root, 'web/dist-classic');
+  if (existsSync(resolve(classic, 'index.html'))) {
+    app.get('/classic', c => c.redirect('/classic/', 302));
+    app.get('/classic/*', serveStatic({ root: classic, rewriteRequestPath: path => path.replace(/^\/classic/, '') }),
+      serveStatic({ path: resolve(classic, 'index.html') }));
+  }
   // DOMINO_UI=web2 serves the Search Desk app (web2/); the default stays the original app (web/) until the UI freeze.
   const dist = resolve(root, process.env.DOMINO_UI === 'web2' ? 'web2/dist' : 'web/dist');
   if (existsSync(resolve(dist, 'index.html'))) {

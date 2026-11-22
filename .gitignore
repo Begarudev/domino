@@ -8,6 +8,7 @@ dist/
 data/*
 !data/cache-snapshot/
 web/dist/
+web/dist-classic/
 *.log
 .DS_Store
 data/cache-snapshot/*
