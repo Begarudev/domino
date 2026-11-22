@@ -7,6 +7,7 @@ import { useQuery } from '../data/query.ts';
 import { runStore, useRunSel } from '../data/store.ts';
 import { fmtDate, fmtTime } from '../lib/format.ts';
 import { getShell, signOut, useShell } from './ui.ts';
+import { Palette, openPalette } from '../features/cmdk/Palette.tsx';
 
 export function Mark() {
   return (
@@ -32,7 +33,9 @@ export function TopBar({ minimal = false }: { minimal?: boolean }) {
       {!minimal && role === 'candidate' && <CandidateTabs route={route} />}
       {!minimal && role === 'company' && <RunChip />}
       <div className="bar-spacer" />
+      {!minimal && role && <button type="button" className="cmdk-hint" onClick={openPalette} data-testid="cmdk-hint" aria-label="Open command palette"><span>Search or jump to…</span><kbd>⌘K</kbd></button>}
       {!minimal && <Account />}
+      {!minimal && <Palette />}
     </header>
   );
 }

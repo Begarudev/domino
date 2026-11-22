@@ -156,3 +156,17 @@
 
 /* Schibsted tabular figures widen commas and colons: big numbers and the run chip use proportional figures */
 .signin-stats dd, .rec-fun b, .fun-n, .funnel b, .big-n, .runchip, .pl-node b { font-variant-numeric: lining-nums proportional-nums; }
+
+/* Shell polish (q6): active tab reads at a glance (filled pill + 2px ink bar), hover stays lighter than active; the
+   breadcrumb carries the tab group so it always matches the sidebar; the bar and sidebar share one surface and hairline. */
+.side a { position: relative; }
+.side a:hover:not([aria-current]) { background: var(--row-hover); color: var(--ink); }
+.side a[aria-current='page'] { background: var(--hover); color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule-2); }
+.side a[aria-current='page']::before { content: ''; position: absolute; left: -10px; top: 7px; bottom: 7px; width: 2px; border-radius: 0 2px 2px 0; background: var(--ink); }
+.side a[aria-current='page'] .c { color: var(--ink-2); font-weight: 500; }
+.side .grp { text-transform: none; letter-spacing: 0; }
+.crumbs { margin-bottom: 8px; }
+.crumbs li.crumb-grp { color: var(--ink-3); }
+.crumbs li > span { color: var(--ink-2); }
+.co-main > .ph:first-of-type { margin-top: 0; }
+.co-main > section { min-width: 0; }
