@@ -541,7 +541,23 @@ straddle the window edge and then settles them as intervals. Both reach the same
 | Bright Vision Technologies | DIRECT (baseline) | yes |
 
 3 decision-makers found, 5 verified drafts, 10 approvals queued (a message and a meeting hold each), 86.3 credits,
-$0.0073, 216 s. *To refresh at 16:30 after the CONTAGION tightening.*
+$0.0073, 216 s.
+
+**After the CONTAGION tightening and the 2-fact gate:** live run `run_1a165a3d` (22 Nov, 16:19 IST, the run shown in
+Find buyers). 441 triggers from 1,107 evidence rows (956 live, 151 from the recorded cache, 0 fixture), 244 canonical
+companies after 59 merges, 17 cascade edges (14 DISPLACEMENT, 3 CONTAGION), **5 ranked accounts**:
+
+| Account | Rule | Hiring filter would find it? | Draft |
+|---|---|---|---|
+| EWOR | DIRECT (baseline) | yes | drafted from 2 verified live facts, to the CTO role |
+| Crusoe | CONTAGION | no | not drafted (0 of 2 verified facts) |
+| Nscale | CONTAGION | no | not drafted (0 of 2) |
+| Undisclosed | CONTAGION | no | not drafted (0 of 2) |
+| The Royal | DISPLACEMENT | no | not drafted (1 of 2; no named decider role) |
+
+142.0 credits, $0.0003, 114 s. Four of the five accounts come from cross-company rules a hiring filter wouldn't find.
+None of those four had two verified, dated facts to write from, so DOMINO held them back and said why. The one
+drafted account is the baseline. Its send and meeting approvals are left pending: nothing was sent.
 
 ### 4. Replay from 1 September
 
