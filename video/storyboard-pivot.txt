@@ -1,0 +1,51 @@
+DOMINO: 2-minute submission video script (pivot: The Search Desk, theme 1.1)
+Target 1:55, hard cap 2:00. No voice-over: every beat has an on-screen step label, a plain headline and one supporting line.
+Numbers in [brackets] are filled from the recorded run's own API snapshot at assembly time (facts.json), never typed by hand.
+
+0:00-0:07  CARD - THE PAID JOB
+  Kicker:   THE PAID JOB
+  Title:    Search firms earn their fee when a person starts the job.
+  Sub:      DOMINO does the search work itself: it spots openings before they're posted, then makes the match with dated proof.
+
+0:07-0:19  STEP 1/6 - CANDIDATE
+  Headline: A candidate pastes their LinkedIn. DOMINO reads it live.
+  Sub:      Crustdata person enrich, then the candidate ticks exactly what DOMINO may share.
+  Pills:    Live Crustdata (or "Fixture candidate" if the demo profile is fictional)
+
+0:19-0:36  STEP 2/6 - OPENINGS BEFORE THEY'RE POSTED
+  Headline: DOMINO predicts Abacus.AI will hire for ML platform, before any job post.
+  Sub:      2 ML-platform engineers left in Oct; 0 ML-platform posts or hires since 1 Oct. Every chip is dated.
+  Action:   open the reason chips, then Request intro (the candidate confirms).
+
+0:36-0:45  STEP 2/6 - TRUST BEAT
+  Headline: It won't call an opening it can't defend.
+  Sub:      Poolside lost 2 inference engineers to NVIDIA, but NVIDIA licensed its models and hired 109 staff (thenextweb, 21 Aug).
+            Acqui-hire, so: Held, not an opening.
+
+0:45-1:00  STEP 3/6 - THE COMPANY SIDE
+  Headline: The company side: who left Abacus.AI, to where, and when.
+  Sub:      Roles and initials only. The match cites the candidate's own profile, and one unsourced claim is struck: "I can't verify".
+
+1:00-1:14  STEP 4/6 - FULL COMPANY ANALYSIS
+  Headline: One click opens the full company dossier.
+  Sub:      News timeline, talent flows, cross-company chains and predicted needs. Click any row to see its dated source.
+
+1:14-1:32  STEP 5/6 - A PERSON APPROVES, IT SENDS ONCE
+  Headline: A person approves, and the intro is delivered once.
+  Sub:      We kill the sender right after delivery, then retry: "already delivered, skipped". Nothing goes out twice.
+  Pills:    Injected fault
+
+1:32-1:48  STEP 6/6 - DID IT WORK?
+  Headline: We froze the data at 1 Sep and checked what actually happened.
+  Sub:      0 facts after 1 Sep used. Predicted openings against real job posts by 22 Nov, next to two simple baselines: [raw counts].
+  Pills:    snapshot label from the app, verbatim
+
+1:48-1:55  CLOSE - LEDGER
+  Headline: Every run has caps and a cost ledger: [credits] credits and $[usd] for this intro.
+  Card:     DOMINO, The Search Desk. Openings before they're posted · every claim dated · a person approves every send · nothing sent twice.
+
+Honesty rules for the edit
+- Any sped-up shot shows a yellow "4x" (or "2x") pill for its whole duration.
+- Shots served from cached live responses show "Cached live responses from <time>", fixtures show "Fixture".
+- Injected faults (timeout, sender kill) show an "Injected fault" pill.
+- People appear as role plus initial. Companies stay named.
