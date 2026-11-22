@@ -50,7 +50,8 @@ const enrichResponse = z.array(z.object({
 
 function roundName(value?: string | null): string | null {
   if (!value?.trim()) return null;
-  return value.replace(/_/g, ' ').replace(/\bseries ([a-z])\b/i, (_, letter: string) => 'Series ' + letter.toUpperCase());
+  return value.replace(/_/g, ' ').replace(/\bseries ([a-z])\b/i, (_, letter: string) => 'Series ' + letter.toUpperCase())
+    .replace(/\bipo\b/gi, 'IPO').replace(/\bpost IPO\b/i, 'post-IPO').replace(/\bpre IPO\b/i, 'pre-IPO');
 }
 
 const periods = [['1m', 'mom'], ['3m', 'qoq'], ['6m', 'six_months'], ['12m', 'yoy']] as const;
@@ -100,7 +101,7 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
       if (pct == null) continue;
       growth = { window, pct };
       growthFact = add('headcount.growth_percent.' + field,
-        `${name} reported ${pct}% headcount growth over ${window}${anchor ? ' through ' + anchor : ''}.`, anchor, pct);
+        `${name} reported ${Math.round(pct * 10) / 10}% headcount growth over ${window}${anchor ? ' through ' + anchor : ''}.`, anchor, pct);
       break;
     }
   }
@@ -117,7 +118,7 @@ function toCompany(row: CompanyRow, meta: ParseMeta, prefix: string, historical:
   let fundingFact: Evidence | undefined;
   if ((fundingDate && fundingDate <= meta.asOf) || (!historical && !fundingDate && (round || amountUsd != null))) {
     funding = { date: fundingDate, round, amountUsd };
-    const amount = amountUsd != null ? ' of $' + amountUsd.toLocaleString('en-US') : '';
+    const amount = amountUsd != null ? ' of ' + usd(amountUsd) : '';
     const fundingField = useMilestone ? `funding.milestones[${historicRound.index}]`
       : 'funding.' + (amountUsd != null ? 'last_round_amount_usd' : round ? 'last_round_type' : 'last_fundraise_date');
     fundingFact = add(fundingField,
@@ -261,3 +262,11 @@ export const companyEnrich: EndpointSpec<{ companies: CompanyInput[] }, Pick<Tri
     }, 0);
   },
 };
+
+// "$3,960,000" reads badly in a first message; "$4.0M" is what a person would write.
+function usd(amount: number): string {
+  if (amount >= 1e9) return '$' + (amount / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (amount >= 1e6) return '$' + (amount / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (amount >= 1e3) return '$' + Math.round(amount / 1e3) + 'K';
+  return '$' + amount;
+}

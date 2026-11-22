@@ -311,11 +311,22 @@ async function draftMessages(ctx: ToolContext, c: Checkpoints): Promise<StepResu
     const template = deps.templateDraft(target, target.decider, claims, profile);
     const prompt = deps.llmDraftPrompt(target, target.decider, claims.filter(claim => claim.verifiable), profile);
     const completion = await modelClient(ctx).complete({ purpose: 'draft', ...prompt, json: true, maxTokens: 2400 });
-    const parsed = completion ? messageShape.safeParse(JSON.parse(completion.text)) : null;
-    const candidate = parsed?.success ? { ...template, ...parsed.data, generator: completion!.model } : template;
-    const checked = deps.verifyDraft(candidate, claims, evidence);
-    // Use the template subject because verifier results cover the message body.
-    const draft = { ...candidate, ...checked, subject: template.subject };
+    const parsed = completion ? safeJson(completion.text, messageShape) : null;
+    let draft: Draft;
+    if (parsed) {
+      // The model writes only the claim-bearing middle; the verifier checks it; the fixed frame goes around it.
+      const frame = deps.draftFrame(target.decider, profile);
+      const checked = deps.verifyDraft({ subject: template.subject, body: parsed.body }, claims, evidence);
+      const frameCheck = (sentence: string) => ({ sentence, status: 'no_claim' as const, evidenceIds: [] });
+      draft = {
+        ...template, ...checked, generator: completion!.model, subject: template.subject,
+        body: [frame.greeting, checked.body.trim(), frame.cta, frame.signoff].filter(Boolean).join('\n\n'),
+        checks: [frameCheck(frame.greeting), ...checked.checks, frameCheck(frame.cta), frameCheck(frame.signoff)],
+      };
+      draft.id = template.id;
+    } else {
+      draft = { ...template, ...deps.verifyDraft(template, claims, evidence), subject: template.subject };
+    }
     drafts.push(draft);
     targets.push({ ...target, draftId: draft.id });
     events.push(...draft.unverifiable.map(item => ({ type: 'claim.unverifiable' as const, companyId: company.id, ...item })),
@@ -392,3 +403,12 @@ export const steps: { [K in StepName]: Runner<K> } = {
   cascade, rank_targets: rankTargets, find_deciders: findDeciders, warm_paths: warmPaths, draft_messages: draftMessages,
   approval_gate: approvalGate, score_replay: scoreReplay,
 };
+
+function safeJson<T>(text: string, shape: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): T | null {
+  try {
+    const result = shape.safeParse(JSON.parse(text));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}

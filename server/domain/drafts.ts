@@ -28,6 +28,8 @@ export function buildClaims(target: Target, company: Company, triggers: Trigger[
   const unique = new Map<string, Evidence>();
   for (const row of evidence) {
     if (!own.has(row.id) || !isPublicCompanyFact(row)) continue;
+    // Shrinking headcount is a fact, but not one to open a first message with.
+    if (row.source.field?.includes('growth_percent') && typeof row.value === 'number' && row.value <= 0) continue;
     const date = row.observedAt ?? '';
     const descriptiveKey = (row.source.field?.includes('headcount') ? 'headcount:' : '') + String(row.value ?? row.claim) + '|' + date;
     const existing = unique.get(descriptiveKey);
@@ -77,6 +79,15 @@ function subjectLine(target: Target, company: string | undefined, offering: stri
   return company ? `${focus} at ${company}` : focus;
 }
 
+// Greeting, meeting invitation and sign-off are fixed seller copy, added around the model's (verified) body.
+export function draftFrame(decider: Decider | null, seller: SellerProfile) {
+  return {
+    greeting: decider ? 'Hi ' + decider.name.trim().split(/\s+/)[0] + ',' : 'Hi,',
+    cta: meetingCopy(seller),
+    signoff: 'Thanks,\n' + seller.senderName,
+  };
+}
+
 export function templateDraft(target: Target, decider: Decider | null, claims: Claim[], seller: SellerProfile): Draft {
   const subject = subjectLine(target, claims.find(claim => claim.recipientCompany)?.recipientCompany, seller.offering);
   const greeting = decider ? 'Hi ' + decider.name.trim().split(/\s+/)[0] + ',' : 'Hi,';
@@ -116,7 +127,7 @@ export function templateDraft(target: Target, decider: Decider | null, claims: C
 export function llmDraftPrompt(target: Target, decider: Decider | null, claims: Claim[], seller: SellerProfile): { system: string; user: string } {
   const usable = claims.filter(claim => claim.verifiable && claim.evidenceIds.length);
   return {
-    system: 'Write a concise first outreach email of 110 words or fewer. Return JSON with subject and body. State factual sentences only from the numbered public facts about the recipient, preserving their numbers and dates exactly. Put each sentence’s [n] citations at its end. Lead with the recipient’s own dated facts. Format dates as day and abbreviated month, such as 15 Nov. Ask about the seller’s offer as a question and include the meeting invitation as supplied. Do not mention engineers moving, departure counts, outside companies, inferred needs as facts, or any unlisted fact. If no fact is supplied, write a short introduction and meeting invitation.',
+    system: 'Write the middle of a first outreach email, 70 words or fewer. Return JSON with subject and body. The body has NO greeting, NO meeting invitation and NO sign-off: the system adds those. State factual sentences only from the numbered public facts about the recipient, preserving their numbers and dates exactly, and put each sentence’s [n] citations at its end. Use at most two facts and pick the ones that best show why now. Write like a person, not a report: no percentages with decimals beyond one place, no ISO dates. Then ask about the seller’s offer as one question, using the supplied question or a close variant. Do not mention engineers moving, departure counts, outside companies, inferred needs as facts, or any unlisted fact.',
     user: [
       `Recipient ${decider?.name ?? 'company team'} at ${claims.find(claim => claim.recipientCompany)?.recipientCompany ?? 'the target company'}.`,
       `Suggested subject ${subjectLine(target, claims.find(claim => claim.recipientCompany)?.recipientCompany, seller.offering)}.`,
