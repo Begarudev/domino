@@ -20,19 +20,19 @@ const base = (): ApexOptions => ({
   yaxis: { labels: { style: { colors: css('--ink-3', '#8A8F98'), fontSize: '11px' }, formatter: (v) => fmtInt(Math.round(v)) } },
 });
 
-export function HeadcountArea({ series, mark, onOpen }: { series: { date: string; count: number }[]; mark: string | null; onOpen?: () => void }) {
+export function HeadcountArea({ series, mark, markLabel, onOpen }: { series: { date: string; count: number }[]; mark: string | null; markLabel?: string; onOpen?: () => void }) {
   const teal = css('--h-teal-dot', '#14A38B');
   const o = base();
   const opts: ApexOptions = {
     ...o,
     chart: { ...o.chart, type: 'area', events: { markerClick: () => onOpen?.(), click: () => onOpen?.() } },
     colors: [teal],
-    stroke: { curve: 'straight', width: 2 },
+    stroke: { curve: 'smooth', width: 2 },
     fill: { type: 'gradient', gradient: { shadeIntensity: 0, opacityFrom: 0.22, opacityTo: 0.02, stops: [0, 100] } },
     markers: { size: 3, strokeWidth: 0, hover: { size: 5 } },
     xaxis: { ...o.xaxis, type: 'datetime', labels: { ...o.xaxis!.labels, datetimeUTC: false, format: 'MMM yy' }, tooltip: { enabled: false } },
-    tooltip: { theme: 'light', x: { formatter: (v) => fmtDate(new Date(v).toISOString().slice(0, 10), true) }, y: { formatter: (v) => `${fmtInt(v)} employees`, title: { formatter: () => '' } } },
-    annotations: mark ? { xaxis: [{ x: Date.parse(mark), borderColor: css('--ink-3', '#8A8F98'), strokeDashArray: 3, label: { text: '90-day base', orientation: 'horizontal', borderWidth: 0, style: { background: 'transparent', color: css('--ink-3', '#8A8F98'), fontSize: '11px' } } }] } : {},
+    tooltip: { theme: 'light', x: { formatter: (v) => fmtDate(new Date(v).toISOString().slice(0, 10), true) }, y: { formatter: (v, o) => { const i = o?.dataPointIndex ?? 0; const p = i > 0 ? series[i - 1].count : null; return `${fmtInt(v)} employees${p != null && v != null ? ` (${v - p >= 0 ? '+' : ''}${fmtInt(v - p)} vs previous)` : ''}`; }, title: { formatter: () => '' } } },
+    annotations: mark ? { xaxis: [{ x: Date.parse(mark), borderColor: css('--ink-3', '#8A8F98'), strokeDashArray: 3, label: { text: `90-day base${markLabel ? ` · ${markLabel}` : ''}`, orientation: 'horizontal', borderWidth: 0, style: { background: 'transparent', color: css('--ink-3', '#8A8F98'), fontSize: '11px' } } }] } : {},
   };
   return (
     <div className="cf-chart" data-testid="file-headcount-chart" aria-label={`Headcount from ${fmtDate(series[0].date, true)} to ${fmtDate(series[series.length - 1].date, true)}, ${series.length} dated points.`}>

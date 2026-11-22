@@ -114,7 +114,7 @@ function Headcount({ d, desk }: { d?: CompanyDossier | null; desk: CompanyDesk }
   const latest = last?.count ?? d?.company.headcount ?? desk.company.headcount ?? null;
 
   return (
-    <section className="panel cf-p" data-testid="file-headcount">
+    <section className="panel cf-p cf-wide" data-testid="file-headcount">
       <header><h2>Headcount</h2>{evId ? <button className="srclink" onClick={() => openEvidence(evId)}>company/enrich timeseries</button> : <span className="faint">company/enrich</span>}</header>
       {latest == null ? (
         <p className="cf-empty">No headcount in this {d ? 'file' : 'view'}.</p>
@@ -129,7 +129,7 @@ function Headcount({ d, desk }: { d?: CompanyDossier | null; desk: CompanyDesk }
           </div>
           {series.length >= 2
             ? <>
-                <HeadcountArea series={series} mark={base?.date ?? null} onOpen={evId ? () => openEvidence(evId) : undefined} />
+                <HeadcountArea series={series} mark={base?.date ?? null} markLabel={change != null ? pct1(change) : undefined} onOpen={evId ? () => openEvidence(evId) : undefined} />
                 <span className="cf-spark-ax"><span>{fmtDate(series[0].date, true)}</span><span>{plural(series.length, 'dated point')}</span><span>{fmtDate(last!.date, true)}</span></span>
               </>
             : <p className="cf-empty sm">Headcount series not read in this scan, so no curve is drawn.</p>}
@@ -152,10 +152,7 @@ function Funding({ d }: { d?: CompanyDossier | null }) {
       ) : lf?.date ? (
         <ul className="cf-rows"><li className="cf-row"><span>{lf.round ?? 'Funding round'}</span><span className="mono cf-date">{fmtDate(lf.date, true)}</span></li></ul>
       ) : (
-        <div className="cf-empty">
-          <b>No dated funding record in this {d ? 'file' : 'view'}.</b>
-          {d?.source === 'openings_scan' && <span>The openings scan reads departures, headcount and replacement searches. A company analysis run reads funding.</span>}
-        </div>
+        <p className="cf-empty sm">No dated funding record in this {d ? 'file' : 'view'}{d?.source === 'openings_scan' ? '; the openings scan does not read funding, a company analysis run does.' : '.'}</p>
       )}
     </section>
   );
