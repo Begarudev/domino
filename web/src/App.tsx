@@ -82,7 +82,7 @@ export function App() {
   const onDecide = (id: string, d: 'approve' | 'reject') => backend && act(id, () => backend.decide(id, d));
   const onLower = (l: Partial<RunLimits>) => backend && runId && act('limits', () => backend.setLimits(runId, l));
 
-  const running = snap.status === 'running' || snap.status === 'queued';
+  const running = !!runId && (snap.status === 'running' || snap.status === 'queued');
   const ask = snap.status === 'awaiting_input' ? snap.asks.find((a) => !a.answer) : undefined;
   const hasRun = !!runId;
   const Centre = centre.Component;

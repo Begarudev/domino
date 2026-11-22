@@ -123,13 +123,13 @@ export function StatusLine(props: {
   return (
     <div className="status">
       {mock && <span className="badge badge-mock" title="Recorded mock stream; the server is not connected">Mock data</span>}
-      <span className={`badge badge-${snap.dataMode}`}>{dataModeText(snap)}</span>
+      {props.hasRun && <span className={`badge badge-${snap.dataMode}`}>{dataModeText(snap)}</span>}
       {snap.dataMode === 'live' && props.fallbacks > 0 && (
         <span className="badge badge-cache" title="Live calls that failed after retries were answered from the response cache">
           Cached live responses for {props.fallbacks} call{props.fallbacks > 1 ? 's' : ''}
         </span>
       )}
-      <span className="status-llm">{llmText(snap.llm)}</span>
+      {props.hasRun && <span className="status-llm">{llmText(snap.llm)}</span>}
       {!props.connected && <span className="badge badge-warn">Reconnecting to the event stream</span>}
       <div className="meters">
         <Meter label="Credits" used={fmtNum(b.used.credits)} limit={fmtNum(b.limits.maxCredits)} frac={b.used.credits / (b.limits.maxCredits || 1)} exhausted={b.exhausted === 'credits'} />

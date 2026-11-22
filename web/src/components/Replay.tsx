@@ -60,6 +60,7 @@ function Scoreboard({ score, snap, reducedMotion }: { score: ReplayScore; snap: 
         <p className="replay-guard"><b className={score.factsAfterAsOfUsed === 0 ? 'ok' : 'miss'}>{score.factsAfterAsOfUsed}</b> facts dated after {fmtDate(score.asOf)} used to predict</p>
         <p className="replay-label">{score.snapshotLabel ?? `Not point-in-time: today's data, filtered to facts dated on or before ${fmtDate(score.asOf)}`}</p>
         <button type="button" className="btn btn-primary btn-sm" onClick={play} disabled={playing}>{done ? `Play to ${fmtDate(score.horizonEnd)} again` : `Play to ${fmtDate(score.horizonEnd)}`}</button>
+        <div className="scrub-wrap">
         <div className="scrub" aria-hidden="true">
           <span className="scrub-fill" style={{ width: `${(day / total) * 100}%` }} />
           {score.outcomes.filter((o) => o.outcomeDate).map((o, i) => (
@@ -70,6 +71,8 @@ function Scoreboard({ score, snap, reducedMotion }: { score: ReplayScore; snap: 
           type="range" className="scrub-input" min={0} max={total} value={day} aria-label="Replay date"
           onChange={(e) => setDay(+e.target.value)}
         />
+        <span className="scrub-focus" />
+        </div>
       </div>
 
       <ul className="outcomes">

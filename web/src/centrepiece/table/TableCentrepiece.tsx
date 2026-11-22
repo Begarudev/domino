@@ -185,13 +185,23 @@ function edgeGeometry(a: Placed, b: Placed, tipped: boolean) {
 
 function TableCentrepiece(props: CentrepieceProps) {
   const { snapshot: snap, selection, onSelect, hiringFilterView, reducedMotion, width, height, replayToken } = props;
-  const { nodes, edges } = snap.graph;
+  // The table shows the cascade itself: nodes on a cross-company edge, plus ranked targets.
+  // Companies that were scanned but never linked stay off the table (counted in a footnote).
+  // A self-loop (DIRECT: the company itself is hiring) is a property of the tile, not a line.
+  const { nodes, edges, offTable } = useMemo(() => {
+    const all = snap.graph;
+    const lines = all.edges.filter((e) => e.from !== e.to);
+    const linked = new Set(lines.flatMap((e) => [e.from, e.to]));
+    const targets = new Set(snap.targets.map((t) => t.companyId));
+    const keep = all.nodes.filter((n) => linked.has(n.id) || targets.has(n.id) || (lines.length === 0 && n.status === 'hypothesis'));
+    return { nodes: keep, edges: lines, offTable: all.nodes.length - keep.length };
+  }, [snap.graph, snap.targets]);
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
   const { placed, vw, vh } = useMemo(() => layout(nodes, edges), [nodes, edges]);
   const times = useMemo(() => schedule(nodes, edges), [nodes, edges]);
   const evById = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
   const baseline = new Set(snap.baseline.hiringFilterCompanyIds);
-  const animate = cascadeDone && edges.length > 0;
+  const animate = cascadeDone && (edges.length > 0 || nodes.length > 0);
 
   if (!nodes.length) {
     return (
@@ -263,6 +273,7 @@ function TableCentrepiece(props: CentrepieceProps) {
           );
         })}
       </svg>
+      {offTable > 0 && <p className="table-foot">{offTable} more scanned {offTable === 1 ? 'company has' : 'companies have'} no dated link in the cascade and stay off the table.</p>}
     </div>
   );
 }

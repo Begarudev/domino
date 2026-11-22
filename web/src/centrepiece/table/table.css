@@ -82,7 +82,7 @@
 .edge-fo { overflow: visible; }
 .edge-label {
   height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; cursor: pointer;
-  font-size: 16px; line-height: 1.18; font-variation-settings: 'wdth' 78; font-weight: 540; color: var(--text-2);
+  font-size: 17px; line-height: 1.16; font-variation-settings: 'wdth' 78; font-weight: 540; color: var(--text-2);
   padding: 0 2px 4px; border-radius: 3px; opacity: 0.5;
 }
 .edge-meta { font-size: 14px; font-weight: 620; color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -112,3 +112,5 @@
 .ghost-tile.is-waiting { animation: ghost 1.6s ease-in-out infinite; }
 @keyframes ghost { 50% { stroke: var(--text-2); } }
 @media (prefers-reduced-motion: reduce) { .ghost-tile.is-waiting { animation: none; } }
+
+.table-foot { position: absolute; top: 0; left: 16px; margin: 0; font-size: 12.5px; color: var(--text-3); }
