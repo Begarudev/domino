@@ -58,7 +58,7 @@ export function CheckedStrip({ scan }: { scan: Scan }) {
       <h2 id="chk-h" className="dash-h3">What DOMINO checked for you</h2>
       <div className="checked">
         {btn('moves', fmtInt(profiles?.count ?? 0), 'job moves read from Crustdata')}
-        {btn('companies', fmtInt(scan.companies.length), 'companies checked')}
+        {btn('companies', fmtInt(scan.companies.length), 'companies with a dated move')}
         {btn('rule', `O1`, `applied: ${countWord(groups?.count ?? 0, 'group')} at 2+, ${countWord(openings, 'opening')}, ${fmtInt(held?.count ?? 0)} held`)}
         {btn('time', time?.split(', ')[1] ?? 'Scan', `scanned ${time?.split(', ')[0] ?? 'today'}`)}
       </div>

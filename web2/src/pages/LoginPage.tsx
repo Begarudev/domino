@@ -30,7 +30,7 @@ export function LoginPage() {
     if (companies.data) {
       const decided = companies.data.reduce((n, c) => n + c.openings, 0);
       out.push({ big: fmtInt(decided), small: decided === 1 ? 'predicted opening' : 'predicted openings' });
-      out.push({ big: fmtInt(companies.data.length), small: 'companies scanned' });
+      out.push({ big: fmtInt(companies.data.length), small: 'companies with a dated move' });
     }
     return out;
   }, [funnel.data, companies.data]);
