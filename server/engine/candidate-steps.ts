@@ -211,8 +211,12 @@ export function introClaims(opening: Opening, candidate: Candidate, candidateEvi
   const drainIds = drainReasons.flatMap(reason => reason.evidenceId ?? []);
   const drainMonth = monthOf(drainReasons[0]?.date ?? null);
   const family = ROLE_FAMILY_LABELS[opening.roleFamily];
-  add(`DOMINO predicts ${article(opening.roleTitle)} ${opening.roleTitle} opening at ${opening.companyName}${drainMonth ? ` after ${family} team changes in ${drainMonth}` : ''}`,
-    drainIds.length ? drainIds : opening.evidenceIds);
+  const after = drainMonth ? ` after ${family} team changes in ${drainMonth}` : '';
+  // A watch is not a prediction (rule O1 needs 2 departures and a settled gap); the claim says so.
+  add(opening.status === 'watch'
+    ? `DOMINO is watching ${opening.companyName} for a possible ${opening.roleTitle} opening${after}`
+    : `DOMINO predicts ${article(opening.roleTitle)} ${opening.roleTitle} opening at ${opening.companyName}${after}`,
+  drainIds.length ? drainIds : opening.evidenceIds);
   const gap = opening.reasons.find(reason => reason.kind === 'no_replacement');
   if (gap) add(`No ${family} job post or hire at ${opening.companyName} has been found since then`,
     gap.evidenceId ? [gap.evidenceId] : [], gap.evidenceId ? undefined : 'The no-replacement check has no dated source record.');

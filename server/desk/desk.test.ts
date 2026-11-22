@@ -16,6 +16,7 @@ import { displayName, enrichFixture, linkedinProfileUrl, parseEnrich, personEnri
 import { Store } from '../db.ts';
 import { defaultLimits, root } from '../env.ts';
 import { classifyProfile, openingsForCandidate } from './match.ts';
+import { introClaims } from '../engine/candidate-steps.ts';
 
 const meta = { mode: 'live' as const, retrievedAt: '2026-11-22T09:00:00.000Z', asOf: '2026-11-22', windowDays: 0, endpoint: '/person/enrich' };
 const PROFILE = 'https://www.linkedin.com/in/fictional-test-profile/';
@@ -131,6 +132,20 @@ const departures: Departure[] = [
   { id: 'dp_2', companyId: 'co_orbit', role: 'ML Platform Engineer', roleFamily: 'ml_platform', initial: 'T.', date: '2026-10-01',
     precision: 'month', toCompanyId: null, toCompanyName: 'Another Fictional', evidenceId: 'ev_drain_b' },
 ];
+
+describe('intro claims', () => {
+  test('a watch is never worded as a prediction', () => {
+    const candidate = { id: 'c', status: 'ready', linkedinUrl: '', displayName: 'Asha K.', headline: null, roleFamily: 'ml_platform',
+      skills: [], history: [], samples: [], consent: { shareHistory: false, shareSkills: false, shareSamples: false, discoverable: false },
+      confirmedAt: null, evidenceIds: [], runId: '', parsedBy: 'rules' } as Candidate;
+    const rows = new Map(seedEvidence.map(row => [row.id, row]));
+    const [open] = introClaims(openings[0], candidate, [], rows);
+    assert.match(open.text, /^DOMINO predicts an ML Platform Engineer opening at Orbitline Fictional after .+ October 2026$/);
+    assert.ok(open.verifiable);
+    const [watch] = introClaims({ ...openings[0], status: 'watch', watch: { have: 1, need: 2 } }, candidate, [], rows);
+    assert.match(watch.text, /^DOMINO is watching Orbitline Fictional for a possible ML Platform Engineer opening/);
+  });
+});
 
 describe('matching', () => {
   test('rules classify a profile and every fit reason is sourced or marked cant_verify', () => {
