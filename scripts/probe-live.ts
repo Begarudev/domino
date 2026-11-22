@@ -21,7 +21,7 @@ export const liveIntent: Intent = {
 export const replayIntent: Intent = { ...liveIntent, runKind: 'replay', asOf: '2026-09-01', horizonEnd: liveIntent.asOf };
 
 const searchRows: Partial<Record<string, string>> = {
-  '/job/search': 'job_listings', '/person/search': 'profiles', '/company/search': 'companies',
+  '/job/search': 'job_listings', '/person/search': 'profiles', '/company/search': 'companies', '/social_post/search': 'posts',
 };
 type Parsed = Partial<TriggerBatch> & { outcomes?: OutcomeFact[] };
 type Call = {

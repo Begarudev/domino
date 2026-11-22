@@ -62,6 +62,9 @@ export function fixtureFor(name: string, body: unknown): unknown {
   const leaves = filterLeaves(request.filters);
   const outcomePeople = leaves.some(leaf => leaf.field.startsWith('experience.employment_details.'));
   switch (name) {
+    case 'company_posts':
+    case '/social_post/search':
+      return { posts: [], total_count: 0, next_cursor: null };
     case 'outcome_check':
       return fixtureFor(outcomePeople ? '/person/search' : '/job/search', body);
     case 'job_search':

@@ -61,3 +61,9 @@ This logical endpoint uses two separate requests. Run `endpoints.outcome_check` 
 The person parser checks that the cohort ID, qualifying title, and recent end date occur on the same past role. It pairs that departure with a recent start at a different employer and counts each person once per origin company. The experiment reports months from those past role end dates and uses the third-most-recent departure to test the November threshold.
 
 Run `bun --env-file=/Users/garudev/dev/domino/.env scripts/probe-yield.ts`. The experiment defaults to a 150-credit cap and writes its summary and raw cache under `data/`.
+
+## company_posts
+
+`POST /social_post/search` requests up to 12 indexed posts in the intent window. It combines text signal phrases with a matching company author, structured company mention, or company name or domain in the text. The response envelope is `{posts, next_cursor, total_count}`. Post fields include `date_posted`, `share_url`, `text`, the author under `actor`, and any resolved company IDs under `mentions`. Evidence cites the post URL and its first 120 characters. The parser attributes third-party posts to their author and emits a `post` trigger only when the post is dated and the text matches a signal phrase.
+
+The indexed endpoint lists at 0.5 credit per returned post. Crustdata also exposes `POST /web/search/live` with `query`, `sources`, date bounds, and pagination. Its `{success, query, timestamp, results, metadata}` envelope timestamps the search. The search timestamp cannot establish an article’s publication date.
