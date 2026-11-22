@@ -366,6 +366,7 @@ export function deskView(events: StoredEvent[], snap: RunSnapshot): DeskView {
       const cand = m?.[1].trim().replace(/'s$/, '');
       if (cand && (!bound.has(cand) || bound.get(cand) === id)) { bound.set(cand, id); return cand; }
     }
+    if (/[:]|^[a-z0-9_]+$/i.test(known) && !/\s/.test(known) && known.length > 14) return 'Company name unavailable';
     return known.charAt(0).toUpperCase() + known.slice(1);
   };
   const sawSourceRead = events.some((e) => e.event.type === 'source.read');

@@ -730,3 +730,27 @@
 
 .mc-crash__text { max-width: 44em; }
 .mc-crash__text .mc-crash__wait { font-size: 1.35em; color: var(--brass) !important; }
+
+/* Sol round 2 */
+.mc-removed { display: block; margin-top: 0.7em; padding: 0.45em 0.7em; border-radius: 0.35em; background: rgba(229, 85, 60, 0.08); box-shadow: inset 0.22em 0 0 var(--alarm); font-size: 0.86em; line-height: 1.35; }
+.mc-removed b { display: block; color: #b23a24; font-size: 0.9em; }
+.mc-removed s { color: #7d7166; text-decoration-color: var(--alarm); text-decoration-thickness: 0.1em; }
+.mc-removed em { display: block; font-style: normal; color: #8a7d62; font-size: 0.9em; }
+.mc-gate__body.is-live .mc-removed { animation: mc-sent-in 0.35s ease-out calc(0.6s + var(--i) * 0.55s) both; }
+.mc-cite { font-size: 0.8em; }
+.mc-gate__dup { display: flex; flex-direction: column; text-align: right; }
+.mc-gate__dup strong { font-family: 'MC Display', sans-serif; font-weight: 800; font-size: 1.5em; line-height: 1.05; color: #8a7d62; }
+.mc-gate__dup.is-hit strong { color: #b06f00; }
+.mc-gate__dup span { font-size: 0.8em; color: var(--ink-soft); font-weight: 500; }
+.mc-gate__striptext strong { font-size: 1.5em; }
+.mc-desk__calling { margin-right: 0.8em; color: var(--ivory); font-family: 'MC Mono', monospace; font-size: 0.9em; }
+.mc-desk__cards { -webkit-mask-image: linear-gradient(to bottom, #000 94%, transparent); mask-image: linear-gradient(to bottom, #000 94%, transparent); }
+.mc-sig em { white-space: nowrap; }
+.mc-crash__text .mc-crash__saved { font-family: 'MC Display', sans-serif; font-weight: 800; font-size: 3em !important; line-height: 1; color: var(--ivory) !important; }
+.mc-crash__text strong { font-size: 1.9em; color: #ff9c86; }
+.mc-crash__text .mc-crash__next { font-size: 1.2em; color: var(--text); }
+.mc-crash.is-live .mc-crash__text > :nth-child(5) { animation: mc-type 0.01s linear 1.9s both; }
+.mc-ptile__what b { font-family: 'MC Display', sans-serif; font-weight: 800; font-size: 1.35em; color: var(--stamp); }
+.mc-ptile { height: 4em; }
+.mc-crash.is-live .mc-crash__text > :nth-child(4) { animation: mc-type 0.01s linear 1.55s both; }
+.mc-crash.is-live .mc-crash__text > :nth-child(5) { animation: mc-type 0.01s linear 1.9s both, mc-blink 1.2s ease-in-out 1.9s infinite; }
