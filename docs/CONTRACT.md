@@ -217,3 +217,73 @@ export interface CentrepieceModule {
 `web/src/centrepiece/registry.ts` lists the modules; the app picks one with `?centre=<id>` (default `table`).
 A sample event stream that conforms to `shared/types.ts` lives at `docs/sample-run-events.json` (regenerated from a
 fixture run) and the UI's mock stream at `web/src/mock/events.ts`.
+
+---
+
+## Search Desk (pivot approved 22 Nov 2026, 14:08 IST)
+
+DOMINO predicts job openings before they are posted, from talent drain, and makes the match with dated proof
+(theme 1.1). Types: [`shared/desk.ts`](../shared/desk.ts). Every agent job is a normal **run** with a `pipeline`
+(`shared/types.ts` `PIPELINES`), so the journal, checkpoints, kill/resume, ledger, caps, verifier, outbox + receiver
+send-once and `source.read` events all apply unchanged. Stream any run at `GET /api/runs/:runId/stream`.
+
+| Pipeline | Steps | Owner |
+|---|---|---|
+| `outbound` | the original 11 steps (kept, not in the demo) | lead |
+| `openings` | scope_search → pull_departures → resolve_departures → check_replacements → detect_openings → score_openings (replay only) | domino-livedata (`server/engine/openings-steps.ts`) |
+| `candidate` | fetch_profile → parse_profile → match_openings | domino-desk-api (`server/engine/candidate-steps.ts`) |
+| `intro` | draft_intro → intro_gate (approval → delivered once to the team inbox) | domino-desk-api |
+
+### Rule O1 (fixed 14:08 IST after seeing live departure counts, before any replay outcome was looked at)
+
+At company A (20–5,000 staff): **≥ 2 conclusive dated departures in role family F within 90 days**, AND **no dated
+replacement hire or dated job post for F at A within 30 days of the last departure** → predicted opening for F at A.
+
+- Role families: `inference`, `ml_platform`, `mlops`, `gpu_llm_infra` (`backend_payments` if cheap).
+- **Dates are month-level** (every Crustdata role date is the 1st). A month-only date is the interval [1st, last day];
+  each condition is evaluated for every day in it (refined 14:14 IST, before replay outcomes were seen; a strict
+  "month-only → Hold" reading makes the rule vacuous on month-level data):
+  - drain window: settled → counts; unsettled (straddles the 90-day edge) → **Hold**;
+  - no-replacement leg: settled → `open`; unsettled with 0 replacements so far → `open` with a *provisional* reason
+    "replacement window closes by <date>"; any replacement found → no opening.
+- **Hold** (`status: 'held'`, `holdReasons`): acquisition / acqui-hire (news source, acquirer = departure destination,
+  ±120 days, article cited), shared parent, > 40% of headcount moving, ambiguous company id, unsettled dates,
+  unrecognised titles, **possible restructure** (headcount down > 10% over 90 days, or dated layoff/restructure news).
+- **Watch** (`status: 'watch'`): exactly 1 departure (`watch.have = 1, need = 2`), or **stale job data** (A's job search
+  failed or is > 14 days old: "I can't verify no replacement was posted"). Never `open`.
+- People who left appear only as **role + initial + date** (`Departure`), never full names or profile URLs.
+- Replay (as of 1 Sep): outcome = a dated job post or hire for F at A within 60 days after the prediction date.
+  Baselines: headcount +30%, any job post in the last 30 days. Raw counts, snapshot label, "0 facts after 1 Sep".
+
+### HTTP API (all JSON; responses that cite evidence ids include `evidence: Evidence[]`)
+
+| Method and path | Body | Returns |
+|---|---|---|
+| `POST /api/openings/scan` | `{ request?, replay?: { asOf } }` | `{ runId }` (openings pipeline) |
+| `GET /api/companies` | | `CompanySummary[]` from the latest completed openings scan |
+| `GET /api/companies/:id` | | `CompanyView` (departures, openings, matches, intros, runId, replay, evidence) |
+| `POST /api/candidates` | `{ linkedinUrl, samples?: string[], consent: Consent }` | `{ candidateId, runId }` (candidate pipeline; live person enrich) |
+| `GET /api/candidates/:id` | | `Candidate` |
+| `POST /api/candidates/:id/confirm` | `{ consent? }` | `Candidate` (confirmed; consent re-recorded) |
+| `GET /api/candidates/:id/openings` | | `OpeningForCandidate[]` ranked for the candidate, each with `fit` |
+| `GET /api/candidates/:id/inbox` | | `IntroRequest[]` (companies reaching out) |
+| `POST /api/candidates/:id/intros` | `{ openingId }` | `IntroRequest` (candidate consents → intro pipeline run → company approval) |
+| `POST /api/companies/:id/intros` | `{ candidateId, openingId }` | `IntroRequest` (company → candidate; only `discoverable` candidates) |
+| `POST /api/approvals/:id` | `{ decision: 'approve' \| 'reject' }` | existing endpoint: approval delivers once; a retry says "already delivered, skipped" |
+| `POST /api/runs/:id/kill`, `/resume` | | existing endpoints (kill and resume any pipeline run) |
+
+Privacy: candidates opt in with their own profile; only consented fields are stored or shown; no emails or phones.
+
+### Company dossier (full company analysis stays in the product; Garud, 14:19)
+
+`GET /api/companies/:id/dossier[?run=<runId>]` → `CompanyDossier` (`shared/desk.ts`), built from the latest
+completed/awaiting-approval **analysis run** (the `outbound` pipeline: triggers, entity resolution, cascade rules
+TALENT_DRAIN (R1) / DISPLACEMENT / CONTAGION / CAPITAL / DIRECT, watchlist and Hold, deciders, drafts, approvals,
+outbox) that contains the company, plus the openings of the latest `openings` scan. Fields:
+`timeline` (dated news/posts, funding, headcount jumps, hires, departures; newest first), `jobPosts`, `talentFlows`
+(in/out, **role + initial + date** only, one row per move), `chains` (cross-company edges where the company is the
+`cause` or the `effect`, with rationale, alternative explanation, confidence), `predictedNeeds` (status
+target/held/watch with hold reasons), `openings`, `outreach` (decider, verified draft, verifier result: removed
+sentences and "I can't verify" claims, approvals, outbox actions sent once), `evidence` (every cited row).
+Company ids are canonical (`co_…`, stable for the same Crustdata id/domain); an alias name is also accepted.
+Start an analysis run with the existing `POST /api/runs {request}` and approve with `POST /api/approvals/:id`.

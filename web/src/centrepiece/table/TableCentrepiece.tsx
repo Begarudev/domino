@@ -16,6 +16,7 @@ const ROW_GAP = 40;
 const LABEL = 30;         // mechanism label under each tile
 const PAD = 18;
 const TIP_DEG = 14;
+const TIP_RAD = (TIP_DEG * Math.PI) / 180;
 const STAGGER = 720;      // ms between edges
 
 export const MECH_LABEL: Record<Mechanism, string> = {
@@ -37,7 +38,18 @@ function mechanismText(n: GraphNode) {
 
 interface Placed { node: GraphNode; x: number; y: number; col: number; row: number }
 
-const SUB_GAP = 44;       // gap between tiles of the same tier when a tier wraps into several columns
+// A tile tips about its bottom-right corner, so its top leans this far right.
+const TIP_REACH = Math.ceil(H * Math.sin(TIP_RAD));
+// Gap between tiles of the same tier when a tier wraps into several columns: wide enough for a tipped neighbour.
+const SUB_GAP = TIP_REACH + 8;
+// Past this many lines the table reads as a network; labels then wait for a line to be selected.
+const MAX_LABELLED_EDGES = 6;
+// Edge label box: above the line where it arrives, in the gap before the target tile (clear of a tipped neighbour).
+const LABEL_BOX_W = COL_GAP - TIP_REACH - 16;
+const LABEL_BOX_H = 86;
+
+interface Box { x: number; y: number; w: number; h: number }
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /** Columns by tier; rows ordered by parents. Tries every row count and keeps the one with the biggest tiles. */
 function layout(nodes: GraphNode[], edges: GraphEdge[], slotW: number, slotH: number) {
@@ -139,7 +151,9 @@ function Tile(props: {
   const label = `${n.name}. ${change.text}, ${change.date}. ${n.need ?? 'Trigger company'}${conf != null ? `, confidence ${Math.round(conf * 100)}%` : ''}${unverifiable ? ", can't verify" : ''}`;
   return (
     <g className={cls}>
-      <text className="tile-mech" x={p.x + 2} y={p.y + H + 24}>{mechanismText(n)}</text>
+      <foreignObject x={p.x + 2} y={p.y + H + 4} width={W + SUB_GAP - 12} height={LABEL}>
+        <div className="tile-mech" title={mechanismText(n)}>{mechanismText(n)}</div>
+      </foreignObject>
       <g
         className="tile-body" style={style} tabIndex={0} role="button" aria-pressed={selected} aria-label={label}
         onClick={(e) => { e.stopPropagation(); onSelect(); }}
@@ -188,8 +202,10 @@ function Tile(props: {
   );
 }
 
+const isTipped = (p: Placed, animate: boolean) => animate && p.node.status !== 'unverifiable';
+
 function edgeGeometry(a: Placed, b: Placed, tipped: boolean) {
-  const th = (TIP_DEG * Math.PI) / 180;
+  const th = TIP_RAD;
   // Mid-point of the from-tile's right edge, after it tips about its bottom-right corner.
   const x1 = a.x + W + (tipped ? (HALF) * Math.sin(th) : 0) + 6;
   const y1 = a.y + H - HALF * (tipped ? Math.cos(th) : 1);
@@ -214,12 +230,27 @@ function TableCentrepiece(props: CentrepieceProps) {
     return { nodes: keep, edges: lines, offTable: all.nodes.length - keep.length };
   }, [snap.graph, snap.targets]);
   const cascadeDone = snap.steps.find((s) => s.step === 'cascade')?.status === 'done';
+  const animate = cascadeDone && nodes.length > 0;
   const { placed, vw, vh } = useMemo(() => layout(nodes, edges, width || 800, height || 500), [nodes, edges, width, height]);
-  const showLabels = edges.length <= 6;
+  // An edge label is drawn only where it covers no tile and no earlier label; a selected line always shows
+  // its label, and a footnote points to the lines whose labels did not fit.
+  const { lines, shownLabels } = useMemo(() => {
+    const lines = new Map<string, { g: ReturnType<typeof edgeGeometry>; box: Box }>();
+    const shown = new Set<string>();
+    const blocked: Box[] = [...placed.values()].map((p) => ({ x: p.x, y: p.y, w: W + (isTipped(p, animate) ? TIP_REACH : 0), h: H + LABEL }));
+    for (const e of [...edges].sort((a, b) => a.order - b.order)) {
+      const a = placed.get(e.from), b = placed.get(e.to);
+      if (!a || !b) continue;
+      const g = edgeGeometry(a, b, isTipped(a, animate));
+      const box = { x: g.x2 - LABEL_BOX_W - 4, y: g.y2 - LABEL_BOX_H - 6, w: LABEL_BOX_W, h: LABEL_BOX_H };
+      lines.set(e.id, { g, box });
+      if (edges.length <= MAX_LABELLED_EDGES && !blocked.some((other) => overlaps(box, other))) { shown.add(e.id); blocked.push(box); }
+    }
+    return { lines, shownLabels: shown };
+  }, [edges, placed, animate]);
   const times = useMemo(() => schedule(nodes, edges), [nodes, edges]);
   const evById = useMemo(() => new Map(snap.evidence.map((e) => [e.id, e])), [snap.evidence]);
   const baseline = new Set(snap.baseline.hiringFilterCompanyIds);
-  const animate = cascadeDone && (edges.length > 0 || nodes.length > 0);
 
   if (!nodes.length) {
     return (
@@ -247,13 +278,12 @@ function TableCentrepiece(props: CentrepieceProps) {
           </filter>
         </defs>
         {edges.map((e) => {
-          const a = placed.get(e.from), b = placed.get(e.to);
-          if (!a || !b) return null;
-          const g = edgeGeometry(a, b, animate && a.node.status !== 'unverifiable');
+          const line = lines.get(e.id);
+          if (!line) return null;
+          const { g, box } = line;
+          const b = placed.get(e.to)!;
           const sel = selection?.kind === 'edge' && selection.id === e.id;
           const weak = b.node.status === 'unverifiable';
-          const midX = (g.x1 + g.x2) / 2;
-          const labelW = Math.max(120, g.x2 - g.x1 - 30);
           const style = { '--draw-delay': `${times.edge.get(e.id) ?? 0}ms` } as CSSProperties;
           return (
             <g key={e.id} className={`edge${weak ? ' is-weak' : ''}${sel ? ' is-selected' : ''}${reducedMotion ? ' no-motion' : ''}`} style={style}>
@@ -266,7 +296,7 @@ function TableCentrepiece(props: CentrepieceProps) {
                 onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: e.id }); }}
                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onSelect({ kind: 'edge', id: e.id }); } }}
               />
-              {(showLabels || sel) && <foreignObject x={midX - labelW / 2} y={Math.min(g.y1, g.y2) - 92} width={labelW} height={86} className="edge-fo">
+              {(shownLabels.has(e.id) || sel) && <foreignObject x={box.x} y={box.y} width={box.w} height={box.h} className="edge-fo">
                 <div className="edge-label" onClick={(ev) => { ev.stopPropagation(); onSelect({ kind: 'edge', id: e.id }); }}>
                   <span>{e.label}</span>
                   <span className="edge-meta">{MECH_LABEL[e.mechanism]} {Math.round(e.confidence * 100)}%</span>
@@ -291,7 +321,7 @@ function TableCentrepiece(props: CentrepieceProps) {
           );
         })}
       </svg>
-      {!showLabels && <p className="table-foot table-foot-right">{edges.length} lines: select one to read its dated evidence</p>}
+      {shownLabels.size < edges.length && <p className="table-foot table-foot-right">{edges.length} lines: select one to read its dated evidence</p>}
       {offTable > 0 && <p className="table-foot">{offTable} more scanned {offTable === 1 ? 'company has' : 'companies have'} no dated link in the cascade and stay off the table.</p>}
     </div>
   );

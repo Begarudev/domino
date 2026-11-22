@@ -8,7 +8,7 @@ import { RequestBar, StatusLine } from './components/Header.tsx';
 import { Reel } from './components/Shell.tsx';
 import { Landing, landingWanted } from './features/landing/Landing.tsx';
 import { Timeline } from './components/Timeline.tsx';
-import { EvidenceDrawer } from './components/Evidence.tsx';
+import { EvidenceDrawer } from './features/evidence/EvidenceDrawer.tsx';
 import { TargetsStrip } from './components/Targets.tsx';
 import { DraftsTab, pendingApprovals } from './components/Drafts.tsx';
 import { ReplayTab } from './components/Replay.tsx';
@@ -173,8 +173,9 @@ export function App() {
 
       {drawerOpen && (
         <aside className="drawer-wrap" aria-label="Evidence drawer">
-          <EvidenceDrawer snap={snap} selection={selection} hoverEvidence={hover} onRecheck={onRecheck} onSelect={setSelection} />
-          <button type="button" className="btn btn-quiet btn-xs drawer-close" onClick={() => { setSelection(null); setEvidenceOpen(false); }}>Close</button>
+          <EvidenceDrawer key={selection ? `${selection.kind}:${selection.id}` : 'all'} snap={snap} events={state.events} selection={selection}
+            hoverEvidence={hover} cacheFetchedAt={backend?.health?.cacheFetchedAt ?? null} reducedMotion={reducedMotion}
+            onRecheck={onRecheck} onSelect={setSelection} onClose={() => { setSelection(null); setEvidenceOpen(false); }} />
         </aside>
       )}
 

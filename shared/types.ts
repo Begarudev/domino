@@ -301,7 +301,33 @@ export const STEP_ORDER = [
   'approval_gate',
   'score_replay',                   // replay runs only; live runs mark it skipped
 ] as const;
-export type StepName = typeof STEP_ORDER[number];
+
+// Search Desk pipelines (pivot, 22 Nov 14:08). Every pipeline is a normal run: journal, checkpoints, kill/resume,
+// ledger, caps and source.read events all apply. See docs/CONTRACT.md "Search Desk".
+export const OPENINGS_STEPS = [
+  'scope_search',                   // role families, cohort, as-of date (replay) from the request
+  'pull_departures',                // dated departures in role family F from cohort companies (person search)
+  'resolve_departures',             // entity resolution + company enrich (headcount, growth) for the losing companies
+  'check_replacements',             // dated job posts / hires for F at A after the last departure (job + person search)
+  'detect_openings',                // rule O1 + Hold/Watch guards -> Opening[]
+  'score_openings',                 // replay runs only: did a dated post/hire for F at A appear within 60 days
+] as const;
+export const CANDIDATE_STEPS = [
+  'fetch_profile',                  // live Crustdata person enrich from the candidate's LinkedIn URL
+  'parse_profile',                  // model (GPT-6 Luna) -> role family, skills, history; shown back for confirmation
+  'match_openings',                 // candidate vs current predicted openings, fit reasons cite sources
+] as const;
+export const INTRO_STEPS = [
+  'draft_intro',                    // sourced intro draft, verifier removes uncited sentences
+  'intro_gate',                     // human approval; approval delivers once to the team inbox
+] as const;
+export type Pipeline = 'outbound' | 'openings' | 'candidate' | 'intro';
+export const PIPELINES = {
+  outbound: STEP_ORDER, openings: OPENINGS_STEPS, candidate: CANDIDATE_STEPS, intro: INTRO_STEPS,
+} as const satisfies Record<Pipeline, readonly string[]>;
+export const ALL_STEPS = [...new Set([...STEP_ORDER, ...OPENINGS_STEPS, ...CANDIDATE_STEPS, ...INTRO_STEPS])] as
+  Array<typeof STEP_ORDER[number] | typeof OPENINGS_STEPS[number] | typeof CANDIDATE_STEPS[number] | typeof INTRO_STEPS[number]>;
+export type StepName = typeof ALL_STEPS[number];
 
 export interface StepState {
   step: StepName;
@@ -325,6 +351,7 @@ export interface Ask {
 
 export interface RunSnapshot {
   id: string;
+  pipeline?: Pipeline;              // absent on runs created before the Search Desk pivot = 'outbound'
   request: string;
   status: RunStatus;
   dataMode: DataMode;
