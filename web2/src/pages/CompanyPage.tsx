@@ -114,7 +114,7 @@ export function CompanyPage({ route }: { route: Extract<Route, { page: 'company'
             {tab === 'file' && <Analysis desk={desk} />}
             {tab === 'chains' && <Chains desk={desk} />}
             {tab === 'verifier' && <Needs desk={desk} />}
-            {tab === 'replay' && <Replay />}
+            {tab === 'replay' && <Replay desk={desk} />}
             {tab === 'ledger' && <LedgerTab />}
           </section>
         )}
