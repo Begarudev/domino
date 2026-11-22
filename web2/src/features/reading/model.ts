@@ -42,6 +42,21 @@ const SHORT: Record<string, [one: string, many: string]> = {
 };
 export const shortLabel = (s: FunnelStage) => (SHORT[s.id] ? SHORT[s.id][s.count === 1 ? 0 : 1] : s.label);
 
+/** How each stage is computed: the O1 clause it applies and where its input comes from. All stages are served by
+ *  GET /api/openings/funnel; source names match the engine's source.read endpoints (sourceName below). */
+export const STAGE_HOW: Record<string, { clause: string; source: string }> = {
+  profiles: { clause: 'Input: every dated job move the scan paged through', source: 'Crustdata person search' },
+  departures: { clause: 'O1: a direct move out of a tracked engineering family', source: 'Crustdata person search' },
+  window: { clause: 'O1: the move month falls in or straddles the 90-day window', source: 'Crustdata person search (month-level dates)' },
+  conclusive: { clause: 'O1: the date is conclusive', source: 'Crustdata person search' },
+  icp: { clause: 'O1: the company has 20–5,000 staff', source: 'Crustdata company enrich (headcount)' },
+  groups: { clause: 'O1: 2 or more departures from the same company and family', source: 'computed from the rows above' },
+  open: { clause: 'O1 decision: every clause met, opening settled', source: 'O1 rule over the groups' },
+  provisional: { clause: 'O1 decision: clauses met, a check still open', source: 'O1 rule' },
+  held: { clause: 'O1 decision: a guard holds it', source: 'O1 guard (news for acqui-hires)' },
+  watch: { clause: 'O1 decision: a check can’t be verified yet', source: 'O1 rule' },
+};
+
 /** Why a person row present in the previous stage is absent from this one: the stage's own rule clause. */
 const DROP_REASON: Record<string, string> = {
   departures: 'not a direct move out of a tracked family',

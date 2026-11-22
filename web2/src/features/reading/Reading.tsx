@@ -9,7 +9,7 @@ import { fmtInt, plural } from '../../lib/format.ts';
 import { useEnterOnce } from '../../lib/motion.ts';
 import { SourceNote } from '../../shell/SourceNote.tsx';
 import { openEvidence } from '../../shell/ui.ts';
-import { DECISION_STAGES, loadFunnel, lockedShort, readRow, shortLabel, stageRows, tally } from './model.ts';
+import { DECISION_STAGES, STAGE_HOW, loadFunnel, lockedShort, readRow, shortLabel, stageRows, tally } from './model.ts';
 import type { Decision, FunnelStage, LogRow, OpeningsFunnel } from './model.ts';
 import './reading.css';
 
@@ -156,14 +156,27 @@ function FunnelStrip({ funnel, view, onPick }: { funnel: OpeningsFunnel; view: s
   const max = Math.max(1, ...funnel.stages.map((s) => s.count));
   const firstDecision = funnel.stages.findIndex((s) => DECISION_STAGES.has(s.id));
   return (
-    <div className="funnel rd-funnel" style={{ gridTemplateColumns: `repeat(${funnel.stages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="O1 funnel">
+    <>
+    <div className="rd-chart" role="group" aria-label="O1 funnel, proportional to the first stage">
+      {funnel.stages.filter((s) => !DECISION_STAGES.has(s.id)).map((s) => {
+        const id = s.rows?.length ? s.id : READS;
+        const w = s.count ? Math.max(0.8, (s.count / max) * 100) : 0;
+        return (
+          <button key={s.id} className={view === id ? 'on' : undefined} onClick={() => onPick(id)} title={`${fmtInt(s.count)} ${shortLabel(s)}: show these rows`}>
+            <i style={{ width: `${w}%` }} /><span data-num>{fmtInt(s.count)}</span><em>{shortLabel(s)}</em>
+          </button>
+        );
+      })}
+    </div>
+    <div className="funnel rd-funnel" role="tablist" aria-label="O1 funnel">
       {funnel.stages.map((s, i) => {
         const id = s.rows?.length || DECISION_STAGES.has(s.id) ? s.id : READS;
         const on = view === id;
         const pct = s.count ? Math.max(1.5, (s.count / max) * 100) : 0;
+        const how = STAGE_HOW[s.id];
         return (
           <div
-            key={s.id} role="tab" tabIndex={0} aria-selected={on} title={s.label}
+            key={s.id} role="tab" tabIndex={0} aria-selected={on} title={how ? `${s.label}\n${how.clause}\nSource: ${how.source}\nGET /api/openings/funnel` : s.label}
             className={[on && 'on', i === firstDecision && 'rd-dec', `rd-${s.id}`].filter(Boolean).join(' ')}
             onClick={() => onPick(id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(id); } }}
             data-testid={`funnel-stage-${s.id}`}
@@ -175,6 +188,7 @@ function FunnelStrip({ funnel, view, onPick }: { funnel: OpeningsFunnel; view: s
         );
       })}
     </div>
+    </>
   );
 }
 
@@ -209,7 +223,12 @@ function DecisionTable({ funnel, view, filter, onFilter, domainOf, runLabel, liv
 
   const all = sv ? sv.rows : readRows;
   const t = tally(all);
-  const filtered = filter === 'all' ? all : all.filter((r) => r.decision === filter);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<'scan' | 'title' | 'decision'>('scan');
+  const needle = q.trim().toLowerCase();
+  const byDecision = filter === 'all' ? all : all.filter((r) => r.decision === filter);
+  const searched = needle ? byDecision.filter((r) => `${r.title} ${r.domain ?? ''} ${r.source} ${r.why.join(' ')}`.toLowerCase().includes(needle)) : byDecision;
+  const filtered = sort === 'scan' ? searched : [...searched].sort((a, b) => (sort === 'title' ? a.title.localeCompare(b.title) : a.decision.localeCompare(b.decision)));
   // Stage records page forward from the top; a streaming read log keeps its newest WINDOW rows.
   const shown = sv ? filtered.slice(0, limit) : filtered.slice(-WINDOW);
   const of = filter === 'all' ? all.length : filtered.length;
@@ -249,7 +268,22 @@ function DecisionTable({ funnel, view, filter, onFilter, domainOf, runLabel, liv
         )}
       </header>
       {slow && !stage && <p className="rd-slow" role="status">{slow.text}</p>}
-      {stage && <p className="rd-def">{funnel!.rule} step: {stage.label}</p>}
+      <div className="rd-tools">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, domain, reason" aria-label="Search the log" />
+        <label className="faint">Sort
+          <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+            <option value="scan">Scan order</option><option value="title">Title A–Z</option><option value="decision">Decision</option>
+          </select>
+        </label>
+        {needle && <span className="faint">{fmtInt(filtered.length)} match{filtered.length === 1 ? '' : 'es'}</span>}
+      </div>
+      {stage && (
+        <p className="rd-def">
+          <b>{stage.label}</b>
+          {STAGE_HOW[stage.id] && <> · {STAGE_HOW[stage.id].clause} · source: {STAGE_HOW[stage.id].source}</>}
+          <span className="mono"> · GET /api/openings/funnel</span>
+        </p>
+      )}
       <table className="t rd-table">
         <colgroup><col className="c-src" /><col className="c-title" /><col className="c-date" /><col className="c-dom" /><col className="c-dec" /><col className="c-why" /></colgroup>
         <thead><tr><th>Source type</th><th>Title</th><th>Date</th><th>Domain</th><th>Kept or discarded</th><th>Why</th></tr></thead>
