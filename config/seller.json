@@ -28,6 +28,22 @@
   ],
   "displacementEvents": [
     {
+      "provider": "Hugging Face",
+      "product": "Text Generation Inference",
+      "kind": "acquired",
+      "date": "2026-09-03",
+      "sourceUrl": "https://blogs.nvidia.com/blog/nvidia-to-acquire-hugging-face/",
+      "note": "NVIDIA agreed to acquire Hugging Face (announced 3 Sep 2026)."
+    },
+    {
+      "provider": "Chroma",
+      "product": "Chroma Cloud",
+      "kind": "shut_down",
+      "date": "2026-10-23",
+      "sourceUrl": "https://trychroma.com/blog/replit",
+      "note": "Configured Chroma Cloud displacement event dated 23 Oct 2026."
+    },
+    {
       "provider": "Lumen Serve",
       "product": "Lumen Serve",
       "kind": "acquired",

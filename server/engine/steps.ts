@@ -173,6 +173,7 @@ async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): P
   const intent = parse_request!;
   const input = { intent };
   const output = emptyBatch();
+  const summaries: string[] = [];
   const append = (batch: Awaited<ReturnType<typeof readSource>>) => {
     const kept = guardBatch(batch, intent);
     ctx.store.transaction(() => {
@@ -183,15 +184,32 @@ async function pullTriggers(ctx: ToolContext, { parse_request }: Checkpoints): P
     output.people.push(...kept.people);
     output.triggers.push(...kept.triggers);
     output.evidence.push(...kept.evidence);
+    if (batch.readSummary) summaries.push(batch.readSummary);
+    return kept;
   };
   append(await readSource(ctx, deps.jobSearch, input, intent));
   for await (const page of deps.readMovesPages(intent, request => readSource(ctx, deps.personSearchRecentMoves, request, intent))) {
     append(page);
   }
+  if (intent.runKind === 'replay') {
+    summaries.push('Skipped news search and article fetch in replay: web search has no as-of-safe dating');
+  } else {
+    const events = deps.activeNewsEvents(seller.displacementEvents, intent, ctx.mode);
+    if (events.length) {
+      // Keep the news calls spaced even when the preceding source used another endpoint's rate-limit slot.
+      if (ctx.mode === 'live') await ctx.wait(3000);
+      const search = append(await readSource(ctx, deps.newsSearch, { intent, events }, intent));
+      const urls = deps.newsFetchUrls(events, search);
+      if (urls.length) {
+        if (ctx.mode === 'live') await ctx.wait(3000);
+        append(await readSource(ctx, deps.newsFetch, { intent, urls, events }, intent));
+      } else summaries.push('No direct publisher URLs available for article fetch');
+    }
+  }
   append(await readSource(ctx, deps.companySearchGrowth, input, intent));
   output.evidence = byId(output.evidence);
   output.triggers = byId(output.triggers);
-  return { output, summary: `${output.triggers.length} triggers from ${output.evidence.length} evidence rows` };
+  return { output, summary: [`${output.triggers.length} triggers from ${output.evidence.length} evidence rows`, ...summaries].join('; ') };
 }
 
 function resolveBatch(batch: TriggerBatch): Resolved {
