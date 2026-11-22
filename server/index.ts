@@ -8,7 +8,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { MAX_REQUEST_CHARS } from '../shared/types.ts';
+import { API_ERROR, MAX_REQUEST_CHARS } from '../shared/types.ts';
 import type { Pipeline, RunEvent, RunLimits, RunStatus } from '../shared/types.ts';
 import { ApprovalError, pendingKeys, reserveApproval } from './actions/outbox.ts';
 import { decode, Store } from './db.ts';
@@ -305,7 +305,7 @@ export function createApp(store: Store) {
     return updated ? c.json(updated) : c.json({ error: 'Evidence record was absent in the latest source response' }, 404);
   });
 
-  app.all('/api/*', c => c.json({ error: 'API route not found' }, 404));
+  app.all('/api/*', c => c.json({ error: 'API route not found', code: API_ERROR.routeMissing }, 404));
   // The original run view, built with base /classic/ (bun run build:classic), stays reachable at /classic.
   const classic = resolve(root, 'web/dist-classic');
   if (existsSync(resolve(classic, 'index.html'))) {

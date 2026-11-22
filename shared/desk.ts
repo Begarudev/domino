@@ -5,6 +5,10 @@ import type {
 } from './types.ts';
 
 export type RoleFamily = 'inference' | 'ml_platform' | 'mlops' | 'gpu_llm_infra' | 'backend_payments';
+/** Onboarding input limits, enforced by the server's schema and mirrored as maxLength on the form. */
+export const LINKEDIN_URL_MAX = 300;
+export const SAMPLE_MAX_CHARS = 2000;
+
 export const ROLE_FAMILY_LABELS: Record<RoleFamily, string> = {
   inference: 'Inference / model serving', ml_platform: 'ML platform / ML infrastructure', mlops: 'MLOps',
   gpu_llm_infra: 'GPU / LLM infrastructure', backend_payments: 'Backend / payments',

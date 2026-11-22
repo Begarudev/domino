@@ -4,10 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Evidence, Pipeline, RunLimits } from '../../shared/types.ts';
+import { API_ERROR } from '../../shared/types.ts';
 import type {
   Candidate, CompanyView, IntroPreview, IntroRequest, Match, Opening, OpeningForCandidate, OpeningsFunnel,
 } from '../../shared/desk.ts';
-import { ROLE_FAMILY_LABELS } from '../../shared/desk.ts';
+import { LINKEDIN_URL_MAX, ROLE_FAMILY_LABELS, SAMPLE_MAX_CHARS } from '../../shared/desk.ts';
 import type { RoleFamily } from '../../shared/desk.ts';
 import type { Store } from '../db.ts';
 import { config } from '../env.ts';
@@ -44,8 +45,8 @@ const confirmSchema = z.object({
   skills: z.array(z.string().max(60)).max(40).optional(),
 });
 const candidateSchema = z.object({
-  linkedinUrl: z.string().max(300),
-  samples: z.array(z.string().max(2000)).max(5).optional(),
+  linkedinUrl: z.string().max(LINKEDIN_URL_MAX),
+  samples: z.array(z.string().max(SAMPLE_MAX_CHARS)).max(5).optional(),
   consent: consentSchema,
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
 });
@@ -149,7 +150,7 @@ export function deskRoutes({ store, launch }: DeskDeps) {
       return c.json({ error: 'Expected linkedinUrl, consent {shareHistory, shareSkills, shareSamples, discoverable} and optional samples' }, 400);
     }
     const linkedinUrl = linkedinProfileUrl(body.data.linkedinUrl);
-    if (!linkedinUrl) return c.json({ error: 'Expected a LinkedIn profile URL like https://www.linkedin.com/in/your-name/' }, 400);
+    if (!linkedinUrl) return c.json({ error: 'Expected a LinkedIn profile link: linkedin.com/in/ followed by the profile name' }, 400);
     const consent = { ...body.data.consent, recordedAt: new Date().toISOString() };
     const samples = (body.data.samples ?? []).map(sample => String(sanitize(sample.trim(), true))).filter(Boolean);
     // One profile per data mode is one candidate: re-creating it returns the existing record (no copy, no second enrich)
@@ -272,7 +273,8 @@ export function deskRoutes({ store, launch }: DeskDeps) {
     // Accept the canonical id or a name slug ("abacus-ai" for Abacus.AI).
     const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const company = snapshot && companiesOf(snapshot).find(item => item.id === id || slug(item.name) === slug(id));
-    if (!snapshot || !company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
+    if (!snapshot) return c.json({ error: 'No openings scan yet', code: API_ERROR.noData }, 404);
+    if (!company) return c.json({ error: 'Company not found in the latest openings scan' }, 404);
     if (company.id !== id) return c.redirect(`/api/companies/${company.id}`, 302);
     const openings = snapshot.openings.filter(opening => opening.companyId === id).sort(compareOpenings);
     const summaries = companySummaries(snapshot);

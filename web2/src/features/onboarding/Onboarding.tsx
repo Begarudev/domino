@@ -3,7 +3,7 @@
 // confirms it ("Is this you?") and lands on the dashboard. The model is used only to read the profile.
 import { useEffect, useRef, useState } from 'react';
 import type { Evidence } from '../../../../shared/types.ts';
-import { isMonthLevel, ROLE_FAMILY_LABELS } from '../../data/desk.ts';
+import { isMonthLevel, LINKEDIN_URL_MAX, ROLE_FAMILY_LABELS, SAMPLE_MAX_CHARS } from '../../data/desk.ts';
 import type { Candidate, Consent, DeskApi, Provenance, RoleFamily } from '../../data/desk.ts';
 import { confirmProfile, fieldSourceText } from './contract.ts';
 import { deskApi } from '../../data/query.ts';
@@ -172,7 +172,7 @@ export function Onboarding() {
               <span className="onb-label">Your LinkedIn profile</span>
               <input
                 ref={urlInput} data-testid="linkedin-input" className={`onb-input ${urlError ? 'has-error' : ''}`} type="url" inputMode="url"
-                autoComplete="url" placeholder="linkedin.com/in/your-name" value={url} aria-invalid={!!urlError}
+                autoComplete="url" placeholder="linkedin.com/in/your-name" maxLength={LINKEDIN_URL_MAX} value={url} aria-invalid={!!urlError}
                 aria-describedby={urlError ? 'li-err' : undefined}
                 onChange={(e) => { setUrl(e.target.value); if (urlError) setUrlError(null); }}
                 onBlur={() => { if (url.trim()) setUrlError(checkLinkedin(url)); }}
@@ -185,7 +185,7 @@ export function Onboarding() {
               {samples.map((s, i) => (i === 0 || samples[i - 1].trim()) ? (
                 <input
                   key={i} data-testid={`sample-input-${i}`} className="onb-input small"
-                  placeholder={i === 0 ? 'A link, or a short note on something you built' : 'Another link or note'}
+                  placeholder={i === 0 ? 'A link, or a short note on something you built' : 'Another link or note'} maxLength={SAMPLE_MAX_CHARS}
                   value={s} onChange={(e) => setSamples((xs) => xs.map((x, j) => (j === i ? e.target.value : x)))}
                 />
               ) : null)}

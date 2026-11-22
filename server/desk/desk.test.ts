@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, describe, test } from 'node:test';
 import type { Draft, Evidence } from '../../shared/types.ts';
+import { API_ERROR } from '../../shared/types.ts';
 import type { Candidate, CompanySummary, CompanyView, IntroPreview, IntroRequest, OpeningForCandidate } from '../../shared/desk.ts';
 import { waitFor } from '../../scripts/smoke.ts';
 import { displayName, enrichFixture, linkedinProfileUrl, parseEnrich, personEnrich } from '../crustdata/person-enrich.ts';
@@ -216,8 +217,19 @@ describe('search desk over HTTP (fixture mode)', () => {
     assert.match(refused.error, /confirmLive: true/);
   });
 
+  test('404s carry a code only when the route is missing or has no data, never for an unknown id', async () => {
+    const missing = await call<{ code?: string }>('/api/no-such-route', undefined, [404]);
+    assert.equal(missing.code, API_ERROR.routeMissing);
+    const unknown = await call<{ error: string; code?: string }>('/api/companies/co_no_such', undefined, [404]);
+    assert.equal(unknown.code, undefined);
+    assert.match(unknown.error, /not found/);
+  });
+
   test('rejects anything but a LinkedIn profile URL', async () => {
-    await call('/api/candidates', { linkedinUrl: 'https://example.com/in/x', consent: all }, [400]);
+    const { error } = await call<{ error: string }>('/api/candidates', { linkedinUrl: 'https://example.com/in/x', consent: all }, [400]);
+    // The hint survives the people-redaction boundary (a URL-shaped example would come out as linkedin.com/in/[redacted]).
+    assert.match(error, /linkedin\.com\/in\//);
+    assert.doesNotMatch(error, /redacted/);
     await call('/api/candidates', { linkedinUrl: 'https://www.linkedin.com/in/x1', consent: { shareHistory: true } }, [400]);
   });
 
