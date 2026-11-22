@@ -1,4 +1,4 @@
-import { STEP_ORDER } from '../../shared/types.ts';
+import { PIPELINES } from '../../shared/types.ts';
 import type { StepName } from '../../shared/types.ts';
 import { now, stepLabels, Store } from '../db.ts';
 import { redactSecrets } from '../env.ts';
@@ -16,6 +16,7 @@ async function runWorker(runId: string) {
     else if (budget.used.seconds >= budget.limits.maxSeconds) deadline.abort(new BudgetError('seconds'));
   }, 100);
   try {
+    const order: readonly StepName[] = PIPELINES[store.requireRun(runId).pipeline ?? 'outbound'];
     const state = store.getSteps(runId);
     const done = state.filter(step => step.status === 'done').map(step => step.step);
     store.transaction(() => {
@@ -24,7 +25,7 @@ async function runWorker(runId: string) {
       store.recordEvent(runId, { type: 'engine.started', pid: process.pid, resume: run.resumes > 0 });
       if (done.length) {
         store.recordEvent(runId, { type: 'engine.resumed',
-          fromStep: STEP_ORDER.find(step => !done.includes(step)) ?? 'score_replay', skipped: done });
+          fromStep: order.find(step => !done.includes(step)) ?? order[order.length - 1], skipped: done });
       }
       store.recordEvent(runId, { type: 'run.status', status: 'running' });
     });
@@ -39,7 +40,9 @@ async function runWorker(runId: string) {
         store.appendEvent(runId, { type: 'step.skipped', step, reason: 'checkpoint' });
         return;
       }
-      if (step === 'score_replay' && checkpoints.parse_request?.runKind !== 'replay') {
+      const replayStep = step === 'score_replay' || step === 'score_openings';
+      const runKind = step === 'score_openings' ? checkpoints.scope_search?.runKind : checkpoints.parse_request?.runKind;
+      if (replayStep && runKind !== 'replay') {
         store.sql.prepare("UPDATE steps SET status = 'skipped', finished_at = ?, summary = ? WHERE run_id = ? AND step = ?")
           .run(now(), 'Replay scoring applies to historical runs', runId, step);
         return;
@@ -58,7 +61,7 @@ async function runWorker(runId: string) {
       current = undefined;
     };
 
-    for (const step of STEP_ORDER) await runStep(step);
+    for (const step of order) await runStep(step);
     store.transaction(() => {
       const pending = store.getApprovals(runId).some(approval => approval.status === 'pending');
       store.sql.prepare('UPDATE runs SET engine_pid = NULL WHERE id = ? AND engine_pid = ?').run(runId, process.pid);
