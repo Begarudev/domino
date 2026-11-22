@@ -72,12 +72,18 @@ test('a past employer in a run snapshot stays a company: only the person becomes
     assert.equal(out.drafts[0].body, 'Orbital Compute had 140 employees on 2026-11-15.');
     // A known person's first name is masked in a greeting, and only there.
     assert.equal(store.redactor.text('Hi Priya,\n\nPriya Street Capital posted a role.'), 'Hi P.,\n\nPriya Street Capital posted a role.');
-    // A trailing initial does not make a full name minimal; only "First X." is.
+    // A third party is an initial only, however the source shortened the name ("Ravi S." from the profile cache); the
+    // candidate's consented "Asha K." stays.
+    store.sql.prepare('INSERT INTO tool_cache (key, provider, endpoint, request_json, response_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('c'.repeat(64), 'crustdata', '/person/search', '{}', JSON.stringify({ profiles: [{ basic_profile: { name: 'Ravi S.' } }] }), new Date().toISOString());
     const initials = store.redactor.value({ people: [
       { id: 'pe_2', name: 'Kavya Menon R.', title: 'Senior AI Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
-      { id: 'pe_3', name: 'Asha K.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_3', name: 'Ravi S.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_4', name: 'Alex Z', title: 'Chief Technology Officer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
+      { id: 'pe_5', name: 'Asha K.', title: 'ML Engineer', companyId: 'co_c', linkedinUrl: null, startedAt: null },
     ] });
-    assert.deepEqual(initials.people.map(person => person.name), ['K.', 'Asha K.']);
+    assert.deepEqual(initials.people.map(person => person.name), ['K.', 'R.', 'A.', 'Asha K.']);
+    assert.equal(store.redactor.text('Hi Alex, Ravi S. left Hugging Face.'), 'Hi A., R. left Hugging Face.');
   } finally {
     store.sql.close();
     rmSync(dir, { recursive: true, force: true });

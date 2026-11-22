@@ -222,7 +222,9 @@ export interface Draft {
   meeting: { title: string; durationMin: number; proposedSlots: IsoDateTime[] };
   // 'not_drafted': fewer than 2 verified, dated, cited facts survived, or no named decider role. Never sent or approved;
   // shown as "Not drafted: …" with the stripped claims under "I can't verify".
-  status?: 'ready' | 'not_drafted';
+  // 'held_pre_gate': drafted by an older build that let it through, but it fails today's gate. Served that way (never
+  // as ready), and approving it is refused.
+  status?: 'ready' | 'not_drafted' | 'held_pre_gate';
   blockedReason?: string | null;
 }
 
@@ -401,6 +403,9 @@ export interface RunSnapshot {
   baseline: { hiringFilterCompanyIds: string[] };   // what a plain "is hiring" filter returns
   engine: { pid: number | null; alive: boolean; crashes: number; resumes: number };
   replay: ReplayScore | null;
+  // Set when a run labelled live has drafts citing fixture rows (only runs from before live runs stopped falling back
+  // to fixtures, 13:18 IST 22 Nov). Screens show the note and never present such a run as live.
+  integrity?: { fixtureCitations: number; note: string };
 }
 
 // ---------- event stream (SSE, append-only, also persisted) ----------

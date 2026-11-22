@@ -41,3 +41,14 @@ test('a not-drafted message never gets an approval, and the gate does not flip t
   assert.deepEqual([...new Set(result.output.map(approval => approval.companyId))], ['co_b']);
   assert.ok(!(result.events ?? []).some(event => event.type === 'run.status'), 'approval_gate must not set the run status');
 });
+
+test('a draft an older build marked ready is served held when it fails today\'s gate, and passes through when it does not', async () => {
+  const { heldPreGate } = await import('../snapshot.ts');
+  const evidence = [ev('ev_1', '2026-11-15'), ev('ev_2', '2026-11-12')];
+  const oneFact = { ...draft('Fact one. [1]', ['ev_1']), status: 'ready' as const };
+  const held = heldPreGate(oneFact, [target(vp)], evidence);
+  assert.equal(held?.status, 'held_pre_gate');
+  assert.equal(held?.blockedReason, 'Drafted before the evidence gate · not sendable (not enough verified evidence (1 of 2))');
+  assert.equal(heldPreGate(draft('A. [1] B. [2]', ['ev_1', 'ev_2']), [target(vp)], evidence), null);
+  assert.equal(heldPreGate({ ...oneFact, status: 'not_drafted' }, [target(vp)], evidence), null, 'not drafted stays not drafted');
+});

@@ -13,7 +13,7 @@ import type { EnrichInput } from '../crustdata/person-enrich.ts';
 import { candidateView, getCandidateRow, getIntroRow, openingsSnapshot } from '../desk/store.ts';
 import { classifyProfile, matchesFor, ROLE_FAMILIES } from '../desk/match.ts';
 import type { Claim, PersonMention } from '../domain/types.ts';
-import { drainWindow, monthInterval } from '../domain/openings.ts';
+import { article, drainWindow, monthInterval } from '../domain/openings.ts';
 import { modelClient } from '../llm/client.ts';
 import { BudgetError, hash, ToolContext } from '../runtime/tool.ts';
 import type { CrustReadMeta } from '../runtime/tool.ts';
@@ -173,7 +173,6 @@ const familyNoun: Record<RoleFamily, string> = {
   gpu_llm_infra: 'GPU / LLM infrastructure engineer', backend_payments: 'Backend / payments engineer',
 };
 // "an ML Platform Engineer", "an Inference engineer", "a GPU engineer": acronyms take the article of their spoken letter.
-const article = (word: string) => /^[A-Z]{2,}/.test(word) ? ('AEFHILMNORSX'.includes(word[0]) ? 'an' : 'a') : /^[aeiou]/i.test(word) ? 'an' : 'a';
 const monthOf = (date: string | null) => date
   ? new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
 
@@ -290,7 +289,7 @@ async function draftIntro(ctx: ToolContext) {
   const greeting = toCompany ? `Hello ${opening.companyName} hiring team,` : `Hello ${candidate.displayName},`;
   const cta = toCompany ? `${candidate.displayName} opted in and asked for this introduction. Reply to accept and we will connect you.`
     : `${opening.companyName} would like an introduction. Reply to accept; your contact details stay private until you do.`;
-  const signoff = 'DOMINO Search Desk (test mode)';
+  const signoff = 'DOMINO (test mode)';
   const frame = (sentence: string) => ({ sentence, status: 'no_claim' as const, evidenceIds: [] });
   const draft: Draft = {
     id: `dr_${hash([ctx.runId, intro.id, checked.body].join('|')).slice(0, 16)}`, companyId: opening.companyId, personId: null, subject,

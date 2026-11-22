@@ -46,6 +46,10 @@ export const FAMILY_PHRASES: Record<RoleFamily, string[]> = {
 };
 
 /** A Crustdata month value ("2026-10-01T00:00:00") as the interval of days it can mean. */
+// "an ML Platform Engineer", "an SRE", "a Senior Engineer", "an Inference Engineer": acronyms by their spoken letter.
+export const article = (word: string) => /^[A-Z]{2,}/.test(word)
+  ? ('AEFHILMNORSX'.includes(word[0]) ? 'an' : 'a') : /^[aeiou]/i.test(word) ? 'an' : 'a';
+
 export function monthInterval(value: string): Interval {
   const first = value.slice(0, 7) + '-01';
   const [y, m] = [Number(value.slice(0, 4)), Number(value.slice(5, 7))];

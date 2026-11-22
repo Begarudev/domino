@@ -51,8 +51,11 @@ function personNames(input: unknown): string[] {
   return found;
 }
 
-// "Asha K." (first name + last initial, the candidate's consented display name) is already minimal; "Asha Rao K." is not.
-const isFullName = (name: string) => name.trim().split(/\s+/).length >= 2 && !/^\S+\s+\p{L}\.?$/u.test(name.trim());
+// "Asha K." (first name + last initial with its full stop: the candidate's consented display name) is already minimal.
+// "Asha Rao K." is not, and neither is "Alex Z". A source profile already shortened to "Alex Z." is a third party, so
+// names from the profile cache are reduced to an initial whatever their form (see `cachedFullNames`).
+const isFullName = (name: string) => name.trim().split(/\s+/).length >= 2 && !/^\S+\s+\p{L}\.$/u.test(name.trim());
+const hasSurname = (name: string) => name.trim().split(/\s+/).length >= 2;
 
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -77,7 +80,7 @@ export class PeopleRedactor {
     const count = (this.sql.prepare('SELECT count(*) AS n FROM tool_cache').get() as { n: number }).n;
     if (count === this.count && this.pattern) return;
     this.count = count;
-    this.names = new Set([...cachedPersonNames(this.sql), ...this.extra(), ...this.names].filter(isFullName));
+    this.names = new Set([...cachedPersonNames(this.sql).filter(hasSurname), ...[...this.extra(), ...this.names].filter(isFullName)]);
     this.rebuild();
   }
 
@@ -124,7 +127,7 @@ export class PeopleRedactor {
         const personLike = isPerson(record);
         const out: Record<string, unknown> = {};
         for (const [key, item] of Object.entries(record)) {
-          if (personLike && key === 'name' && typeof item === 'string' && isFullName(item)) out[key] = initialOf(item);
+          if (personLike && key === 'name' && typeof item === 'string' && (isFullName(item) || this.names.has(item.trim()))) out[key] = initialOf(item);
           else if (key === 'linkedinUrl' && typeof item === 'string' && /linkedin\.com\/in\//i.test(item)) out[key] = null;
           else out[key] = walk(item, key);
         }

@@ -275,6 +275,11 @@ export function createApp(store: Store) {
   app.post('/api/approvals/:id', async c => {
     const body = z.object({ decision: z.enum(['approve', 'reject']) }).safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: 'Expected decision approve or reject' }, 400);
+    // A draft that fails today's evidence gate is never sent, whenever it was drafted.
+    const asked = body.data.decision === 'approve' ? store.getApproval(c.req.param('id')) : undefined;
+    const held = asked?.status === 'pending'
+      ? store.transaction(() => snapshot(store, asked.runId).drafts.find(draft => draft.id === asked.draftId), 'read') : undefined;
+    if (held?.status === 'held_pre_gate') return c.json({ error: held.blockedReason, code: 'held_pre_gate' }, 409);
     const result = reserveApproval(store, c.req.param('id'), body.data.decision);
     if (!result) return c.json({ error: 'Approval not found' }, 404);
     const { approval, status } = result;
