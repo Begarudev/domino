@@ -209,3 +209,4 @@ ul.cf-holds li::before { content: 'Held: '; color: var(--ink-3); font-weight: 40
 .cf-click:hover .cf-src-i { color: var(--ink); }
 .cf-collapsed { margin: 0; display: flex; gap: 10px; align-items: baseline; padding: 10px 16px; border: 1px dashed var(--rule); border-radius: 8px; font-size: 13px; color: var(--ink-2); }
 .cf-collapsed b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.cf-big.num, .cf-why-pos.num { font-variant-numeric: proportional-nums; letter-spacing: -.01em; }
