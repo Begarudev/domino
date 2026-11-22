@@ -130,21 +130,14 @@
 .by-co-t b { font-size: var(--fs-ui); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .by-dom { font-size: var(--fs-cap); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .by-trig > .by-rule-l { gap: 4px 8px; align-items: center; flex-wrap: nowrap; }
-.by-pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--surface); font-size: var(--fs-cap); font-weight: 500; color: var(--ink); white-space: nowrap; }
-.by-pill i, .by-stp i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); flex: none; }
 .by-date { font-size: var(--fs-cap); color: var(--ink-3); }
 .by-trig > .by-l2 { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-top: 4px; }
 .by-ell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .by-l2 .by-ell { flex: 0 1 auto; color: var(--ink-2); }
 .by-l2 .srclink { flex: none; font-size: var(--fs-cap); white-space: nowrap; }
 .by-dec .by-ell { color: var(--ink); }
-.by-stp { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 22px; padding: 0 8px; border-radius: var(--r); border: 1px solid var(--rule); font-size: var(--fs-cap); font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.by-stp { max-width: 100%; }
 .by-stp > span { overflow: hidden; text-overflow: ellipsis; }
-.by-stp.s-ready, .by-stp.s-approved { color: var(--ink); border-color: var(--acc-line, var(--rule)); }
-.by-stp.s-ready i, .by-stp.s-approved i { background: var(--acc); }
-.by-stp.s-sent { color: var(--ink); background: var(--acc-weak); border-color: transparent; }
-.by-stp.s-sent i { background: var(--acc); }
-.by-stp.s-held i, .by-stp.s-not_drafted i { background: transparent; border: 1.5px solid var(--ink-3); width: 7px; height: 7px; box-sizing: border-box; }
 .by-st small.by-why { display: block; margin-top: 4px; font-size: var(--fs-cap); line-height: 16px; color: var(--ink-3); }
 .by-facts b { font-size: var(--fs-ui); }
 .by-facts span { font-size: var(--fs-cap); color: var(--ink-3); }

@@ -19,6 +19,11 @@ import './buyers.css';
 type Loaded = { row: RunRow; snap: RunSnapshot };
 type Filter = 'all' | 'ready' | 'sent' | 'blocked';
 const BLOCKED: StatusKind[] = ['held', 'watch', 'not_drafted'];
+/** Meaning palette (styles/colors.css): one tone per status, one hue per rule. */
+const STATUS_TONE: Record<StatusKind, string> = {
+  ready: 'tone-provisional', approved: 'tone-provisional', sent: 'tone-delivered', held: 'tone-held', watch: 'tone-watch', not_drafted: 'tone-not-evaluated',
+};
+const RULE_TONE: Record<string, string> = { CONTAGION: 'rule-contagion', DIRECT: 'rule-direct', DISPLACEMENT: 'rule-displacement' };
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url);
@@ -190,7 +195,7 @@ function Row({ a, ev, sel, onSel }: { a: Account; ev: Map<string, Evidence>; sel
       </td>
       <td className="by-trig">
         <span className="by-rule-l">
-          <span className={`by-pill r-${t.mechanisms[0]?.toLowerCase() ?? 'x'}`} title={readableDates(t.whyNow)}><i aria-hidden />{t.mechanisms.map(ruleWords).join(' + ')}</span>
+          <span className={`ctag ${RULE_TONE[t.mechanisms[0]] ?? 'hue-grey'}`} title={readableDates(t.whyNow)}>{t.mechanisms.map(ruleWords).join(' + ')}</span>
           {a.trigger ? <span className="by-date">{fmtDate(a.trigger.date, true)}</span>
             : t.whyNowDate ? <span className="by-date">{fmtDate(t.whyNowDate, true)}</span> : <span className="cant">No dated trigger</span>}
           {a.trigger?.precision === 'month' && <span className="tag">month-level</span>}
@@ -213,7 +218,7 @@ function Row({ a, ev, sel, onSel }: { a: Account; ev: Map<string, Evidence>; sel
         <b>{a.facts.have}</b><span> of {a.facts.need}</span>
       </td>
       <td className="by-st">
-        <span className={`by-stp s-${a.status.kind}`} title={a.status.label}><i aria-hidden /><span>{a.status.label}</span></span>
+        <span className={`ctag by-stp ${STATUS_TONE[a.status.kind]}`} title={a.status.label}><span>{a.status.label}</span></span>
         {a.status.why && <small className="by-ell by-why" title={a.status.why}>{a.status.why}</small>}
       </td>
     </tr>
