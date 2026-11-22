@@ -41,15 +41,16 @@ export function LoginPage() {
       <header className="signin-head">
         <h1>Predict what a company needs next, from moves at other companies.</h1>
         <p>Rules decide. Every claim has a dated source. The model is labelled where it’s used: parsing a profile, refining a request, drafting a message.</p>
+        {stats.length > 0 && <p className="signin-at">{at ? `Scan as of ${fmtDate(at, true)}, ${fmtTime(at)} IST` : 'Latest scan'}</p>}
         {stats.length > 0 && (
-          <dl className="signin-stats">
+          <dl className="signin-stats" aria-label={at ? `Scan as of ${fmtDate(at, true)}, ${fmtTime(at)} IST` : 'Latest scan'}>
             {stats.map((s) => <div key={s.small}><dt>{s.small}</dt><dd data-num>{s.big}</dd></div>)}
           </dl>
         )}
-        {at && <p className="signin-at">Latest scan {fmtDate(at, true)}, {fmtTime(at)} IST</p>}
+
       </header>
       <section className="signin-panel panel" aria-label="Sign in">
-        <h2>Sign in as</h2>
+        <h2>Company or candidate?</h2>
         <button className="role" aria-pressed={choice === 'candidate'} onClick={() => setChoice('candidate')} data-testid="signin-candidate">
           <span className="rad" /><span><b>Candidate</b><p>See companies likely to need you, before they post.</p></span>
         </button>

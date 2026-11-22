@@ -192,12 +192,12 @@ export function Onboarding() {
             </div>
 
             <div className="onb-actions">
-              <button data-testid="onboard-submit" className="btn primary onb-go" type="submit">Read my profile</button>
+              <span className="onb-btns">
+                <button data-testid="onboard-submit" className="btn primary onb-go" type="submit">Read my profile</button>
+                <button type="button" className="btn onb-demo" data-testid="onboard-demo" onClick={() => void start(DEMO_LINKEDIN, deskApi, 'fixture')}>Use the fictional demo profile</button>
+              </span>
               <span className="onb-after">Reads your public profile once from Crustdata, then shows it back to you to confirm.</span>
             </div>
-            <button type="button" className="btn ghost sm onb-demo" data-testid="onboard-demo" onClick={() => void start(DEMO_LINKEDIN, deskApi, 'fixture')}>
-              Use the fictional demo candidate (no live call)
-            </button>
           </div>
 
           <fieldset className="onb-col onb-consent">
