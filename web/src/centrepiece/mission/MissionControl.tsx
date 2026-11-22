@@ -12,6 +12,7 @@ import { Scoreboard } from './Scoreboard.tsx';
 import {
   STEP_SHORT, chainRows, sourceKind, companyName, day, deskView, engineView, gateView, looseUnverifiable, narrate, replayView, streamRows,
 } from './model.ts';
+import { useDwell } from './motion.ts';
 import './mission.css';
 
 /** Optional hooks a host can pass so the instruments become controls. Without them the view is read-only. */
@@ -53,7 +54,9 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
   const gate = useMemo(() => gateView(snap, events), [snap, events]);
   const replay = useMemo(() => replayView(snap, events), [snap, events]);
   const desk = useMemo(() => deskView(events, snap), [events, snap]);
-  const line = useMemo(() => narrate(events, snap), [events, snap]);
+  const latestLine = useMemo(() => narrate(events, snap), [events, snap]);
+  // One sentence at a time: hold each line ~0.9 s instead of swapping it on every event (it was remounting ~11x/s).
+  const line = useDwell(latestLine, (a, b) => a?.text === b?.text && a?.tone === b?.tone, 900);
 
   const calls = snap.ledger.length ? snap.ledger : stream.flatMap((r) => (r.kind === 'call' ? [r.entry] : []));
   const total = { calls: calls.length, credits: calls.reduce((s, e) => s + (e.credits || 0), 0) };
@@ -124,6 +127,9 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
   const maxRows = gatePending ? (compact ? 1 : 2) : 4;
   const gateH = Math.round(height * (compact ? 0.5 : 0.44));
   const empty = rows.length === 0 && loose.length === 0;
+  const deskSeen = useRef(false);
+  if (desk.cards.length > 0 || desk.pending || desk.companies.length > 0) deskSeen.current = true;
+  const showDesk = rows.length === 0 && deskSeen.current;
 
   return (
     <div
@@ -137,7 +143,7 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
           {snap.status === 'running' && current && <span className="mc-head__step">step {stepIdx} of {STEP_ORDER.length}</span>}
         </div>
         {line && (
-          <p key={line.seq} className={`mc-say mc-say--${line.tone}${line.seq > settledSeq ? ' is-live' : ''}`} aria-live="polite">{line.text}</p>
+          <p key={line.text} className={`mc-say mc-say--${line.tone}${line.seq > settledSeq ? ' is-live' : ''}`} aria-live="polite">{line.text}</p>
         )}
         {replay?.score && (
           <div className="mc-tabs" role="tablist">
@@ -168,13 +174,13 @@ export function MissionControl(props: CentrepieceProps & { controls?: MissionCon
           <Scoreboard view={replay} animate={scoredSeq > settledSeq || stageKey > 0} nameOf={nameOf} onSelect={onSelect} fixture={snap.dataMode === 'fixture'} reducedMotion={reducedMotion} />
         ) : (
           <>
-            {rows.length === 0 && (desk.cards.length > 0 || desk.pending) && <Desk desk={desk} settledSeq={settledSeq} onSelect={onSelect} />}
+            {showDesk && <Desk desk={desk} settledSeq={settledSeq} onSelect={onSelect} />}
             {rows.length > 0 && (
               <div className="mc-from">
                 From <b>{desk.cards.length}</b> sources read and <b>{desk.signalCount}</b> signals across <b>{desk.companies.length}</b> companies, these links held up:
               </div>
             )}
-            {empty && desk.cards.length === 0 && !desk.pending && (
+            {empty && !showDesk && (
               <div className="mc-empty">
                 <Dominoes />
                 <p>{snap.status === 'queued' || snap.status === 'running' ? 'Pulling dated changes. The chain builds here as each link is verified.' : 'Start a run to watch the chain build.'}</p>
