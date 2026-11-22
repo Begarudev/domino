@@ -3,8 +3,8 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../server/env.ts';
 
-function runNpm(...args: string[]) {
-  const result = spawnSync('npm', args, { cwd: root, stdio: 'inherit' });
+function runBun(...args: string[]) {
+  const result = spawnSync(process.versions.bun ? process.execPath : 'bun', args, { cwd: root, stdio: 'inherit' });
   if (result.error || result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -15,14 +15,14 @@ function latestChange(path: string): number {
   return readdirSync(path).reduce((latest, file) => Math.max(latest, latestChange(join(path, file))), stat.mtimeMs);
 }
 
-if (!existsSync(join(root, 'node_modules'))) runNpm('install');
+if (!existsSync(join(root, 'node_modules'))) runBun('install');
 const web = join(root, 'web');
 const html = join(web, 'dist/index.html');
 const webConfig = join(web, 'vite.config.ts');
 if (existsSync(webConfig) && latestChange(html) < Math.max(
   latestChange(join(web, 'src')), latestChange(webConfig), latestChange(join(web, 'index.html')),
 )) {
-  runNpm('run', 'build:web');
+  runBun('run', 'build:web');
 }
 
 const { startServer } = await import('../server/index.ts');

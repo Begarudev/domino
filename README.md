@@ -53,11 +53,12 @@ as "I can't verify" and kept out of the message.
 
 ## Run it (fresh clone, one command)
 
-Requirements: Node 24+. Nothing else: SQLite is built into Node.
+Requirements: [Bun](https://bun.sh) 1.2+ (`brew install oven-sh/bun/bun` or `curl -fsSL https://bun.sh/install | bash`).
+Nothing else: SQLite is built in.
 
 ```bash
 git clone https://github.com/Begarudev/domino && cd domino
-npm run demo          # installs, builds the UI, starts http://localhost:4321
+bun install && bun start      # builds the UI if needed, starts http://localhost:4321
 ```
 
 Optional `.env` in the repo root (gitignored, never committed):
@@ -69,8 +70,20 @@ ANTHROPIC_API_KEY=...      # optional alternative provider (claude-opus-5-5)
 DOMINO_DATA=auto           # auto | live | cache | fixture
 ```
 
-Other commands: `npm test` (unit and engine tests), `npm run smoke` (end to end: run, approve twice, kill and resume),
-`npm run dev` (hot-reload UI), `npm run snapshot` (export cached live responses for an offline demo).
+Other commands: `bun run test` (unit and engine tests), `bun run smoke` (end to end: run, approve twice, kill and
+resume), `bun run dev` (hot-reload UI), `bun run snapshot` (export cached live responses for an offline demo).
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Runtime and package manager | Bun (TypeScript run natively, no build step for the server) |
+| Server | Hono on Bun: REST + Server-Sent Events; the engine is a forked child process per run |
+| Frontend | React 19 + Vite (served as static files by the server) |
+| State store | SQLite (`node:sqlite` API under Bun), WAL mode: runs, step checkpoints, events, ledger, cache, outbox |
+| Tests | `bun test` (unit, engine, edge cases) + an HTTP smoke script |
+| LLM | OpenAI `gpt-5-mini` (request parsing, message drafting from numbered claims); deterministic template fallback; every call in the cost ledger |
+| Data | Crustdata REST API (`x-api-version: 2025-11-01`): `/job/search`, `/person/search`, `/company/search`, `/company/enrich` |
 
 ## Architecture
 
