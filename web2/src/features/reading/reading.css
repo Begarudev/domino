@@ -177,3 +177,4 @@ tr:not(.rd-sub) + .rd-sub td, .rd-sub + .rd-sub td { border-top: 0; }
 .rd-why-chip span { color: var(--ink-3); font-size: 10px; }
 .rd-why-list { margin-top: 6px; }
 .rd-funnel > div.on { outline: none !important; box-shadow: none !important; border-color: var(--rule-2) !important; background: var(--hover); }
+.rd [data-num], .funnel b, .rd-showing, .rd-seg button span, .rd-chart, .rd-chart text, .rd-date, .rd-dom { font-variant-numeric: proportional-nums !important; font-feature-settings: "tnum" 0 !important; letter-spacing: 0 !important; }

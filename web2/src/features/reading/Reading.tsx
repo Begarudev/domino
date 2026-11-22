@@ -170,7 +170,7 @@ function FunnelStrip({ funnel, view, onPick }: { funnel: OpeningsFunnel; view: s
           legend: { show: false }, grid: { borderColor: '#ebecef', strokeDashArray: 3, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
           dataLabels: { enabled: false },
           xaxis: { categories: steps.map((s) => `${shortLabel(s)} · ${fmtInt(s.count)}`), labels: { formatter: (v: string) => fmtInt(Number(v)), style: { colors: '#8a8f98', fontSize: '11px' } } },
-          yaxis: { labels: { maxWidth: 240, style: { colors: '#4b5059', fontSize: '12px' } } },
+          yaxis: { labels: { maxWidth: 320, style: { colors: '#4b5059', fontSize: '12px' } } },
           tooltip: { y: { formatter: (v: number) => `${fmtInt(v)} · ${Math.round((v / top) * 1000) / 10}% of the first step · click to list these rows` } },
           states: { active: { filter: { type: 'none' } } },
         }} />
