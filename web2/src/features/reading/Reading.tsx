@@ -27,7 +27,8 @@ export function Reading({ desk }: { desk: CompanyDesk }) {
   const storeError = useRunSel((v) => v.error);
   const funnel = fq.data;
   const missing = !!fq.error && !funnel && /no funnel/.test(fq.error);
-  const live = !!runId && (status === 'running' || status === 'queued');
+  const playing = useRunSel((v) => v.playing);
+  const live = !!runId && (status === 'running' || status === 'queued' || playing);
 
   // ---------------------------------------------------------------- selection
   const [picked, setPicked] = useState<string | null>(null);
@@ -97,7 +98,7 @@ export function Reading({ desk }: { desk: CompanyDesk }) {
             </button>
           </form>
           <button className="btn pri" onClick={runAgain} disabled={act.state !== 'idle' || live} data-testid="run-again">
-            {act.state === 'scan' ? 'Starting the scan…' : live ? 'Running…' : 'Run again'}
+            {act.state === 'scan' ? 'Starting the scan…' : live ? 'Running…' : 'Re-run from cache · 0 credits'}
           </button>
         </div>
       </div>
@@ -108,8 +109,8 @@ export function Reading({ desk }: { desk: CompanyDesk }) {
       {missing && !runId && (
         <div className="empty-act rd-empty" data-testid="reading-empty">
           <h2>No scan has run yet</h2>
-          <p>The O1 scan reads the latest dated job moves from Crustdata and applies the rule. Every record it reads lands here, kept or discarded, with the rule’s reason. Cached mode costs 0 credits.</p>
-          <button className="btn pri" onClick={runAgain} disabled={act.state !== 'idle'}>{act.state === 'scan' ? 'Starting the scan…' : 'Run the scan'}</button>
+          <p>The O1 scan reads the latest dated job moves from Crustdata and applies the rule. Every record it reads lands here, kept or discarded, with the rule’s reason.</p>
+          <button className="btn pri" onClick={runAgain} disabled={act.state !== 'idle'}>{act.state === 'scan' ? 'Starting the scan…' : 'Run the scan from cache · 0 credits'}</button>
         </div>
       )}
       {missing && !runId && (
