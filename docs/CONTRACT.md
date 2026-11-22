@@ -29,8 +29,8 @@ All shared types live in `shared/types.ts`. Do not change a type there without t
 - One root `package.json` (no workspaces). Server: `hono`, `@hono/node-server`, `zod`. Web: `vite`, `react`,
   `react-dom`, `@vitejs/plugin-react`, `typescript`, `motion`. Add others only if they clearly pay for themselves.
 - SQLite via built-in `node:sqlite` (`DatabaseSync`), file `data/domino.db`, WAL mode, `busy_timeout=5000`.
-- Web UI: Vite + React. `web2/` is the Search Desk app (candidate + company), `web/` the original run view; the server
-  serves `web2/dist` when `DOMINO_UI=web2`, else `web/dist`.
+- Web UI: Vite + React. `web2/` is the DOMINO app (sign-in with role, candidate side, company side), served at `/`;
+  `web/` is the original run view, served at `/classic` (built with base `/classic/`). `DOMINO_UI=web` puts it at `/`.
 - Port: `DOMINO_PORT` default `4321`.
 - Scripts: `bun start` (install if needed, build the UI if stale, start the server), `bun run dev` (server + vite dev
   with `/api` proxy), `bun run test` (`bun test server`), `bun run test:e2e`, `bun run smoke`, `bun run proof:send-once`.

@@ -40,7 +40,7 @@ const runSchema = z.object({
   dataMode: z.enum(['live', 'cache', 'fixture']).optional(),
   pipeline: z.enum(['outbound', 'openings', 'candidate', 'intro']).optional(),
 });
-const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>run bun run build:web</p></html>';
+const missingWeb = '<!doctype html><html lang="en"><title>DOMINO</title><p>The UI is not built yet: run <code>bun start</code> (it builds the UI), or <code>bun run build:web2</code>.</p></html>';
 
 export function createApp(store: Store) {
   const app = new Hono();
@@ -313,8 +313,9 @@ export function createApp(store: Store) {
     app.get('/classic/*', serveStatic({ root: classic, rewriteRequestPath: path => path.replace(/^\/classic/, '') }),
       serveStatic({ path: resolve(classic, 'index.html') }));
   }
-  // DOMINO_UI=web2 serves the Search Desk app (web2/); the default stays the original app (web/) until the UI freeze.
-  const dist = resolve(root, process.env.DOMINO_UI === 'web2' ? 'web2/dist' : 'web/dist');
+  // The DOMINO app (web2/: sign-in, candidate and company sides) is the main UI. DOMINO_UI=web serves the original run
+  // view at / instead; it is also always at /classic once built.
+  const dist = resolve(root, process.env.DOMINO_UI === 'web' ? 'web/dist' : 'web2/dist');
   if (existsSync(resolve(dist, 'index.html'))) {
     app.get('*', serveStatic({ root: dist }), serveStatic({ path: resolve(dist, 'index.html') }));
   }

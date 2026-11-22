@@ -146,8 +146,9 @@ bun install
 bun start            # builds the UI on first run, then serves http://localhost:4321
 ```
 
-Open <http://localhost:4321>. If port 4321 is taken, `bun start` names the busy port; pick another with
-`DOMINO_PORT=4399 bun start`.
+Open <http://localhost:4321> and sign in as a candidate or a company (the role is chosen at sign-in; sign out to switch).
+The original run view, with the live step theatre and kill and resume, is at <http://localhost:4321/classic>. If port
+4321 is taken, `bun start` names the busy port; pick another with `DOMINO_PORT=4399 bun start`.
 
 **Without API keys**, DOMINO runs on a labelled synthetic fixture world (the data badge reads "Fixture", and the demo
 candidate is a labelled fictional person) and writes drafts from an evidence template. Every feature works this way,

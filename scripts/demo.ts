@@ -16,9 +16,9 @@ function latestChange(path: string): number {
 }
 
 if (!existsSync(join(root, 'node_modules'))) runBun('install');
-// Build the UI that will be served (DOMINO_UI=web2 for the Search Desk app) when its sources are newer than its build.
-// web2 imports state and API code from web/src and types from shared/, so those count as its sources too.
-const ui = process.env.DOMINO_UI === 'web2' ? 'web2' : 'web';
+// Build the UI that will be served (web2, the DOMINO app; DOMINO_UI=web for the original run view) when its sources are
+// newer than its build. web2 imports state and API code from web/src and types from shared/, so those count too.
+const ui = process.env.DOMINO_UI === 'web' ? 'web' : 'web2';
 const dir = join(root, ui);
 const sources = [join(dir, 'src'), join(dir, 'vite.config.ts'), join(dir, 'index.html'), join(root, 'shared'),
   ...ui === 'web2' ? [join(root, 'web/src')] : []];
